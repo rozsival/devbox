@@ -81,11 +81,14 @@ ssh workstation 'cd ~/devbox && ./bin/devbox keys'       # the two public keys +
    as a Signing key. Without the Signing key registration commits push fine but show as unverified.
 2. `gh auth login --hostname github.com --git-protocol ssh --web`; a second account is a second
    `gh auth login`, then `gh auth switch`. Tokens persist in `~/.config/gh` on the bind mount.
-3. `op account add --address <OP_ACCOUNT_ADDRESS> --email <OP_ACCOUNT_EMAIL>`, then `eval "$(op signin)"` per
-   shell.
-4. Fill `~/.config/devbox/secrets.env` with `op://vault/item/field` references. `devenv <cmd>` wraps
-   `op run --env-file` - a single unresolvable reference fails the whole command, so only add lines for items
-   that exist.
+3. Add **both** 1Password accounts under their shorthands - `op account add --address <OP_PERSONAL_ADDRESS>
+   --email <OP_PERSONAL_EMAIL> --shorthand personal` and the same with the `OP_WORK_*` values and
+   `--shorthand work`. Then `eval "$(op signin --account <shorthand>)"` per shell; sessions are per
+   account and the `OP_*` variables in `.env` are hints only, never used to log in.
+4. Fill `~/.config/devbox/secrets.env` (personal) and `~/.config/devbox/secrets.work.env` (work) with
+   `op://vault/item/field` references. `devenv <cmd>` wraps `op run --account personal --env-file`;
+   `OP_ACCOUNT=work devenv <cmd>` selects the other file. One account per call, and a single
+   unresolvable reference fails the whole command, so only add lines for items that exist.
 5. Place the work-app GitHub App credentials in `~/.config/work/work-app/` (`app-id` and
    `app.pem`, mode 600). Bootstrap creates that directory and never fetches secrets.
 

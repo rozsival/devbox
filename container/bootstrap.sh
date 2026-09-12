@@ -173,19 +173,36 @@ if ! gh auth status >/dev/null 2>&1; then
 fi
 
 # -- 11. 1Password ------------------------------------------------------------
-# Interactive by design: `op` sessions expire, so nothing here is automated.
-if [[ -z "$(op account list 2>/dev/null)" ]]; then
-  register_action "Add the 1Password account: op account add --address '${OP_ACCOUNT_ADDRESS:-}' --email '${OP_ACCOUNT_EMAIL:-}'"
-  # shellcheck disable=SC2016 # literal command in a message
-  register_action 'Sign in per shell: eval "$(op signin)"'
-fi
-
+# Interactive by design: `op account add` needs the account's Secret Key and
+# master password, and sessions expire, so nothing here is automated. Both
+# accounts are added under their own shorthand, because `op` refuses to guess
+# which one a reference belongs to once several are present. Each account gets
+# its own env file: `op run` resolves one account per call.
 secrets_dir="${HOME_DIR}/.config/devbox"
 mkdir -p "${secrets_dir}"
-if [[ ! -f "${secrets_dir}/secrets.env" ]]; then
-  install -m 600 "${TEMPLATE_DIR}/.config/devbox/secrets.env.example" "${secrets_dir}/secrets.env"
-  register_action "Fill ${secrets_dir}/secrets.env with op:// references, then run commands through \`devenv <cmd>\`."
-fi
+op_accounts="$(op account list 2>/dev/null || true)"
+for account in personal work; do
+  address_var="OP_${account^^}_ADDRESS"
+  email_var="OP_${account^^}_EMAIL"
+  address="${!address_var:-}"
+  email="${!email_var:-}"
+
+  if [[ -n "${email}" ]] && ! grep -qiF -- "${email}" <<<"${op_accounts}"; then
+    register_action "Add the ${account} 1Password account: op account add --address '${address}' --email '${email}' --shorthand ${account}"
+    register_action "Sign in to ${account} per shell: eval \"\$(op signin --account ${account})\""
+  fi
+
+  env_file="${secrets_dir}/secrets.env"
+  devenv_hint='devenv <cmd>'
+  if [[ "${account}" != personal ]]; then
+    env_file="${secrets_dir}/secrets.${account}.env"
+    devenv_hint="OP_ACCOUNT=${account} devenv <cmd>"
+  fi
+  if [[ ! -f "${env_file}" ]]; then
+    install -m 600 "${TEMPLATE_DIR}/.config/devbox/secrets.env.example" "${env_file}"
+    register_action "Fill ${env_file} with ${account} op:// references, then run \`${devenv_hint}\`."
+  fi
+done
 
 # -- 12. OMP config -----------------------------------------------------------
 omp_config_dir="${HOME_DIR}/.omp/agent"

@@ -34,7 +34,15 @@ if [[ $- == *i* ]]; then
 fi
 
 # Run a command with secrets injected from 1Password, e.g. `devenv omp`.
-# Needs an active `op` session: eval "$(op signin)".
+# Selects the account by shorthand - `personal` unless OP_ACCOUNT says
+# otherwise - and the matching env file, because `op run` resolves references
+# against a single account per call:
+#   devenv omp                         personal -> ~/.config/devbox/secrets.env
+#   OP_ACCOUNT=work devenv omp      work  -> ~/.config/devbox/secrets.work.env
+# Needs an active session for that account: eval "$(op signin --account <name>)".
 devenv() {
-  op run --env-file="$HOME/.config/devbox/secrets.env" -- "$@"
+  local account="${OP_ACCOUNT:-personal}"
+  local env_file="$HOME/.config/devbox/secrets.env"
+  [[ "${account}" == personal ]] || env_file="$HOME/.config/devbox/secrets.${account}.env"
+  op run --account "${account}" --env-file="${env_file}" -- "$@"
 }

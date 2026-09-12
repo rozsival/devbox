@@ -107,8 +107,8 @@ you need a cache-free image, e.g. after bumping a pinned version.
 
 **Does `bootstrap` overwrite my dotfiles?**
 Only the two generated ones: `~/.bashrc.d/devbox.sh` and `~/.ssh/config`, both rewritten from the templates
-on every run. `~/.gitconfig`, `secrets.env` and the OMP config are created if absent and then left alone;
-derived Git identity values are re-applied with `git config --global` on each run.
+on every run. `~/.gitconfig`, both `secrets*.env` files and the OMP config are created if absent and then
+left alone; derived Git identity values are re-applied with `git config --global` on each run.
 
 **`doctor` says `BIND_ADDR is X but Tailscale reports Y`.**
 The node's Tailscale address changed. `./bin/devbox env && ./bin/devbox up`.

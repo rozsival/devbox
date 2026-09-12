@@ -7,8 +7,8 @@ mount, or a file you place by hand.
 | Secret                      | Lives in                                  | Established by                           |
 |-----------------------------|-------------------------------------------|------------------------------------------|
 | `gh` tokens (per account)   | `~/.config/gh`                            | `gh auth login` (browser, once)          |
-| 1Password session           | `op` agent state, expires ~30 min         | `op account add` + `eval "$(op signin)"` |
-| API keys for agents         | `~/.config/devbox/secrets.env`            | you, as `op://` references               |
+| 1Password sessions (two)    | `op` agent state, expire ~30 min          | `op account add` + `op signin --account` |
+| API keys for agents         | `secrets.env`, `secrets.work.env`      | you, as `op://` references               |
 | GitHub App (work-app) | `~/.config/work/work-app/`       | you, `app-id` + `app.pem` at mode 600    |
 | SSH keys (both identities)  | `~/.ssh/id_personal`, `~/.ssh/id_work` | `bootstrap`, passphrase-less             |
 
@@ -24,29 +24,59 @@ or a secret.
    Signing key. See [Git identities](git.md#github-registration).
 2. `gh auth login --hostname github.com --git-protocol ssh --web` inside the devbox (repeat per account,
    switch with `gh auth switch`). The token persists in `~/.config/gh` on the bind mount.
-3. `op account add --address my.1password.com --email <email>`, then `eval "$(op signin)"` per shell.
-4. Fill `~/.config/devbox/secrets.env` with `op://` references and run commands as `devenv <cmd>`.
+3. Add **both** 1Password accounts, each under its own shorthand, then sign in to the one you need:
+   `op account add --address <OP_PERSONAL_ADDRESS> --email <OP_PERSONAL_EMAIL> --shorthand personal`
+   `op account add --address <OP_WORK_ADDRESS> --email <OP_WORK_EMAIL> --shorthand work`
+   `eval "$(op signin --account personal)"` per shell (sessions are per account).
+4. Fill `~/.config/devbox/secrets.env` (personal) and `secrets.work.env` (work) with `op://`
+   references, then run commands as `devenv <cmd>` or `OP_ACCOUNT=work devenv <cmd>`.
 5. Place the work-app GitHub App credentials in `~/.config/work/work-app/`
    (`app-id`, `app.pem` at mode 600) if you need them.
 
-## `devenv` and `secrets.env`
+## Two accounts
 
-`~/.config/devbox/secrets.env` holds references, never values:
+`op` holds both the personal and the work account, distinguished by the shorthands `personal` and
+`work`. Selection follows `op`'s own precedence: the `--account` flag, then `OP_ACCOUNT`, then the most
+recent `op signin`. Relying on "most recent" with two accounts added is how you get
+`could not resolve item` on a reference that exists - always be explicit:
+
+```bash
+eval "$(op signin --account work)"        # session for one account
+op --account work item list               # one-off read
+op account list                              # shorthands currently added
+```
+
+`.env` on the workstation carries `OP_PERSONAL_ADDRESS`/`_EMAIL` and `OP_WORK_ADDRESS`/`_EMAIL`. They are
+hints only: `bootstrap` interpolates them into the printed `op account add` commands and never runs them,
+because the Secret Key and master password are interactive by design. Clear an email to drop that account
+from the checklist.
+
+## `devenv` and the secrets files
+
+Each account gets its own env file, because `op run` resolves references against a single account per call:
+
+| Account    | File                                   | Command                        |
+|------------|----------------------------------------|--------------------------------|
+| `personal` | `~/.config/devbox/secrets.env`         | `devenv <cmd>`                 |
+| `work`  | `~/.config/devbox/secrets.work.env` | `OP_ACCOUNT=work devenv …`  |
+
+Both hold references, never values:
 
 ```dotenv
 ANTHROPIC_API_KEY=op://Private/anthropic/credential
 OPENAI_API_KEY=op://Private/openai/credential
 ```
 
-`devenv` (a function from `~/.bashrc.d/devbox.sh`) resolves them at call time:
+`devenv` (a function from `~/.bashrc.d/devbox.sh`) picks the account from `OP_ACCOUNT` (default `personal`),
+maps it to the matching file, and resolves at call time:
 
 ```bash
-devenv omp                # op run --env-file=~/.config/devbox/secrets.env -- omp
-devenv pnpm test
+devenv omp                        # op run --account personal --env-file=…/secrets.env -- omp
+OP_ACCOUNT=work devenv pnpm test
 ```
 
-The file is copied from `home/.config/devbox/secrets.env.example` if absent and never overwritten. Values
-resolve only while an `op` session is active.
+Both files are copied from `home/.config/devbox/secrets.env.example` if absent and never overwritten. Values
+resolve only while a session for **that** account is active.
 
 ## 1Password stays interactive
 
@@ -70,7 +100,15 @@ It would work - `op run` passes through plain values - but then the secret sits 
 mount. Prefer an `op://` reference, or the tool's own credential store.
 
 **My agent run failed with an unresolved `op://` reference.**
-The `op` session expired. `eval "$(op signin)"` in that shell, or move the credential to a long-lived token.
+Either the session for that account expired - `eval "$(op signin --account <shorthand>)"` in that shell - or
+the reference lives in the other account. Sessions and references are per account: a personal vault item is
+unresolvable while `OP_ACCOUNT=work` is in effect. Move the credential to a long-lived token if an
+unattended agent needs it.
+
+**Can one `devenv` call mix personal and work secrets?**
+No. `op run` authenticates as one account per invocation, which is why there are two env files. If a single
+command genuinely needs both, copy the item into one account's vault (or a shared vault) and reference it
+from that account's file.
 
 **Does OMP see my keys in plaintext?**
 `~/.omp/agent/config.yml` sets `secrets: { enabled: true }`, which obfuscates environment secrets before they

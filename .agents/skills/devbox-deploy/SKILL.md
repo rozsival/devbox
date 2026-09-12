@@ -48,8 +48,8 @@ the single answer for both. `up` with no changes at all is idempotent: compose r
 
 One caveat for `home/` specifically. Bootstrap rewrites two files unconditionally - `~/.bashrc.d/devbox.sh`
 and `~/.ssh/config` - because both are generated, not hand-edited, so template edits land on the next run.
-`~/.gitconfig`, `secrets.env` and the OMP config are create-if-absent: editing those templates does not
-reach a home that already has them, so delete the file under `${DEVBOX_DATA_DIR}` first or apply the change
+`~/.gitconfig`, both `secrets*.env` files and the OMP config are create-if-absent: editing those templates
+does not reach a home that already has them, so delete the file under `${DEVBOX_DATA_DIR}` first or apply it
 by hand. Derived Git identity values are re-applied with `git config --global` on every run regardless.
 
 ## What a redeploy cannot destroy
