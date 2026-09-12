@@ -42,7 +42,11 @@ background connections), the two **`~/.ssh/config` blocks**, and a non-empty **`
 | [Operations](docs/operations.md)   | Redeploy, restart, backup, `doctor`, troubleshooting                |
 | [Security model](docs/security.md) | Boundaries, trust assumptions, what an escaped agent reaches        |
 
-Working on this repo rather than in it? [AGENTS.md](AGENTS.md) holds the conventions.
+Working on this repo rather than in it? [AGENTS.md](AGENTS.md) holds the conventions, and
+`.agents/skills/` holds three skills that route an agent through the same material:
+[devbox-basics](.agents/skills/devbox-basics/SKILL.md) (what it is and how it is isolated),
+[devbox-setup](.agents/skills/devbox-setup/SKILL.md) (first install and connection failures), and
+[devbox-deploy](.agents/skills/devbox-deploy/SKILL.md) (shipping a change and applying it).
 
 ## 🗺 Layout
 
@@ -55,6 +59,7 @@ bin/push              laptop-side rsync deploy
 container/            entrypoint.sh (PID 1), bootstrap.sh (idempotent user setup), sshd_config
 home/                 templates installed into /home/dev by bootstrap
 docs/                 this documentation
+.agents/skills/       agent skills: devbox-basics, devbox-setup, devbox-deploy
 ```
 
 ## ⚡ Cheat sheet

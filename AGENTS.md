@@ -63,3 +63,7 @@ it reaches the project tree and the internet, never the host filesystem or the h
 - `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `shell`, `logs`, `keys`,
   `doctor`)
 - `bin/push` - laptop-side rsync deploy; excludes `.git`, `.env`, and `data/`
+- `.agents/skills/` - three skills mirroring the docs for agents: `devbox-basics` (architecture, boundaries,
+  entry routes), `devbox-setup` (four ordered setup phases plus connection failures), `devbox-deploy`
+  (sync vs apply, what a redeploy cannot destroy). They must stay consistent with `docs/`; when a command or
+  default changes, update both

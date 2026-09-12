@@ -16,9 +16,8 @@ herdr                    # select "Workstation devbox" in the sidebar
 ```
 
 A pane opens with a login shell in `/home/dev`. Detaching or quitting the client leaves the pane running
-server-side, so
-closing the laptop lid or killing the client does not interrupt a build, a clone, or an agent. Reconnecting
-restores the session shape.
+server-side, so closing the laptop lid or killing the client does not interrupt a build, a clone, or an
+agent. Reconnecting restores the session shape.
 
 `herdr` requires the pinned binary at `/usr/local/bin/herdr` - the default non-interactive SSH `PATH` is the
 only `PATH` its background connections get, which is why it is not installed in `~/.local/bin`.
