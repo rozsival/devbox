@@ -1,0 +1,46 @@
+name: devbox
+
+services:
+  # -- Remote development container -------------------------------------------
+  # Unprivileged sshd owned by the `dev` user; the published port is the entire
+  # network boundary (see PORTS note in README.md).
+  devbox:
+    container_name: devbox
+    build:
+      context: .
+      args:
+        HOST_UID: '${HOST_UID}'
+        HOST_GID: '${HOST_GID}'
+    init: true
+    restart: unless-stopped
+    user: '${HOST_UID}:${HOST_GID}'
+    hostname: devbox
+    environment:
+      TZ: '${TZ}'
+      DEVBOX_GITHUB_USER: '${DEVBOX_GITHUB_USER}'
+      DEVBOX_EXTRA_AUTHORIZED_KEYS: '${DEVBOX_EXTRA_AUTHORIZED_KEYS}'
+      GIT_PERSONAL_NAME: '${GIT_PERSONAL_NAME}'
+      GIT_PERSONAL_EMAIL: '${GIT_PERSONAL_EMAIL}'
+      GIT_WORK_NAME: '${GIT_WORK_NAME}'
+      GIT_WORK_EMAIL: '${GIT_WORK_EMAIL}'
+      OP_ACCOUNT_ADDRESS: '${OP_ACCOUNT_ADDRESS}'
+      OP_ACCOUNT_EMAIL: '${OP_ACCOUNT_EMAIL}'
+    ports:
+      - '${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222'
+      - '127.0.0.1:${DEVBOX_SSH_PORT}:2222'
+    volumes:
+      - '${DEVBOX_DATA_DIR}:/home/dev'
+      - './container:/opt/devbox/container:ro'
+      - './home:/opt/devbox/home:ro'
+    tmpfs:
+      - '/tmp:mode=1777'
+    cap_drop:
+      - ALL
+    security_opt:
+      - 'no-new-privileges:true'
+    healthcheck:
+      test: ['CMD-SHELL', 'ss -ltn | grep -q ":2222"']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

@@ -1,0 +1,285 @@
+#!/usr/bin/env bash
+# Host-side CLI for the devbox container. Hand-written bash on purpose: ~9
+# commands and no code generation, so workstation's bashly pipeline would be
+# pure overhead here.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly REPO_ROOT
+readonly ENV_FILE="${REPO_ROOT}/.env"
+readonly ENV_EXAMPLE="${REPO_ROOT}/.env.example"
+readonly SERVICE='devbox'
+
+log_info() { echo -e "\033[0;34m[INFO]\033[0m  $*"; }
+log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
+log_warn() { echo -e "\033[1;33m[WARN]\033[0m  $*" >&2; }
+log_error() {
+  echo -e "\033[0;31m[ERROR]\033[0m $*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: ./bin/devbox <command>
+
+Commands:
+  env               Create .env from .env.example and sync BIND_ADDR, HOST_UID, HOST_GID
+  up                Preflight, then build and start the container
+  down              Stop and remove the container
+  rebuild           Rebuild the image from scratch and restart
+  bootstrap         Re-run the in-container user setup
+  shell             Open a login shell inside the container
+  logs [-f]         Show container logs (last 100 lines; -f follows)
+  keys              Print the devbox public keys and sshd host-key fingerprint
+  doctor            Check host wiring, exposure, and the in-container toolchain
+USAGE
+}
+
+require_env_file() {
+  [[ -f "${ENV_FILE}" ]] || log_error "Missing ${ENV_FILE} - run './bin/devbox env' (template: ${ENV_EXAMPLE})."
+}
+
+# Reads a single key. Deliberately not `source`: .env holds unquoted UTF-8 values
+# that compose parses fine but bash would try to execute.
+env_get() {
+  local key="$1" value
+  value="$(grep -E "^${key}=" "${ENV_FILE}" 2>/dev/null | tail -1 || true)"
+  value="${value#*=}"
+  value="${value%\"}"
+  value="${value#\"}"
+  printf '%s' "${value}"
+}
+
+upsert_env_key() {
+  local key="$1" value="$2" tmp
+  tmp="$(mktemp)"
+  if grep -qE "^${key}=" "${ENV_FILE}"; then
+    KEY="${key}" VALUE="${value}" awk -F= '
+      BEGIN { k = ENVIRON["KEY"]; v = ENVIRON["VALUE"] }
+      $1 == k && !replaced { print k "=" v; replaced = 1; next }
+      { print }
+    ' "${ENV_FILE}" >"${tmp}"
+  else
+    cat "${ENV_FILE}" >"${tmp}"
+    printf '%s=%s\n' "${key}" "${value}" >>"${tmp}"
+  fi
+  mv "${tmp}" "${ENV_FILE}"
+}
+
+compose() {
+  (cd "${REPO_ROOT}" && docker compose "$@")
+}
+
+tailscale_addr() {
+  command -v tailscale >/dev/null 2>&1 || return 0
+  tailscale ip -4 2>/dev/null | head -1 || true
+}
+
+cmd_env() {
+  if [[ ! -f "${ENV_FILE}" ]]; then
+    [[ -f "${ENV_EXAMPLE}" ]] || log_error "Missing ${ENV_EXAMPLE}"
+    log_info "Creating ${ENV_FILE} from .env.example..."
+    cp "${ENV_EXAMPLE}" "${ENV_FILE}"
+  fi
+
+  log_info 'Syncing HOST_UID and HOST_GID from the current user...'
+  upsert_env_key HOST_UID "$(id -u)"
+  upsert_env_key HOST_GID "$(id -g)"
+
+  # Resolved from Tailscale, not from a flag: this address is what scopes the
+  # published sshd port away from the public internet, and the node already owns
+  # exactly one correct value for it.
+  local addr
+  addr="$(tailscale_addr)"
+  if [[ -z "${addr}" ]]; then
+    log_warn 'No Tailscale IPv4 address yet; BIND_ADDR left unset.'
+    log_warn "Run 'sudo tailscale up', then './bin/devbox env' again - 'up' refuses to start without it."
+  else
+    log_info "Syncing BIND_ADDR to ${addr}..."
+    upsert_env_key BIND_ADDR "${addr}"
+  fi
+
+  log_success "Env vars ready in ${ENV_FILE}."
+}
+
+preflight() {
+  require_env_file
+  command -v docker >/dev/null 2>&1 || log_error 'docker is not installed.'
+  docker compose version >/dev/null 2>&1 || log_error 'docker compose v2 is not available.'
+
+  local bind_addr data_dir host_uid host_gid owner_uid owner_gid
+  bind_addr="$(env_get BIND_ADDR)"
+  # Empty BIND_ADDR makes compose publish on 0.0.0.0, which would put the devbox
+  # on the public internet. Failing here is the intended direction.
+  [[ -n "${bind_addr}" ]] || log_error "BIND_ADDR is empty in ${ENV_FILE} - run './bin/devbox env' (Tailscale must be up)."
+
+  data_dir="$(env_get DEVBOX_DATA_DIR)"
+  [[ -n "${data_dir}" ]] || log_error "DEVBOX_DATA_DIR is empty in ${ENV_FILE}."
+  [[ "${data_dir}" == /* ]] || log_error "DEVBOX_DATA_DIR must be an absolute path, got '${data_dir}'."
+
+  host_uid="$(env_get HOST_UID)"
+  host_gid="$(env_get HOST_GID)"
+
+  if [[ ! -d "${data_dir}" ]]; then
+    log_info "Creating ${data_dir} owned by ${host_uid}:${host_gid}..."
+    install -d -m 755 -o "${host_uid}" -g "${host_gid}" "${data_dir}" 2>/dev/null \
+      || log_error "Could not create ${data_dir} - run: sudo install -d -m 755 -o ${host_uid} -g ${host_gid} ${data_dir}"
+  fi
+
+  owner_uid="$(stat -c '%u' "${data_dir}")"
+  owner_gid="$(stat -c '%g' "${data_dir}")"
+  if [[ "${owner_uid}" != "${host_uid}" || "${owner_gid}" != "${host_gid}" ]]; then
+    log_error "${data_dir} is owned by ${owner_uid}:${owner_gid}, expected ${host_uid}:${host_gid} - run: sudo chown -R ${host_uid}:${host_gid} ${data_dir}"
+  fi
+}
+
+cmd_up() {
+  preflight
+  compose up -d --build
+  log_success "devbox is up on $(env_get BIND_ADDR):$(env_get DEVBOX_SSH_PORT)."
+}
+
+cmd_down() {
+  require_env_file
+  compose down
+  log_success 'devbox is down.'
+}
+
+cmd_rebuild() {
+  preflight
+  compose build --no-cache
+  compose up -d
+  log_success 'devbox rebuilt.'
+}
+
+cmd_bootstrap() {
+  require_env_file
+  compose exec -T "${SERVICE}" /opt/devbox/container/bootstrap.sh
+}
+
+cmd_shell() {
+  require_env_file
+  compose exec "${SERVICE}" bash -l
+}
+
+cmd_logs() {
+  require_env_file
+  if [[ "${1:-}" == '-f' ]]; then
+    compose logs -f "${SERVICE}"
+  else
+    compose logs --tail 100 "${SERVICE}"
+  fi
+}
+
+cmd_keys() {
+  require_env_file
+  # shellcheck disable=SC2016 # the script body must expand inside the container
+  compose exec -T "${SERVICE}" bash -c '
+    set -e
+    for identity in personal work; do
+      printf "%-10s %s\n" "$identity" "$(cat "$HOME/.ssh/id_${identity}.pub")"
+    done
+    echo
+    echo "sshd host key:"
+    ssh-keygen -lf "$HOME/.ssh/host/ssh_host_ed25519_key.pub"
+  '
+}
+
+cmd_doctor() {
+  require_env_file
+  local failures=0
+  fail() {
+    log_warn "$*"
+    failures=$((failures + 1))
+  }
+
+  if command -v docker >/dev/null 2>&1; then
+    log_success 'docker present'
+  else
+    fail 'docker missing'
+  fi
+
+  if docker compose version >/dev/null 2>&1; then
+    log_success "compose present: $(docker compose version --short)"
+  else
+    fail 'docker compose v2 missing'
+  fi
+
+  local bind_addr ssh_port addr
+  bind_addr="$(env_get BIND_ADDR)"
+  ssh_port="$(env_get DEVBOX_SSH_PORT)"
+  addr="$(tailscale_addr)"
+
+  if [[ -z "${bind_addr}" ]]; then
+    fail 'BIND_ADDR is empty'
+  elif [[ -n "${addr}" && "${bind_addr}" != "${addr}" ]]; then
+    fail "BIND_ADDR is ${bind_addr} but Tailscale reports ${addr} - run './bin/devbox env'"
+  else
+    log_success "BIND_ADDR matches the Tailscale address (${bind_addr})"
+  fi
+
+  if ss -ltn 2>/dev/null | grep -qE "${bind_addr}:${ssh_port}\b"; then
+    log_success "sshd published on ${bind_addr}:${ssh_port}"
+  else
+    fail "nothing listening on ${bind_addr}:${ssh_port}"
+  fi
+
+  if ss -ltn 2>/dev/null | grep -qE "0\.0\.0\.0:${ssh_port}\b"; then
+    fail "port ${ssh_port} is published on 0.0.0.0 - the devbox is internet-exposed"
+  else
+    log_success "port ${ssh_port} is not published on 0.0.0.0"
+  fi
+
+  local health
+  health="$(docker inspect -f '{{ .State.Health.Status }}' "${SERVICE}" 2>/dev/null || echo 'missing')"
+  if [[ "${health}" == 'healthy' ]]; then
+    log_success 'container healthy'
+  else
+    fail "container health: ${health}"
+  fi
+
+  local pid1_user
+  pid1_user="$(compose exec -T "${SERVICE}" ps -o user= -p 1 2>/dev/null | tr -d ' ' || true)"
+  if [[ "${pid1_user}" == 'dev' ]]; then
+    log_success 'PID 1 runs as dev (no root process)'
+  else
+    fail "PID 1 user: ${pid1_user:-unknown}"
+  fi
+
+  log_info 'Toolchain versions:'
+  # shellcheck disable=SC2016 # the probe list must expand inside the container
+  compose exec -T "${SERVICE}" bash -lc '
+    for probe in "herdr --version" "omp --version" "node -v" "pnpm -v" "gh --version" \
+      "lazygit --version" "wt --version" "terraform version" "op --version" "git --version"; do
+      printf "  %-12s %s\n" "${probe%% *}" "$($probe 2>&1 | head -1)"
+    done
+  ' || fail 'toolchain probe failed'
+
+  if ((failures > 0)); then
+    log_error "${failures} check(s) failed."
+  fi
+  log_success 'All checks passed.'
+}
+
+main() {
+  local command="${1:-}"
+  shift || true
+  case "${command}" in
+    env) cmd_env "$@" ;;
+    up) cmd_up "$@" ;;
+    down) cmd_down "$@" ;;
+    rebuild) cmd_rebuild "$@" ;;
+    bootstrap) cmd_bootstrap "$@" ;;
+    shell) cmd_shell "$@" ;;
+    logs) cmd_logs "$@" ;;
+    keys) cmd_keys "$@" ;;
+    doctor) cmd_doctor "$@" ;;
+    ''|-h|--help|help) usage ;;
+    *)
+      usage >&2
+      log_error "Unknown command: ${command}"
+      ;;
+  esac
+}
+
+main "$@"

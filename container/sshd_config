@@ -1,0 +1,37 @@
+# sshd runs unprivileged as `dev`, so: a port above 1024, no PAM, pubkey only,
+# and absolute paths everywhere (sshd_config does not expand `~`).
+Port 2222
+ListenAddress 0.0.0.0
+
+# In the bind mount, so the client's known_hosts entry survives container and
+# image rebuilds.
+HostKey /home/dev/.ssh/host/ssh_host_ed25519_key
+
+AuthorizedKeysFile /home/dev/.ssh/authorized_keys
+PidFile /home/dev/.ssh/sshd.pid
+
+AllowUsers dev
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+UsePAM no
+StrictModes yes
+
+X11Forwarding no
+# Signing and GitHub auth use keys that live inside the devbox, so nothing needs
+# a forwarded agent.
+AllowAgentForwarding no
+# Load-bearing: dev servers are reached with `ssh -N -L 5173:localhost:5173 devbox`
+# instead of publishing more container ports.
+AllowTcpForwarding yes
+PermitTunnel no
+
+PrintMotd no
+LogLevel INFO
+ClientAliveInterval 30
+ClientAliveCountMax 6
+# herdr opens several concurrent channels over one connection.
+MaxSessions 32
+AcceptEnv LANG LC_* TERM COLORTERM
+Subsystem sftp internal-sftp

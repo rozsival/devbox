@@ -1,0 +1,23 @@
+# IDE
+.idea
+.vscode
+
+# Environment
+.env
+.push.env
+
+# Docker
+docker-compose.override.yml
+
+# Local state
+data/
+
+# Secrets
+*.pem
+
+# Temporary files
+*.backup
+*.bak
+*.log
+*.tmp
+tmp
