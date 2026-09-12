@@ -186,7 +186,10 @@ chmod 600 "${secrets_file}"
 # written when `op run` resolved these references is still here - and this file
 # is now sourced directly, which would export the literal `op://...` string into
 # every shell. Warn instead of editing someone's credential file.
-if grep -q 'op://' "${secrets_file}" 2>/dev/null; then
+#
+# Assignments only: the shipped template mentions `op://` in a comment, so a
+# bare `grep op://` would flag every fresh install.
+if grep -qE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=.*op://' "${secrets_file}" 2>/dev/null; then
   log_warn "${secrets_file} still holds op:// references; they are now exported verbatim."
   register_action "Replace the op:// references in ${secrets_file} with plain values (op is no longer installed; render them on the laptop)"
 fi
