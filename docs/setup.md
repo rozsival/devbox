@@ -131,6 +131,20 @@ It is rebuilt on every container start from `https://github.com/<DEVBOX_GITHUB_U
 `DEVBOX_EXTRA_AUTHORIZED_KEYS`, so rotating a key on GitHub is a restart rather than a manual edit. To narrow
 the trust, clear `DEVBOX_GITHUB_USER` and list keys explicitly instead.
 
+**How do I authorize another client - a phone, a second laptop?**
+Append its public key to `DEVBOX_EXTRA_AUTHORIZED_KEYS` in `.env` **on the workstation**
+(`workstation:~/devbox/.env`; `bin/push` never syncs it) and run `./bin/devbox up`. The value is
+newline-separated inside one pair of double quotes - compose passes multi-line values through intact:
+
+```bash
+DEVBOX_EXTRA_AUTHORIZED_KEYS="ssh-ed25519 AAAA…O/L+ laptop-devbox
+ssh-ed25519 AAAA…a0iNF iphone"
+```
+
+`up` recreates the container, which is what re-reads `.env` - a plain `docker restart` would keep the old
+environment. Confirm with `docker compose exec devbox ssh-keygen -lf /home/dev/.ssh/authorized_keys`. The
+client still needs to be on the tailnet: the port is published only on `BIND_ADDR`.
+
 **Can I use the 1Password agent anyway?**
 For interactive `ssh devbox`, yes - any key the agent holds works if it is authorized. Only herdr's
 background connections need the file key, so both can coexist.
