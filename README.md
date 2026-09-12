@@ -5,8 +5,9 @@ container running its own unprivileged `sshd`, published only on the node's Tail
 [herdr](https://herdr.dev) client on a laptop can attach to it as a saved machine and run OMP agents inside
 it.
 
-The container **is** the sandbox. Agents running with bypassed permissions reach the project tree and the
-internet - never the host filesystem and never the host Docker daemon.
+The container **is** the sandbox. Agents running with bypassed permissions reach the project tree, the
+internet and a rootless project Docker daemon - never the host filesystem and never the host's root Docker
+daemon.
 
 ```mermaid
 flowchart LR
@@ -20,7 +21,9 @@ flowchart LR
 
 ```bash
 ./bin/push workstation # sync the repo to ~/devbox
-ssh workstation 'cd ~/devbox && ./bin/devbox env && ./bin/devbox up'
+ssh workstation 'cd ~/devbox && ./bin/devbox env'
+ssh -t workstation 'cd ~/devbox && sudo ./bin/rootless-docker' # once: project Docker, asks for a password
+ssh workstation 'cd ~/devbox && ./bin/devbox up'
 herdr machine add devbox --label "Workstation devbox" # once the SSH setup below is done
 ssh workstation 'cd ~/devbox && ./bin/devbox skills' # optional: agent skills + browser automation
 ./bin/sync-omp # optional: push this laptop's OMP preset into the devbox
@@ -41,6 +44,7 @@ background connections), the two **`~/.ssh/config` blocks**, and a non-empty **`
 | [Secrets](docs/secrets.md)         | Box-wide vs per-project secrets, `gh` token, GCP ADC, App creds     |
 | [CLI reference](docs/cli.md)       | Every `bin/devbox`, `bin/push` and `bin/sync-omp` flag              |
 | [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding                |
+| [Docker](docs/docker.md)           | Project containers, the rootless daemon, `devbox-ports`             |
 | [Operations](docs/operations.md)   | Redeploy, restart, backup, `doctor`, troubleshooting                |
 | [Security model](docs/security.md) | Boundaries, trust assumptions, what an escaped agent reaches        |
 
@@ -57,6 +61,7 @@ Working on this repo rather than in it? [AGENTS.md](AGENTS.md) holds the convent
 Dockerfile            pinned toolchain; ends as USER dev
 docker-compose.yml    ${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222 is the whole network boundary
 bin/devbox            host-side CLI: env, up, down, rebuild, bootstrap, skills, shell, logs, keys, doctor
+bin/rootless-docker   host-side, one-time: provisions the rootless project Docker daemon
 bin/push              laptop-side rsync deploy
 bin/sync-omp          laptop-side OMP preset sync (~/.omp/agent/config.yml → devbox)
 container/            entrypoint.sh (PID 1), bootstrap.sh (user setup), skills.sh (optional), sshd_config
@@ -72,6 +77,7 @@ docs/                 this documentation
 ssh devbox                           # shell in the container
 herdr                                # attach panes; they survive client exit
 ssh -N -L 5173:localhost:5173 devbox # reach a dev server
+ssh devbox 'cd projects/app && docker compose up -d && devbox-ports'  # project containers on localhost
 ssh workstation 'cd ~/devbox && ./bin/devbox doctor'
 ssh workstation 'cd ~/devbox && ./bin/devbox sessions'   # who is connected (a recreate kills them)
 ./bin/sync-omp                       # push this laptop's OMP preset into the devbox

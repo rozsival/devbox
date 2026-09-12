@@ -15,10 +15,13 @@
 | `wt` (worktrunk) | `0.77.0`  | `/usr/local/bin/wt` + `git-wt`                     |
 | `terraform`      | `1.16.2`  | `/usr/local/bin/terraform`                         |
 | `nvm`            | `0.40.7`  | `/opt/nvm`                                         |
+| Docker CLI       | `29.8.0`  | `/usr/local/bin/docker`                            |
+| Compose plugin   | `5.5.1`   | `/usr/local/lib/docker/cli-plugins/docker-compose` |
+| Buildx plugin    | `0.37.1`  | `/usr/local/lib/docker/cli-plugins/docker-buildx`  |
 
 Plus from the Ubuntu archive: `git`, `git-lfs`, `starship`, `ripgrep`, `fd` (symlinked from `fdfind`), `jq`,
 `curl`, `rsync`, `build-essential`, `python3`, `openssh-server`/`-client`, `nano`, `less`, `procps`,
-`iproute2`.
+`iproute2`, `socat` (backs `devbox-ports`, see [Project containers](#project-containers)).
 
 Deliberately absent: **`op`** (the container holds no 1Password account) and **`gcloud`** (projects reach
 Google APIs through a per-project service-account key, and ADC needs only the key file). Both decisions and
@@ -43,6 +46,22 @@ blank line.
   `/usr/local/bin` so they resolve without a login shell.
 - **`~/.local/bin`** - OMP only, installed by `bootstrap` instead of baked into the image so `omp update`
   works without a rebuild.
+- **`/usr/local/lib/docker/cli-plugins`** - where `docker compose` and `docker buildx` live as CLI plugins.
+  Only the client ships in the image; the daemon is the host's rootless `dev` daemon (see below).
+
+## Project containers
+
+Projects that bring their own containers reach Docker through a second, rootless daemon on the host, never
+through a daemon nested in this container. See [Docker](docker.md) for the full model and the one-time
+`sudo ./bin/rootless-docker` setup.
+
+```bash
+docker compose up -d
+devbox-ports            # mirrors published ports onto 127.0.0.1
+```
+
+Keep `DOCKER_CLI_VERSION` in the `Dockerfile` equal to the host daemon's version - compose refuses to talk
+to an API newer than the server it reaches.
 
 ## OMP
 
@@ -160,8 +179,10 @@ No - `dev` is not root and there is no sudo. That is deliberate: the image is th
 it to the `Dockerfile` and rebuild. For throwaway tools, prefer `pnpm dlx` or `python3 -m venv`.
 
 **Can I run Docker inside the devbox?**
-No. The host socket is not mounted; see [Security model](security.md). The answer if it ever becomes
-necessary is a `docker:dind-rootless` sidecar plus `DOCKER_HOST`, not a socket mount.
+Yes, via a second rootless daemon owned by a dedicated host user - see [Docker](docker.md). The host's own
+root daemon socket is still not mounted, and nesting a daemon in the container remains impossible: rootless
+docker needs the setuid helpers `newuidmap`/`newgidmap`, which `cap_drop: [ALL]` and `no-new-privileges` rule
+out.
 
 **Does `rebuild` destroy my data?**
 No. The image is rebuilt from scratch; `/home/dev` is a bind mount on the host and untouched. Only things

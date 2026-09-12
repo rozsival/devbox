@@ -36,14 +36,26 @@ including the client's `known_hosts` entry.
 Panes survive client loss because the herdr server runs in the container; they do not survive the container
 restarting with it.
 
+Images, the build cache and named volumes for project containers live under
+`/home/dev/.local/share/docker`, on the same bind mount - they survive `rebuild` and are excluded from
+`bin/push` like the rest of the data dir. Pruning is manual: `docker system prune`.
+
 ## Backup
 
 ```bash
-ssh workstation 'tar -C /home/vit -czf - devbox-data' > devbox-data-$(date +%F).tar.gz
+ssh -t workstation 'sudo tar -C /home --exclude=dev/.local/share/docker -czf /tmp/devbox-home.tar.gz dev'
+scp workstation:/tmp/devbox-home.tar.gz "devbox-home-$(date +%F).tar.gz"
+ssh -t workstation 'sudo rm -f /tmp/devbox-home.tar.gz'
 ```
 
-Restore by extracting into place with the ownership preserved (`HOST_UID:HOST_GID`), then `./bin/devbox up`.
-The `.env` file on the host is worth copying separately - it is not in the repo and not in the data dir.
+`sudo` is needed because the tree belongs to the dedicated `dev` account, not to your host user. The
+exclusion drops the project daemon's images, build cache **and named volumes** - all of
+`~/.local/share/docker`. Images rebuild from a `Dockerfile`; if a named volume holds data you care about,
+dump it instead (`docker compose exec db pg_dump …`), which is the portable copy anyway.
+
+Restore by extracting into place with the ownership preserved (`HOST_UID:HOST_GID`, i.e. `dev:devbox`), then
+`./bin/devbox up`. The `.env` file on the host is worth copying separately - it is not in the repo and not in
+the data dir.
 
 ## Health
 
@@ -54,6 +66,9 @@ ssh workstation 'cd ~/devbox && ./bin/devbox logs -f'    # follow sshd output
 
 The compose healthcheck is `ss -ltn | grep -q ":2222"` every 30s with a 20s start period, so a container that
 comes up without a listening sshd is reported `unhealthy` rather than silently broken.
+
+`doctor` also probes `docker --version` and `docker compose version` in the toolchain list, that the project
+Docker daemon is reachable from the container and rootless, and that `host.docker.internal` resolves.
 
 ## Troubleshooting
 
@@ -90,6 +105,15 @@ the bind mount. Pin it in the `Dockerfile` instead - see [Toolchain](toolchain.m
 
 **`wt switch` does not change directory**
 It was run inside a pipeline, so its `cd` happened in a subshell. Run it directly.
+
+**`docker: Cannot connect to the Docker daemon`**
+The project daemon is down or was never provisioned. On the host: `sudo ./bin/rootless-docker --check`, then
+`systemctl --user --machine=dev@.host status docker` for the daemon's own log.
+
+**A project's bind mount is empty**
+Path identity was broken: the project must live under `/home/dev`, and `DEVBOX_DATA_DIR` must equal
+`/home/dev` - the daemon resolves bind-mount sources on the host. `sudo ./bin/rootless-docker --check` reports
+a mismatch.
 
 **`ssh devbox` closes mid-session with no error**
 The container went away under the session. sshd was killed with it, so nothing was left to send a disconnect

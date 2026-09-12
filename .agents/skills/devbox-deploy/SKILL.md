@@ -41,10 +41,11 @@ only for when they have said to drop them: it kills their shells and panes with 
 | Only a `bin/*` script                 | nothing                          | Read at invocation, on the host   |
 | `container/skills.sh`                 | `up`, then `./bin/devbox skills` | Script is only run on demand      |
 | `~/.omp/agent/config.yml` (laptop)    | `./bin/sync-omp`                 | Personal state, not repo content  |
+| `bin/rootless-docker` on a new host   | `sudo ./bin/rootless-docker`     | Host provisioning, needs sudo     |
 
 `up` = `docker compose build` then `docker compose up -d` behind a preflight (`BIND_ADDR` non-empty;
-`${DEVBOX_DATA_DIR}` present and owned by `HOST_UID:HOST_GID`). `rebuild` = `docker compose build --no-cache
-&& docker compose up -d`.
+`${DEVBOX_DATA_DIR}` present and owned by `HOST_UID:HOST_GID`). A missing project Docker socket only warns -
+the devbox is usable without it. `rebuild` = `docker compose build --no-cache && docker compose up -d`.
 
 A recreate kills every live SSH session instantly, and the client prints no reason at all - it looks like
 `ssh devbox` closed itself. `up`, `down` and `rebuild` therefore count established sessions first: with any
@@ -73,8 +74,9 @@ This matters because the answer to "will I lose my keys / repos / gh login" is a
 
 - `.env` is gitignored **and** rsync-excluded, so host-local config survives every push.
 - `${DEVBOX_DATA_DIR}` is a host bind mount, not part of the image: `~/.ssh/id_personal`, `~/.ssh/id_work`,
-  the sshd host key under `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/secrets.env`, `~/.gitconfig` and
-  every project checkout persist across `up`, `rebuild` and image changes.
+  the sshd host key under `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/secrets.env`, `~/.gitconfig`,
+  every project checkout, and the project daemon's images, build cache and named volumes under
+  `~/.local/share/docker` persist across `up`, `rebuild` and image changes.
 - `--delete` applies only to synced paths. It *will* remove files added by hand to the remote copy of a
   tracked directory - the remote is a mirror, deliberately.
 
@@ -120,15 +122,19 @@ git switch --detach <good-commit> && ./bin/push workstation --up
 git switch - && git stash pop                                  # back to where you were
 ```
 
-State lives outside the repo, so back it up from the host and stream it to the laptop:
+State lives outside the repo, in a tree owned by the dedicated `dev` account, so the backup needs `sudo` on
+the host:
 
 ```bash
-ssh workstation 'tar -C /home/vit -czf - devbox-data' > devbox-data-$(date +%F).tar.gz
+ssh -t workstation 'sudo tar -C /home --exclude=dev/.local/share/docker -czf /tmp/devbox-home.tar.gz dev'
+scp workstation:/tmp/devbox-home.tar.gz "devbox-home-$(date +%F).tar.gz"
+ssh -t workstation 'sudo rm -f /tmp/devbox-home.tar.gz'
 ```
 
-Restore by extracting into place with `HOST_UID:HOST_GID` ownership preserved, then `./bin/devbox up`. Copy
-the host's `.env` separately - it is in neither the repo nor the data dir. The sshd host key *is* in the
-archive, so a restore keeps the laptop's `known_hosts` valid.
+The exclusion drops the project daemon's images, cache and named volumes; dump a database you care about
+rather than tarring its volume. Restore by extracting into place with `HOST_UID:HOST_GID` ownership
+preserved, then `./bin/devbox up`. Copy the host's `.env` separately - it is in neither the repo nor the data
+dir. The sshd host key *is* in the archive, so a restore keeps the laptop's `known_hosts` valid.
 
 ## Repo conventions when the change is yours
 

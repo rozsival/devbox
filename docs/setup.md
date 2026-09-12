@@ -80,8 +80,19 @@ ssh workstation 'cd ~/devbox && ./bin/devbox env'
 ```
 
 `env` creates `.env` from `.env.example` and fills `BIND_ADDR` from `tailscale ip -4`, plus `HOST_UID` and
-`HOST_GID` from the current user. Then edit `~/devbox/.env` on the workstation - at minimum
-`DEVBOX_EXTRA_AUTHORIZED_KEYS` with the key from step 1 - and start it:
+`HOST_GID` from the `dev` host user once it exists, otherwise from the current user. Then edit
+`~/devbox/.env` on the workstation - at minimum `DEVBOX_EXTRA_AUTHORIZED_KEYS` with the key from step 1.
+
+Provision the project Docker daemon once. It needs `.env` to exist (hence after `env`) and moves
+`DEVBOX_DATA_DIR` to `/home/dev` under the new `dev` account, which it refuses to do while the container
+is running (hence before the first `up`):
+
+```bash
+ssh -t workstation 'cd ~/devbox && sudo ./bin/rootless-docker'
+```
+
+`--check` reports what is missing without changing anything; see [Docker](docker.md) for what it provisions.
+Then start the container:
 
 ```bash
 ssh workstation 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
@@ -111,17 +122,18 @@ Both are idempotent and can be re-run at any time. Details in
 
 ## `.env` reference
 
-| Variable                        | Default                 | Purpose                                   |
-|---------------------------------|-------------------------|-------------------------------------------|
-| `BIND_ADDR`                     | *(empty)*               | Publish address; empty = `up` refuses     |
-| `DEVBOX_SSH_PORT`               | `2223`                  | Host port (container always uses `2222`)  |
-| `DEVBOX_DATA_DIR`               | `/home/vit/devbox-data` | Host path mounted at `/home/dev`          |
-| `HOST_UID` / `HOST_GID`         | `1000`                  | Container UID/GID; must own the data dir  |
-| `TZ`                            | `Europe/Prague`         | Container timezone                        |
-| `DEVBOX_GITHUB_USER`            | `rozsival`              | Seeds keys from `github.com/<user>.keys`  |
-| `DEVBOX_EXTRA_AUTHORIZED_KEYS`  | *(empty)*               | Extra keys, newline-separated             |
-| `GIT_PERSONAL_NAME` / `_EMAIL`  | personal identity       | Applied to `~/.gitconfig`                 |
-| `GIT_WORK_NAME` / `_EMAIL`   | work identity        | Applied to `~/.config/work/.gitconfig` |
+| Variable                       | Default           | Purpose                                                         |
+|--------------------------------|-------------------|-----------------------------------------------------------------|
+| `BIND_ADDR`                    | *(empty)*         | Publish address; empty = `up` refuses                           |
+| `DEVBOX_SSH_PORT`              | `2223`            | Host port (container always uses `2222`)                        |
+| `DEVBOX_DATA_DIR`              | `/home/dev`       | Host path; must equal container home (path identity)            |
+| `HOST_UID` / `HOST_GID`        | `1001`            | Dedicated `dev` host user; owns the data dir and project daemon |
+| `DEVBOX_DOCKER_SOCKET_DIR`     | `/run/devbox`     | Project daemon socket dir, bind-mounted into the container      |
+| `TZ`                           | `Europe/Prague`   | Container timezone                                              |
+| `DEVBOX_GITHUB_USER`           | `rozsival`        | Seeds keys from `github.com/<user>.keys`                        |
+| `DEVBOX_EXTRA_AUTHORIZED_KEYS` | *(empty)*         | Extra keys, newline-separated                                   |
+| `GIT_PERSONAL_NAME` / `_EMAIL` | personal identity | Applied to `~/.gitconfig`                                       |
+| `GIT_WORK_NAME` / `_EMAIL`  | work identity  | Applied to `~/.config/work/.gitconfig`                       |
 
 `.env` holds no secrets: tool credentials go in `~/.config/devbox/secrets.env` inside the container and
 project secrets in each project's own `.env`. See [Secrets](secrets.md).
@@ -162,6 +174,11 @@ No. It excludes `.git`, `.env`, `data/` and `.DS_Store`, and `--delete` applies 
 Only if the Tailscale address changed. `doctor` compares `BIND_ADDR` against `tailscale ip -4` and fails when
 they diverge.
 
+**I already have a devbox at the old data path. What does `sudo ./bin/rootless-docker` do to it?**
+Nothing while the container is running - it refuses and tells you to `./bin/devbox down` first. Stopped, it
+`mv`s the old `DEVBOX_DATA_DIR` to `/home/dev` and chowns the tree to the new `dev` user. Keys, cloned repos
+and `gh auth login` all survive: it is a move, not a recreate. Finish with `./bin/devbox rebuild`.
+
 **Where does the data live on the host?**
-`${DEVBOX_DATA_DIR}` (default `/home/vit/devbox-data`), owned by `HOST_UID:HOST_GID`. See
-[Operations](operations.md) for backup and restore.
+`${DEVBOX_DATA_DIR}` (default `/home/dev`), owned by `HOST_UID:HOST_GID`. See [Operations](operations.md) for
+backup and restore.

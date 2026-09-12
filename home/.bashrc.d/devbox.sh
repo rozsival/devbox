@@ -26,6 +26,13 @@ export COREPACK_HOME=/opt/corepack
 
 export EDITOR=nano
 
+# The project Docker daemon: a rootless dockerd owned by the `dev` *host* user,
+# reached through the socket directory compose bind-mounts here. Exported for
+# non-interactive shells too, so `ssh devbox 'docker compose up -d'` works.
+# Container paths equal host paths for /home/dev, so relative bind mounts in a
+# project's compose file resolve correctly - see docs/docker.md.
+export DOCKER_HOST=unix:///run/devbox/docker.sock
+
 # Interactive-only: prompt, aliases, and the ~100ms nvm shell function.
 if [[ $- == *i* ]]; then
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"

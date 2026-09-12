@@ -30,10 +30,12 @@ refuse outright in a script; `--force` (`-f`) skips the prompt. A `docker compos
 leaves the container running, so a no-op `up` never asks.
 
 - **`env`** - never clobbers an existing `.env`; rewrites `BIND_ADDR` from `tailscale ip -4` and
-  `HOST_UID`/`HOST_GID` from the current user.
+  `HOST_UID`/`HOST_GID` from the `dev` host user when it exists, otherwise from the invoking user.
 - **`up`** - preflight (`BIND_ADDR` non-empty; `DEVBOX_DATA_DIR` present and owned by `HOST_UID:HOST_GID`,
-  created with `install -d` when absent), `docker compose build`, then `docker compose up -d`. The build
-  runs before the session check because a fresh image is itself a reason for compose to recreate.
+  created with `install -d` when absent; a *warning*, not a failure, when the project Docker socket is
+  missing, with a pointer to `sudo ./bin/rootless-docker`), `docker compose build`, then
+  `docker compose up -d`. The build runs before the session check because a fresh image is itself a reason
+  for compose to recreate.
 - **`down`** - `docker compose down`. The bind mount and `.env` are untouched.
 - **`rebuild`** - `docker compose build --no-cache && docker compose up -d`. Use after a `Dockerfile` change.
 - **`bootstrap`** - `docker compose exec` of `container/bootstrap.sh`; idempotent and reprints the checklist.
@@ -55,8 +57,40 @@ leaves the container running, so a no-op `up` never asks.
 3. Something listening on `BIND_ADDR:${DEVBOX_SSH_PORT}`, and **nothing** on `0.0.0.0`
 4. Container health status is `healthy`
 5. PID 1 runs as `dev` (no root process)
-6. Nine toolchain probes, each with its real exit code: `herdr`, `omp`, `node`, `pnpm`, `gh`, `lazygit`, `wt`,
-   `terraform`, `git`
+6. Eleven toolchain probes, each with its real exit code: `herdr`, `omp`, `node`, `pnpm`, `gh`, `lazygit`,
+   `wt`, `terraform`, `git`, `docker`, `docker compose`
+7. The project Docker daemon is reachable from inside the container and reports `rootless`
+8. `host.docker.internal` resolves inside the container
+
+## `bin/rootless-docker`
+
+```
+Usage: sudo ./bin/rootless-docker [--check]
+```
+
+Host-side, one-time provisioning for the project Docker daemon: a second, rootless `dockerd` running as a
+dedicated unprivileged host user `dev` (uid 1001, group `devbox`) - never the host's root daemon, never
+nested in the container. See [Docker](docker.md) for the reasoning.
+
+Must run with `sudo`. Every step is idempotent, so a re-run is a no-op. `--check` reports what is missing and
+changes nothing.
+
+What it provisions:
+
+- installs `uidmap` and `slirp4netns`
+- creates the `dev:devbox` host user (uid 1001), no password, no keys, no sudo
+- moves `DEVBOX_DATA_DIR` to `/home/dev` and chowns it, so container and host bind-mount paths match
+- writes `/etc/nftables.d/devbox-docker.nft` and enables `devbox-docker-firewall.service`, which keeps
+  published project ports off every interface but loopback and the devbox bridge
+- adds one `ufw` rule so the devbox bridge can reach the gateway address ports are published on
+- writes `/etc/tmpfiles.d/devbox-docker.conf` so `/run/devbox` exists before the daemon starts and on reboot
+- runs `loginctl enable-linger dev`, so the never-logged-in account still gets a systemd user manager
+- writes its own root-owned `/etc/systemd/user/docker.service` running
+  `dockerd-rootless.sh --host unix:///run/devbox/docker.sock`, and restarts the daemon when that file changes
+- patches `.env`: `DEVBOX_DATA_DIR=/home/dev`, `HOST_UID`/`HOST_GID=1001`,
+  `DEVBOX_DOCKER_SOCKET_DIR=/run/devbox`
+
+Finish with `./bin/devbox rebuild` as your own user.
 
 ## `bin/push`
 
@@ -126,3 +160,7 @@ left alone; derived Git identity values are re-applied with `git config --global
 
 **`doctor` says `BIND_ADDR is X but Tailscale reports Y`.**
 The node's Tailscale address changed. `./bin/devbox env && ./bin/devbox up`.
+
+**How do I tell whether the project Docker daemon is provisioned?**
+`sudo ./bin/rootless-docker --check` reports every missing piece and changes nothing. `./bin/devbox doctor`
+also checks that the daemon is reachable and rootless from inside the container.

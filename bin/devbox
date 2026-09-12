@@ -133,9 +133,21 @@ cmd_env() {
     cp "${ENV_EXAMPLE}" "${ENV_FILE}"
   fi
 
-  log_info 'Syncing HOST_UID and HOST_GID from the current user...'
-  upsert_env_key HOST_UID "$(id -u)"
-  upsert_env_key HOST_GID "$(id -g)"
+  # HOST_UID is the user that owns the bind mount *and* the rootless project
+  # Docker daemon, which is the dedicated `dev` account once
+  # `sudo ./bin/rootless-docker` has run - not whoever is deploying.
+  local owner_uid owner_gid
+  if getent passwd dev >/dev/null 2>&1; then
+    owner_uid="$(id -u dev)"
+    owner_gid="$(id -g dev)"
+    log_info "Syncing HOST_UID and HOST_GID from the dev user (${owner_uid}:${owner_gid})..."
+  else
+    owner_uid="$(id -u)"
+    owner_gid="$(id -g)"
+    log_info 'Syncing HOST_UID and HOST_GID from the current user...'
+  fi
+  upsert_env_key HOST_UID "${owner_uid}"
+  upsert_env_key HOST_GID "${owner_gid}"
 
   # Resolved from Tailscale, not from a flag: this address is what scopes the
   # published sshd port away from the public internet, and the node already owns
@@ -181,6 +193,18 @@ preflight() {
   owner_gid="$(stat -c '%g' "${data_dir}")"
   if [[ "${owner_uid}" != "${host_uid}" || "${owner_gid}" != "${host_gid}" ]]; then
     log_error "${data_dir} is owned by ${owner_uid}:${owner_gid}, expected ${host_uid}:${host_gid} - run: sudo chown -R ${host_uid}:${host_gid} ${data_dir}"
+  fi
+
+  # The project Docker daemon is optional infrastructure: a devbox with no
+  # project containers is perfectly usable, so a missing socket warns rather
+  # than blocking `up`. `docker` inside the container reports it precisely, and
+  # `doctor` fails on it.
+  local socket_dir
+  socket_dir="$(env_get DEVBOX_DOCKER_SOCKET_DIR)"
+  socket_dir="${socket_dir:-/run/devbox}"
+  if [[ ! -S "${socket_dir}/docker.sock" ]]; then
+    log_warn "No project Docker daemon at ${socket_dir}/docker.sock - 'docker' inside the devbox will not work."
+    log_warn 'Provision it with: sudo ./bin/rootless-docker'
   fi
 }
 
@@ -338,21 +362,68 @@ cmd_doctor() {
   if ! compose exec -T "${SERVICE}" bash -lc '
     status=0
     for probe in "herdr --version" "omp --version" "node -v" "pnpm -v" "gh --version" \
-      "lazygit --version" "wt --version" "terraform version" "git --version"; do
+      "lazygit --version" "wt --version" "terraform version" "git --version" \
+      "docker --version" "docker compose version"; do
       # No pipe into head: a multi-line tool would take SIGPIPE (141) once head
       # exits, and the real exit code is the whole point of this loop.
+      label="${probe%% *}"
+      [[ "${probe}" == "docker compose"* ]] && label=compose
       if output="$($probe 2>&1)"; then
         IFS= read -r first <<< "$output"
-        printf "  %-12s %s\n" "${probe%% *}" "$first"
+        printf "  %-12s %s\n" "$label" "$first"
       else
         IFS= read -r first <<< "$output"
-        printf "  %-12s FAILED: %s\n" "${probe%% *}" "$first"
+        printf "  %-12s FAILED: %s\n" "$label" "$first"
         status=1
       fi
     done
     exit "$status"
   '; then
     fail 'one or more toolchain probes failed'
+  fi
+
+  # The project daemon must be reachable from inside the container and must be
+  # rootless: a rootful server here would mean the socket belongs to the host's
+  # root daemon, which is exactly what this design refuses.
+  local docker_info
+  docker_info="$(compose exec -T "${SERVICE}" bash -lc \
+    'docker info -f "{{ .ServerVersion }} {{ .SecurityOptions }}"' 2>&1 || true)"
+  if [[ "${docker_info}" == *rootless* ]]; then
+    log_success "project docker reachable: ${docker_info%% *} (rootless)"
+  elif [[ -n "${docker_info}" && "${docker_info}" != *'Cannot connect'* && "${docker_info}" != *error* ]]; then
+    fail "project docker is not rootless: ${docker_info}"
+  else
+    fail "project docker unreachable from the container - run: sudo ./bin/rootless-docker --check"
+  fi
+
+  # host.docker.internal is how everything in the container reaches a project
+  # service, so an unresolvable name means every published port is unreachable
+  # while both halves still look healthy. The daemon's publish address has to
+  # agree with it, or a project's ports land where nothing can reach them.
+  local gateway publish_ip
+  gateway="$(compose exec -T "${SERVICE}" \
+    sh -c "getent hosts host.docker.internal | awk '{ print \$1; exit }'" 2>/dev/null | tr -cd '0-9.' || true)"
+  # From the unit file, not `systemctl --machine` - the file is world-readable,
+  # the other user's manager is not addressable without root.
+  publish_ip="$(sed -n 's/^ExecStart=.*--ip \([0-9.]*\).*/\1/p' \
+    /etc/systemd/user/docker.service 2>/dev/null | head -1 || true)"
+  if [[ -z "${gateway}" ]]; then
+    fail 'host.docker.internal does not resolve inside the container'
+  elif [[ -n "${publish_ip}" && "${publish_ip}" != "${gateway}" ]]; then
+    fail "host.docker.internal is ${gateway} but the daemon publishes on ${publish_ip}: sudo ./bin/rootless-docker"
+  else
+    log_success "host.docker.internal resolves to ${gateway}${publish_ip:+ (matches the daemon publish address)}"
+  fi
+
+  # The rootless daemon publishes every project port on 0.0.0.0 and cannot be
+  # told otherwise, so this table - not the daemon - is what keeps those ports
+  # off the Tailnet and the LAN. `is-active` needs no privileges; reading the
+  # table itself would.
+  if systemctl is-active --quiet devbox-docker-firewall.service; then
+    log_success 'project port boundary active (devbox-docker-firewall)'
+  else
+    fail 'devbox-docker-firewall is inactive - project ports would reach the Tailnet and the LAN:'\
+' sudo ./bin/rootless-docker'
   fi
 
   if ((failures > 0)); then

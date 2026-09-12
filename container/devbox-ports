@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Mirrors the published ports of the project Docker daemon onto this container's
+# own loopback, so a project that expects `localhost:5432` needs no edit.
+#
+# Why it is needed: the daemon is a rootless sibling on the host, so its
+# containers publish into the host's network namespace, not this one. They are
+# reachable here as `host.docker.internal:<port>` - correct, but not what a
+# project's .env says. This forwards 127.0.0.1:<port> to that address for every
+# published port, which is exactly the Docker Desktop illusion.
+#
+# /usr/local/bin/devbox-ports is a symlink to this file under the read-only
+# ./container bind mount, so a host edit takes effect without an image rebuild.
+set -euo pipefail
+
+readonly STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/devbox-ports"
+readonly GATEWAY_HOST='host.docker.internal'
+
+log_info() { echo -e "\033[0;34m[INFO]\033[0m  $*"; }
+log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
+log_warn() { echo -e "\033[1;33m[WARN]\033[0m  $*" >&2; }
+log_error() {
+  echo -e "\033[0;31m[ERROR]\033[0m $*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: devbox-ports [sync|stop|status]
+
+  sync    (default) forward 127.0.0.1:<port> to every port the project daemon
+          publishes; safe to re-run after `docker compose up`
+  stop    tear down every forward this command started
+  status  list the live forwards
+USAGE
+}
+
+# A forward is alive when its recorded pid is still a running socat.
+forward_alive() {
+  local port="$1" pid
+  [[ -f "${STATE_DIR}/${port}.pid" ]] || return 1
+  pid="$(cat "${STATE_DIR}/${port}.pid")"
+  [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null
+}
+
+cmd_sync() {
+  command -v socat >/dev/null 2>&1 || log_error 'socat is missing from this image.'
+  docker info >/dev/null 2>&1 ||
+    log_error "cannot reach ${DOCKER_HOST:-the docker socket} - on the host: sudo ./bin/rootless-docker --check"
+
+  local gateway
+  gateway="$(getent hosts "${GATEWAY_HOST}" | awk '{ print $1; exit }')"
+  [[ -n "${gateway}" ]] ||
+    log_error "${GATEWAY_HOST} does not resolve - the container needs the host-gateway extra_hosts entry."
+
+  mkdir -p "${STATE_DIR}"
+  local mirrored=0 container port proto spec
+  # One inspect per container, printing "<containerPort>/<proto> <hostPort>"
+  # lines; a container with no published port prints nothing.
+  while read -r container; do
+    [[ -n "${container}" ]] || continue
+    while read -r spec port; do
+      [[ -n "${port}" ]] || continue
+      proto="${spec#*/}"
+      # UDP would need a second socat mode and no dev service here uses it.
+      [[ "${proto}" == 'tcp' ]] || continue
+      if forward_alive "${port}"; then
+        continue
+      fi
+      if ss -ltnH "sport = :${port}" | grep -q .; then
+        log_warn "port ${port} is already taken inside the container; skipped"
+        continue
+      fi
+      setsid socat "TCP-LISTEN:${port},bind=127.0.0.1,fork,reuseaddr" \
+        "TCP:${gateway}:${port}" >/dev/null 2>&1 &
+      echo "$!" >"${STATE_DIR}/${port}.pid"
+      log_success "127.0.0.1:${port} -> ${GATEWAY_HOST}:${port} (${container})"
+      mirrored=$((mirrored + 1))
+    done < <(docker inspect -f \
+      '{{ range $p, $bindings := .NetworkSettings.Ports }}{{ range $bindings }}{{ $p }} {{ .HostPort }}
+{{ end }}{{ end }}' "${container}")
+  done < <(docker ps --format '{{.Names}}')
+
+  if ((mirrored == 0)); then
+    log_info 'Nothing new to mirror.'
+  fi
+  cmd_status
+}
+
+cmd_stop() {
+  local file port pid stopped=0
+  for file in "${STATE_DIR}"/*.pid; do
+    [[ -e "${file}" ]] || continue
+    port="$(basename "${file}" .pid)"
+    pid="$(cat "${file}")"
+    if [[ -n "${pid}" ]] && kill "${pid}" 2>/dev/null; then
+      log_success "stopped the forward on 127.0.0.1:${port}"
+      stopped=$((stopped + 1))
+    fi
+    rm -f "${file}"
+  done
+  ((stopped > 0)) || log_info 'No forwards were running.'
+}
+
+cmd_status() {
+  local file port live=0
+  for file in "${STATE_DIR}"/*.pid; do
+    [[ -e "${file}" ]] || continue
+    port="$(basename "${file}" .pid)"
+    if forward_alive "${port}"; then
+      printf '  127.0.0.1:%-6s -> %s:%s\n' "${port}" "${GATEWAY_HOST}" "${port}"
+      live=$((live + 1))
+    else
+      rm -f "${file}"
+    fi
+  done
+  ((live > 0)) || log_info 'No live forwards.'
+}
+
+case "${1:-sync}" in
+sync) cmd_sync ;;
+stop) cmd_stop ;;
+status) cmd_status ;;
+-h | --help | help) usage ;;
+*)
+  usage >&2
+  log_error "Unknown command: $1"
+  ;;
+esac

@@ -33,6 +33,16 @@ port is enforced by the DNAT rule itself, which is why `BIND_ADDR` - not a firew
 `BIND_ADDR` is mandatory: unset, `./bin/devbox up` refuses to start rather than silently falling back to
 `0.0.0.0`.
 
+The converse also holds, and matters for project containers: traffic *from* the devbox container *to* a host
+address is delivered locally, so it does traverse `INPUT` and UFW's default deny drops it. That is why
+`sudo ./bin/rootless-docker` adds exactly one rule - `allow in on docker0 to <gateway>`. Arriving on that
+interface already means a container on that bridge, so the rule needs no source clause. The only host
+service already reachable from the container is the workstation's own sshd, which binds `0.0.0.0`.
+
+Project ports are the mirror image: the rootless daemon publishes them on the bridge gateway, and the
+listeners it opens *are* plain host-namespace sockets, so `INPUT` does apply to them - which is why a
+netfilter table, not the publish address, is the boundary there. See [Docker](docker.md).
+
 ## Verifying exposure
 
 ```bash
@@ -44,7 +54,7 @@ is internet-exposed; `./bin/devbox doctor` fails on that condition explicitly.
 
 ## Dev servers and other ports
 
-Nothing else is published. Forward per port, per session:
+Nothing else is published from the devbox container itself. Forward per port, per session:
 
 ```bash
 ssh -N -L 5173:localhost:5173 devbox &          # dev server
@@ -54,6 +64,16 @@ ssh -N -L 8080:localhost:8080 -L 5432:localhost:5432 devbox &   # several at onc
 `AllowTcpForwarding yes` in `container/sshd_config` enables this; `PermitTunnel no` and
 `AllowAgentForwarding no` keep the rest closed. Remote (`-R`) forwards work the same way if the devbox needs
 to reach something on the laptop.
+
+Project containers (see [Docker](docker.md)) publish onto the `docker0` gateway - the devbox container's own
+bridge gateway - never onto `0.0.0.0`, so a published port is reachable inside the devbox at
+`host.docker.internal:<port>`, and `devbox-ports` mirrors it onto `127.0.0.1:<port>`. Tunnel from the laptop
+either way:
+
+```bash
+ssh -N -L 5432:localhost:5432 devbox &                  # after `devbox-ports` mirrors the port
+ssh -N -L 5432:host.docker.internal:5432 devbox &        # directly, without the mirror
+```
 
 ## ❓ FAQ
 
@@ -75,8 +95,15 @@ Possible, not recommended - it would need a second address-scoped `ports` entry 
 entry is a new boundary to audit. SSH forwarding needs no configuration and inherits the existing auth.
 
 **Does the container get its own IP on the Tailnet?**
-No. It uses Docker's default bridge network; the Tailnet terminates on the host, which DNATs into the
+No. It sits on Docker's default bridge (`docker0`); the Tailnet terminates on the host, which DNATs into the
 container. Outbound internet access from the container works normally.
 
 **Is IPv6 published?**
 No - only the IPv4 Tailscale address from `tailscale ip -4` and `127.0.0.1`.
+
+**Are project containers on the Tailnet?**
+No. The rootless daemon publishes them on the devbox bridge gateway rather than `0.0.0.0`, and
+`devbox-docker-firewall` drops input to that daemon's sockets outside loopback and the devbox bridge even if
+a port spec overrides that default. So `ports: ['5432:5432']` is reachable from the devbox and the host and
+nowhere else - unlike the DNAT case above, these listeners traverse `INPUT`, which is what makes a firewall
+the right tool here. See [Docker](docker.md).

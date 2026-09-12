@@ -17,6 +17,12 @@ ARG GH_VERSION=2.100.0
 ARG LAZYGIT_VERSION=0.65.0
 ARG WORKTRUNK_VERSION=0.77.0
 ARG TERRAFORM_VERSION=1.16.2
+# Client only - the daemon lives on the host as the `dev` user (docs/docker.md).
+# Keep DOCKER_CLI_VERSION equal to the host daemon's version; compose refuses to
+# talk to an API newer than the server it reaches.
+ARG DOCKER_CLI_VERSION=29.8.0
+ARG DOCKER_COMPOSE_VERSION=5.5.1
+ARG DOCKER_BUILDX_VERSION=0.37.1
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -46,6 +52,7 @@ RUN apt-get update \
     python3-venv \
     ripgrep \
     rsync \
+    socat \
     starship \
     tzdata \
     unzip \
@@ -111,7 +118,10 @@ RUN if getent passwd "${HOST_UID}" >/dev/null; then userdel -r "$(getent passwd 
 # is exactly how saved-machine background connections run.
 #
 # Checksums are verified wherever upstream publishes a checksum file; `herdr`
-# publishes none, so it relies on the pinned version plus TLS.
+# and Docker's static CLI tarball publish none, so those rely on the pinned
+# version plus TLS. The compose and buildx plugins do publish checksums.txt -
+# with the name marked for binary mode (`*name`), hence the extra `sub()` those
+# two awk filters carry and the others do not.
 #
 # No `op` here on purpose: the container holds no 1Password account. Secrets are
 # rendered on the laptop and pushed in - see docs/secrets.md.
@@ -144,6 +154,21 @@ RUN set -eux; \
   awk -v f="terraform_${TERRAFORM_VERSION}_linux_amd64.zip" '$2 == f { print $1 "  terraform.zip" }' terraform.sums | sha256sum -c -; \
   unzip -q terraform.zip terraform; \
   install -m 0755 terraform /usr/local/bin/terraform; \
+  \
+  curl -fsSL -o docker.tgz "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_CLI_VERSION}.tgz"; \
+  tar -xzf docker.tgz docker/docker; \
+  install -m 0755 docker/docker /usr/local/bin/docker; \
+  \
+  mkdir -p /usr/local/lib/docker/cli-plugins; \
+  curl -fsSL -o compose "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-linux-x86_64"; \
+  curl -fsSL -o compose.sums "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/checksums.txt"; \
+  awk '{ n = $2; sub(/^\*/, "", n) } n == "docker-compose-linux-x86_64" { print $1 "  compose" }' compose.sums | sha256sum -c -; \
+  install -m 0755 compose /usr/local/lib/docker/cli-plugins/docker-compose; \
+  \
+  curl -fsSL -o buildx "https://github.com/docker/buildx/releases/download/v${DOCKER_BUILDX_VERSION}/buildx-v${DOCKER_BUILDX_VERSION}.linux-amd64"; \
+  curl -fsSL -o buildx.sums "https://github.com/docker/buildx/releases/download/v${DOCKER_BUILDX_VERSION}/checksums.txt"; \
+  awk -v f="buildx-v${DOCKER_BUILDX_VERSION}.linux-amd64" '{ n = $2; sub(/^\*/, "", n) } n == f { print $1 "  buildx" }' buildx.sums | sha256sum -c -; \
+  install -m 0755 buildx /usr/local/lib/docker/cli-plugins/docker-buildx; \
   \
   cd /; rm -rf "$tmp"
 
@@ -180,6 +205,11 @@ RUN set -eux; \
 # edits take effect without a rebuild.
 COPY container/ /opt/devbox/container/
 COPY home/ /opt/devbox/home/
+
+# Symlink, not a copy: the target is the read-only ./container bind mount, so a
+# host edit is live without a rebuild. /usr/local/bin is on the default
+# non-interactive sshd PATH, which `ssh devbox 'devbox-ports'` needs.
+RUN ln -sf /opt/devbox/container/devbox-ports /usr/local/bin/devbox-ports
 
 # The container has no root process at runtime: sshd runs as `dev` and only ever
 # authenticates the user it already runs as (UsePAM no, pubkey-only), so it needs

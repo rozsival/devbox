@@ -5,9 +5,9 @@ description: Sets up the devbox end to end - the dedicated laptop SSH key, the t
 
 # devbox setup
 
-Setup has four phases with a hard ordering: laptop key → `~/.ssh/config` → deploy and `.env` on the
-workstation → in-container identity steps. Each phase ends with a check that must pass before moving on,
-because a failure two phases later is almost always an unverified earlier phase.
+Setup has five phases with a hard ordering: laptop key → `~/.ssh/config` → deploy and `.env` on the
+workstation → project Docker → in-container identity steps. Each phase ends with a check that must pass
+before moving on, because a failure two phases later is almost always an unverified earlier phase.
 
 The literal command and config blocks live in `docs/setup.md` - read the section this skill points you at
 rather than retyping them from memory, so a changed default is picked up instead of being reintroduced.
@@ -44,10 +44,13 @@ ssh workstation 'cd ~/devbox && ./bin/devbox env'
 ```
 
 `env` creates `.env` from `.env.example`, never clobbers an existing one, and fills `BIND_ADDR` from
-`tailscale ip -4` plus `HOST_UID`/`HOST_GID` from the current user. Tailscale must be up first - with it
-down there is no address to write, and `up` then refuses on the empty value. Then edit `~/devbox/.env` on
-the workstation - at minimum put the phase-1 public key in `DEVBOX_EXTRA_AUTHORIZED_KEYS`, which takes
-newline-separated keys - and start it:
+`tailscale ip -4` plus `HOST_UID`/`HOST_GID` - from the dedicated `dev` host user when it exists, otherwise
+from the invoking user. Tailscale must be up first - with it down there is no address to write, and `up` then
+refuses on the empty value. Then edit `~/devbox/.env` on the workstation - at minimum put the phase-1 public
+key in `DEVBOX_EXTRA_AUTHORIZED_KEYS`, which takes newline-separated keys.
+
+Do phase 4 **before** the first `up`: it moves the data directory and refuses to run while the container is
+up. Then start it:
 
 ```bash
 ssh workstation 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
@@ -55,14 +58,38 @@ ssh workstation 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
 
 `doctor` is the acceptance test for this phase: it checks compose, `BIND_ADDR` against Tailscale, that
 something listens on `BIND_ADDR:${DEVBOX_SSH_PORT}` and **nothing** on `0.0.0.0`, container health, that PID 1
-is `dev`, and ten toolchain probes. It exits non-zero if any check fails.
+is `dev`, that the project Docker daemon answers and is rootless, that `host.docker.internal` resolves, that
+the project-port boundary service is active, and the toolchain probes. It exits non-zero if any check fails.
 
 `.env` is gitignored **and** excluded from `bin/push`, so later deploys never touch it.
 
 If the node's Tailscale address later changes, `doctor` reports
 `BIND_ADDR is X but Tailscale reports Y`; re-run `./bin/devbox env && ./bin/devbox up`.
 
-## Phase 4 - attach herdr and finish the identity steps
+## Phase 4 - project Docker (on the workstation, once)
+
+```bash
+ssh -t workstation 'cd ~/devbox && sudo ./bin/rootless-docker'
+```
+
+Needs `sudo`, is idempotent, and `--check` reports state without changing anything. It installs `uidmap` and
+`slirp4netns`, creates the unprivileged `dev:devbox` host user that owns the daemon, moves `DEVBOX_DATA_DIR`
+to `/home/dev`, chowns the tree, installs the nftables table and `devbox-docker-firewall.service` that keep
+published project ports off the Tailnet and the LAN, and enables a lingering rootless `dockerd` on
+`/run/devbox/docker.sock`.
+
+Two things to get right, both explained in `docs/docker.md`:
+
+- **Run it before the first `up`, or after `./bin/devbox down`.** It refuses while the container is running,
+  because it moves the bind mount out from under it. Nothing is destroyed - a `mv` plus a `chown`, so keys,
+  repos and the `gh` login survive.
+- **`DEVBOX_DATA_DIR` has to end up as `/home/dev`.** The daemon resolves a project's bind mounts as host
+  paths, so both sides must agree on the path or every relative mount silently resolves to an empty
+  directory.
+
+Check: the Docker probes in `./bin/devbox doctor`, then `ssh devbox 'docker run --rm hello-world'`.
+
+## Phase 5 - attach herdr and finish the identity steps
 
 ```bash
 ssh devbox true                                    # accept the container host key once

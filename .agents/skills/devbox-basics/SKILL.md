@@ -10,8 +10,9 @@ unprivileged `sshd`, published only on the node's Tailscale address, so a [herdr
 the laptop attaches to it as a saved machine and runs OMP agents inside it.
 
 The point of the design: **the container is the sandbox**. An agent running with bypassed permissions reaches
-the project tree and the internet, never the host filesystem and never the host Docker daemon. Explaining any
-part of the devbox well means explaining which of those boundaries it protects.
+the project tree, the internet and a rootless project Docker daemon, never the host filesystem and never the
+host's root Docker daemon. Explaining any part of the devbox well means explaining which of those boundaries
+it protects.
 
 ## The mental model
 
@@ -27,17 +28,22 @@ Four facts that answer most questions:
 1. **Work happens inside the container.** The laptop's `~/projects` and the workstation's `~/projects` are
    different trees from the container's `/home/dev/projects`. A repo must be cloned in the container to be
    visible to agents there.
-2. **`/home/dev` is a host bind mount** (`${DEVBOX_DATA_DIR}`, default `/home/vit/devbox-data`). Everything
-   that must survive an image rebuild - keys, dotfiles, `~/.config/gh`, project checkouts, the sshd host key -
-   lives there. Everything else (installed packages, `/opt/nvm`) is in the container's writable layer and is
-   lost on recreate.
+2. **`/home/dev` is a host bind mount** (`${DEVBOX_DATA_DIR}`, which must be `/home/dev` on the host too).
+   Everything that must survive an image rebuild - keys, dotfiles, `~/.config/gh`, project checkouts, the
+   sshd host key, Docker images and volumes - lives there. Everything else (installed packages, `/opt/nvm`)
+   is in the container's writable layer and is lost on recreate.
 3. **The published port is the entire network boundary.** `${BIND_ADDR}:2223:2222` in
    `docker-compose.yml` plus `127.0.0.1:2223`. Docker's DNAT rules match the bound address, so UFW cannot
    restrict a published port - binding to the Tailscale IP is what keeps the devbox off the public internet.
    An empty `BIND_ADDR` makes `./bin/devbox up` refuse to start rather than publish on `0.0.0.0`.
-4. **No root, no socket.** The image ends as `USER dev`, PID 1 is `dev`, `cap_drop: [ALL]`,
-   `no-new-privileges`, and the host Docker socket is deliberately not mounted - mounting it would hand the
-   sandbox host root and void the whole design.
+4. **No root, no root socket.** The image ends as `USER dev`, PID 1 is `dev`, `cap_drop: [ALL]`,
+   `no-new-privileges`, and the host's root Docker socket is deliberately not mounted. Projects that need
+   containers talk to a *second* daemon: a rootless `dockerd` owned by the dedicated unprivileged host user
+   `dev`, socket `/run/devbox/docker.sock`, provisioned once with `sudo ./bin/rootless-docker`. Inside the
+   box, `docker` and `docker compose` then just work. Published project ports land on the devbox bridge
+   gateway (`--ip` plus `--default-network-opt`, since the first covers only the default bridge) and are
+   held there by `devbox-docker-firewall`, an nftables table matching that daemon's own socket cgroup, so an
+   explicit `0.0.0.0:` port spec cannot reach the Tailnet or the LAN either (`docs/docker.md`).
 
 ## The three ways in
 
@@ -103,6 +109,7 @@ hit in practice.
 | Every `bin/devbox` / `bin/push` / `bin/sync-omp` cmd | `docs/cli.md`        |
 | Exposure model, why UFW cannot help                  | `docs/networking.md` |
 | Redeploy, restart, backup, `doctor`, troubleshooting | `docs/operations.md` |
+| Project containers, path identity, `devbox-ports`    | `docs/docker.md`     |
 | Boundaries and what an escaped agent reaches         | `docs/security.md`   |
 | Conventions for changing this repo                   | `AGENTS.md`          |
 
@@ -111,7 +118,9 @@ hit in practice.
 - "I'll clone it on the laptop and push it over" - no; clone in the container, the bind mount does the rest.
 - "Let's open another port for the dev server" - no; `ssh -L` exists precisely so `docker-compose.yml` stays
   a one-port file.
-- "Add the Docker socket so agents can run containers" - that is the one thing the design forbids; a
-  `docker:dind-rootless` sidecar with `DOCKER_HOST` is the only acceptable answer.
+- "Add the Docker socket so agents can run containers" - the host's *root* socket is the one thing the design
+  forbids. Project containers come from the rootless sibling daemon; a nested daemon is impossible here at
+  all, because rootless needs setuid `newuidmap` and this container has `cap_drop: ALL` plus
+  `no-new-privileges`.
 - "`ssh devbox` is a shell alias in `.bashrc`" - it is `~/.ssh/config`.
 - "Firewall the port" - `ufw deny` cannot see Docker's DNAT; `BIND_ADDR` is the control.

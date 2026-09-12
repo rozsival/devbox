@@ -26,10 +26,25 @@ services:
     ports:
       - '${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222'
       - '127.0.0.1:${DEVBOX_SSH_PORT}:2222'
+    # docker0 is this container's own gateway (see network_mode below), so
+    # `host-gateway` resolves to the address the project daemon publishes on.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     volumes:
       - '${DEVBOX_DATA_DIR}:/home/dev'
       - './container:/opt/devbox/container:ro'
       - './home:/opt/devbox/home:ro'
+      # The *directory*, not the socket file: rootlesskit recreates the socket
+      # inode on every daemon restart and a file bind mount would pin the old
+      # one. This is a sibling rootless daemon owned by the unprivileged `dev`
+      # host user - never the host's root /var/run/docker.sock.
+      #
+      # Defaulted so an .env written before `sudo ./bin/rootless-docker` ran
+      # still parses; an unset variable would make every compose command fail
+      # with "empty section between colons". Docker creates the directory
+      # root-owned if it is missing, which the tmpfiles.d rule then re-owns -
+      # until then the socket is simply absent and `docker` says so.
+      - '${DEVBOX_DOCKER_SOCKET_DIR:-/run/devbox}:/run/devbox'
     tmpfs:
       - '/tmp:mode=1777'
     cap_drop:
@@ -42,3 +57,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    # The default bridge, deliberately: docker0 exists whenever the host docker
+    # daemon does, while a compose-managed bridge disappears on `down` and is
+    # recreated on `up`. The rootless project daemon publishes onto this
+    # gateway, so a vanishing interface would leave project containers unable to
+    # bind their ports (docs/docker.md). One service, no compose DNS needed.
+    network_mode: bridge

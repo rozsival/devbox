@@ -8,10 +8,10 @@ devbox.
 
 | Boundary                   | Enforced by                                                                  |
 |----------------------------|------------------------------------------------------------------------------|
-| No host filesystem access  | Only `${DEVBOX_DATA_DIR}` is mounted, at `/home/dev`                         |
-| No host Docker daemon      | `/var/run/docker.sock` is not mounted; no `privileged`                       |
+| No host filesystem access  | Only `${DEVBOX_DATA_DIR}` is mounted, at `/home/dev` (but see limit 5)       |
+| No host root Docker daemon | `/var/run/docker.sock` is not mounted; the reachable daemon is rootless      |
 | No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true` |
-| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` - Tailnet address only                |
+| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` - Tailnet address only               |
 | No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`         |
 | No agent forwarding        | `AllowAgentForwarding no` - signing keys live inside the devbox              |
 
@@ -21,8 +21,8 @@ The image ends as `USER dev`, and `sshd` runs unprivileged: it only ever authent
 runs as, so with `UsePAM no` and pubkey-only auth it needs neither `/etc/shadow` nor setuid.
 
 This is the isolation that matters here: user namespaces are not configured on the workstation, so container
-root would be **host UID 0** in a runtime escape. Running as UID 1000 means an escape lands as the ordinary
-host user instead.
+root would be **host UID 0** in a runtime escape. Running as the dedicated `dev` account (UID 1001) means an
+escape lands as a host user with no password, no sudo and no files outside `/home/dev`.
 
 Verify:
 
@@ -51,10 +51,12 @@ Notably absent: any 1Password account (`op` is not installed) and any Google use
 ## What an agent inside the devbox can reach
 
 **Can**: the whole `/home/dev` tree - both SSH keys, `GH_TOKEN`, the App private key, every project's `.env`
-and every GCP key - plus the internet, and the Tailnet from the container's network namespace.
+and every GCP key - plus the internet, the Tailnet from the container's network namespace, and the rootless
+project Docker daemon ([Docker](docker.md)).
 
-**Cannot**: the host filesystem outside the data dir, the host Docker daemon, other containers' filesystems,
-root inside the container, any port that is not published, and any 1Password vault.
+**Cannot**: the host filesystem outside the data dir and world-readable paths, the host's **root** Docker
+daemon, the devbox container's own lifecycle, root inside the container, any port that is not published, and
+any 1Password vault.
 
 The consequence to plan for: an agent with shell access has the same GitHub push reach as you do through those
 keys. Treat a compromise as "revoke two SSH keys, one token, one App key and one service-account key", not
@@ -76,6 +78,17 @@ These are known and deliberate, not gaps to be closed later:
 4. **Secrets are plaintext at rest.** `.env` files, `GH_TOKEN` and key files are unencrypted on the
    workstation's disk, readable by the host user. Workstation disk encryption and host account hygiene are
    part of this security model, not separate from it.
+5. **The project Docker daemon widens reach to the `dev` account.** Anything in the container can start a
+   container through that socket, including one that bind-mounts a host path. It runs as the unprivileged
+   `dev` user, so it reads only world-readable host files and writes only what `dev` owns - never host root,
+   never the root daemon that runs the devbox itself, and never your own home directory, which stays `750`
+   and is not traversable by `dev`. This is the price of `docker compose up` inside the box, and the reason
+   the daemon has its own dedicated account.
+6. **A project port is one firewall rule away from the Tailnet.** Rootless Docker binds every published port
+   on `0.0.0.0` and offers no way to change that, so `devbox-docker-firewall` - an nftables table dropping
+   input to that daemon's sockets outside loopback and the devbox bridge - is what confines them.
+   `./bin/devbox doctor` fails if it is not active; if it is ever removed, every project port becomes
+   reachable from the Tailnet and the LAN. See [Docker](docker.md).
 
 An agent's own command allowlist - forbidding `op`, `gcloud` and similar - is a useful guardrail but not a
 control: a subverted agent can call the same APIs through an SDK without either binary. The boundary is what
@@ -83,9 +96,10 @@ each credential is permitted to do.
 
 ## Deliberate boundaries
 
-- **No host Docker socket.** Mounting `/var/run/docker.sock` would hand the sandbox host root and void the
-  point of the container. Project-level containers are therefore unavailable inside the devbox; if they are
-  ever needed, the answer is a `docker:dind-rootless` sidecar plus `DOCKER_HOST`, not a socket mount.
+- **No host *root* Docker socket.** Mounting `/var/run/docker.sock` would hand the sandbox host root and void
+  the point of the container. Projects that need containers get a sibling rootless daemon owned by a
+  dedicated unprivileged host user instead, reached through `DOCKER_HOST` - see [Docker](docker.md) for why
+  a nested daemon is impossible here without giving the container back `CAP_SETUID`.
 - **No root process at runtime.** See above.
 - **No 1Password in the container.** A live `op` session is readable by any agent in that shell, turning a
   one-project leak into every vault the account can read - while the project's secrets sit in a plaintext
@@ -100,8 +114,9 @@ each credential is permitted to do.
 2. **`authorized_keys` trusts a GitHub account.** Every key on the `DEVBOX_GITHUB_USER` account can log in -
    the same trust model the workstation's host sshd uses. To narrow it, clear `DEVBOX_GITHUB_USER` and list
    keys explicitly in `DEVBOX_EXTRA_AUTHORIZED_KEYS`.
-3. **The host user can read everything.** The bind mount is owned by `HOST_UID`. The container protects the
-   host from the agent, not the files from the host owner.
+3. **The `dev` host user owns the data, and root can read everything.** The bind mount belongs to the
+   dedicated `dev` account, which also owns the project Docker daemon; your own host account reaches it only
+   through `sudo`. The container protects the host from the agent, not the files from the host's owner.
 4. **Passphrase-less keys are intentional.** Unattended agents must push without a prompt; the mitigation is
    scope and revocability, not a passphrase.
 
