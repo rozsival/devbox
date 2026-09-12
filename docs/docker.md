@@ -203,8 +203,8 @@ No - the devbox container runs on the host's root daemon, which the container ca
 start project containers, which is the point.
 
 **Do project ports end up on the Tailnet?**
-No, and by two independent mechanisms: the daemon publishes on the bridge gateway by default
-(`--default-network-opt`, so `docker ps` shows `172.17.0.1:5432`), and `devbox-docker-firewall` drops input
+No, and by two independent mechanisms: the daemon publishes on the bridge gateway by default (`--default-network-opt`,
+so `docker ps` shows `172.17.0.1:5432`), and `devbox-docker-firewall` drops input
 to that daemon's sockets outside loopback and the devbox bridge even when a port spec overrides the default.
 `./bin/devbox doctor` fails if the boundary service is not active or the publish address has drifted.
 

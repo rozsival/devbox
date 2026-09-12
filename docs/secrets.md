@@ -1,7 +1,7 @@
 # 🔐 Secrets
 
-Nothing secret is baked into the image, fetched by `bootstrap`, or committed to this repo. The container holds
-**no 1Password account and no Google account** - `op` is not even installed. Secrets are rendered on the
+Nothing secret is baked into the image, fetched by `bootstrap`, or committed to this repo. The container holds **no
+1Password account and no Google account** - `op` is not even installed. Secrets are rendered on the
 laptop, where approving access is yours to do, and copied in.
 
 That is a deliberate reduction of authority, not an oversight. The container is an isolation boundary for the
@@ -11,11 +11,11 @@ anything inside can leave, and put nothing inside that is not worth its own blas
 
 ## Three layers
 
-| Layer            | Holds                                     | Scope of a leak                  |
-|------------------|-------------------------------------------|----------------------------------|
-| Identity         | `~/.ssh/id_personal`, `~/.ssh/id_work` | your GitHub accounts' push reach |
-| Box-wide tools   | `~/.config/devbox/secrets.env`            | the tools' own credentials       |
-| Per project      | that project's `.env`                     | one project                      |
+| Layer          | Holds                                     | Scope of a leak                  |
+|----------------|-------------------------------------------|----------------------------------|
+| Identity       | `~/.ssh/id_personal`, `~/.ssh/id_work` | your GitHub accounts' push reach |
+| Box-wide tools | `~/.config/devbox/secrets.env`            | the tools' own credentials       |
+| Per project    | that project's `.env`                     | one project                      |
 
 Everything lives on the `/home/dev` bind mount, so all of it survives container and image rebuilds and is
 established once per host.

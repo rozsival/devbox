@@ -422,8 +422,7 @@ cmd_doctor() {
   if systemctl is-active --quiet devbox-docker-firewall.service; then
     log_success 'project port boundary active (devbox-docker-firewall)'
   else
-    fail 'devbox-docker-firewall is inactive - project ports would reach the Tailnet and the LAN:'\
-' sudo ./bin/rootless-docker'
+    fail 'devbox-docker-firewall is inactive - project ports would reach the Tailnet and the LAN:'' sudo ./bin/rootless-docker'
   fi
 
   if ((failures > 0)); then

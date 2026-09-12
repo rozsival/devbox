@@ -554,7 +554,7 @@ step_smoke() {
 main() {
   case "${1:-}" in
   --check) CHECK_ONLY='true' ;;
-  '' ) : ;;
+  '') : ;;
   -h | --help | help)
     usage
     return 0

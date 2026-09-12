@@ -11,7 +11,7 @@ devbox.
 | No host filesystem access  | Only `${DEVBOX_DATA_DIR}` is mounted, at `/home/dev` (but see limit 5)       |
 | No host root Docker daemon | `/var/run/docker.sock` is not mounted; the reachable daemon is rootless      |
 | No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true` |
-| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` - Tailnet address only               |
+| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` - Tailnet address only                |
 | No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`         |
 | No agent forwarding        | `AllowAgentForwarding no` - signing keys live inside the devbox              |
 
@@ -36,8 +36,8 @@ ssh workstation 'cd ~/devbox && ./bin/devbox logs | grep "Server listening"'    
 Authority is enumerated, not ambient. Each credential is scoped, separately revocable, and separately
 attributable:
 
-| Purpose                 | Credential                                | Reach                              |
-|-------------------------|-------------------------------------------|------------------------------------|
+| Purpose                 | Credential                                | Reach                               |
+|-------------------------|-------------------------------------------|-------------------------------------|
 | Clone, pull, push       | `~/.ssh/id_personal`, `~/.ssh/id_work` | what those GitHub accounts can push |
 | Commit author + signing | the same keys + the two-identity config   | verification only, grants nothing   |
 | Agent commits           | work-app GitHub App                 | the App's repos and permissions     |
