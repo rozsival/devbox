@@ -35,7 +35,18 @@ it reaches the project tree and the internet, never the host filesystem or the h
 
 ## Key Files
 
-- `README.md` - quick start, exposure model, manual checklist, deliberate boundaries
+- `README.md` - entry point: 60-second start, documentation index, layout, cheat sheet
+- `docs/` - domain-scoped documentation, each file ending in an FAQ. Update the file that owns the domain
+  rather than growing `README.md`:
+  - `docs/setup.md` - prerequisites, laptop key, `~/.ssh/config`, first deploy, `.env` reference
+  - `docs/connecting.md` - herdr panes, `ssh devbox`, `./bin/devbox shell`, cloning, port forwarding
+  - `docs/git.md` - the two identities, clone rules, signing, GitHub key registration
+  - `docs/toolchain.md` - pinned versions, install locations, OMP, adding a tool
+  - `docs/secrets.md` - `op`, `devenv`, `gh` tokens, GitHub App credentials, manual checklist
+  - `docs/cli.md` - `bin/devbox` and `bin/push` reference
+  - `docs/networking.md` - exposure model, why UFW cannot block a published port, tunnels
+  - `docs/operations.md` - redeploy, persistence, backup, health, troubleshooting
+  - `docs/security.md` - boundaries, trust assumptions, deliberate limits
 - `.env.example` - the only per-host configuration; `.env` is gitignored and never synced by `bin/push`
 - `Dockerfile` - pinned toolchain; `NVM_DIR=/opt/nvm` and `COREPACK_HOME=/opt/corepack` exist because
   `/home/dev` is bind-mounted and would shadow a home-directory install; `herdr` must land in
