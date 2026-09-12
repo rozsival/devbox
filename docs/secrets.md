@@ -190,6 +190,12 @@ excluded from `bin/push`, but it is not a secret store.
 **Can I put a raw API key in `secrets.env`?**
 That is exactly what it is for now - plain values, mode 600. Keep it to credentials shared across projects.
 
+**`bootstrap` says my `secrets.env` still holds `op://` references.**
+`/home/dev` survives every rebuild, so a file written for the old `op run` layout is still there - and it is
+now sourced directly, which exports the literal `op://…` string into every shell. Replace those lines with
+plain values (render them on the laptop). A leftover `secrets.work.env` is reported the same way and can
+simply be deleted; one `secrets.env` now serves every project.
+
 **Does OMP see my keys in plaintext?**
 `~/.omp/agent/config.yml` sets `secrets: { enabled: true }`, which obfuscates environment secrets before they
 can reach a provider.

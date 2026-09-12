@@ -132,10 +132,11 @@ repositories and permissions, and `gh` uses a fine-grained PAT rather than an ac
 SSH keys remain broad because they are yours, for manual work - see accepted limit 2.
 
 **Would per-repo deploy keys be tighter than the account SSH keys?**
-Yes, and they were considered. A public key can be a deploy key on only one repository, so it means one
-generated key plus one `~/.ssh/config` alias per repo, alias-based clone URLs, and manual enrollment
-(needing repo admin) every time. Since agents already commit through the App, the remaining exposure is your
-own manual pushes, and branch protection covers that at a fraction of the friction.
+Yes. A deploy key can push to exactly one repository, whereas these keys reach everything the accounts can -
+and they are readable by any agent in the container, not just by you at a prompt (accepted limit 2). They
+were rejected on friction, not because the exposure is hypothetical: a public key can be a deploy key on only
+one repository, so it means one generated key plus one `~/.ssh/config` alias per repo, alias-based clone URLs,
+and manual enrollment needing repo admin every time. Branch protection is the backstop chosen instead.
 
 **How do I revoke access from a lost laptop?**
 Remove the key from GitHub (or from `DEVBOX_EXTRA_AUTHORIZED_KEYS`) and restart the container -

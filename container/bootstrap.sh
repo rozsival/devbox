@@ -164,16 +164,7 @@ if ! grep -q worktrunk "${bashrc}"; then
   printf 'y\n' | wt config shell install bash || log_warn 'wt config shell install failed; run it by hand.'
 fi
 
-# -- 10. gh -------------------------------------------------------------------
-# `gh auth status` also succeeds on a GH_TOKEN from secrets.env, which is the
-# intended path: a fine-grained, expiring, read-mostly token beats the full
-# read/write OAuth scopes `gh auth login --web` stores in plaintext here.
-gh config set git_protocol ssh
-if ! gh auth status >/dev/null 2>&1; then
-  register_action "Add a fine-grained GitHub token to ${HOME_DIR}/.config/devbox/secrets.env as GH_TOKEN (scopes: contents/actions/checks read, plus issues or pull-requests write only if agents should post)"
-fi
-
-# -- 11. Tool credentials -----------------------------------------------------
+# -- 10. Tool credentials -----------------------------------------------------
 # One box-wide file of plain KEY=value pairs, sourced by every shell (see
 # home/.bashrc.d/devbox.sh) so `ssh devbox <cmd>` sees the same environment a
 # pane does. Deliberately not 1Password-backed: the container holds no vault
@@ -190,6 +181,37 @@ fi
 # A credential file that became group- or world-readable is worth fixing
 # silently; it is on the bind mount and survives every rebuild.
 chmod 600 "${secrets_file}"
+
+# Leftovers from the op-era layout. /home/dev outlives every rebuild, so a file
+# written when `op run` resolved these references is still here - and this file
+# is now sourced directly, which would export the literal `op://...` string into
+# every shell. Warn instead of editing someone's credential file.
+if grep -q 'op://' "${secrets_file}" 2>/dev/null; then
+  log_warn "${secrets_file} still holds op:// references; they are now exported verbatim."
+  register_action "Replace the op:// references in ${secrets_file} with plain values (op is no longer installed; render them on the laptop)"
+fi
+if [[ -f "${secrets_dir}/secrets.work.env" ]]; then
+  register_action "Delete the orphaned ${secrets_dir}/secrets.work.env (the per-account op files are gone; one secrets.env now serves every project)"
+fi
+
+# Read here so the gh check below sees the same GH_TOKEN an interactive shell
+# would: bootstrap runs from the entrypoint and under `docker compose exec`,
+# neither of which sources ~/.bashrc.
+if [[ -r "${secrets_file}" ]]; then
+  set -a
+  # shellcheck source=/dev/null # a runtime credential file, not repo content
+  . "${secrets_file}"
+  set +a
+fi
+
+# -- 11. gh -------------------------------------------------------------------
+# `gh auth status` also succeeds on a GH_TOKEN from secrets.env, which is the
+# intended path: a fine-grained, expiring, read-mostly token beats the full
+# read/write OAuth scopes `gh auth login --web` stores in plaintext here.
+gh config set git_protocol ssh
+if ! gh auth status >/dev/null 2>&1; then
+  register_action "Add a fine-grained GitHub token to ${secrets_file} as GH_TOKEN (scopes: contents/actions/checks read, plus issues or pull-requests write only if agents should post)"
+fi
 
 # -- 12. OMP config -----------------------------------------------------------
 omp_config_dir="${HOME_DIR}/.omp/agent"
