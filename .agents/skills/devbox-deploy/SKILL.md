@@ -37,11 +37,18 @@ Full reference: `docs/cli.md` for flags, `docs/operations.md` for restart, backu
 `up` = `docker compose up -d --build` behind a preflight (`BIND_ADDR` non-empty; `${DEVBOX_DATA_DIR}` present
 and owned by `HOST_UID:HOST_GID`). `rebuild` = `docker compose build --no-cache && docker compose up -d`.
 
-`container/` and `home/` are both bind-mounted `:ro` *and* `COPY`d into the image as a fallback
-(`Dockerfile:145-146`). The mount means the new bytes are visible immediately; the `COPY` means editing them
-changes the build context, so `up` produces a new image id and compose recreates the container - which
-re-runs the entrypoint and therefore bootstrap. That is why `up` is the single answer for both. `up` with no
-changes at all is idempotent: compose reports `Container devbox Running` and nothing restarts.
+`container/` and `home/` are both bind-mounted `:ro` *and* `COPY`d into the image as a fallback (the
+`COPY container/` / `COPY home/` lines in the `Dockerfile`). The mount means the new bytes are visible
+immediately; the `COPY` means editing them changes the build context, so `up` produces a new image id and
+compose recreates the container - which re-runs the entrypoint and therefore bootstrap. That is why `up` is
+the single answer for both. `up` with no changes at all is idempotent: compose reports
+`Container devbox Running` and nothing restarts.
+
+One caveat for `home/` specifically: bootstrap only regenerates `~/.bashrc.d/devbox.sh`. `~/.gitconfig`,
+`~/.ssh/config`, `secrets.env` and the OMP config are create-if-absent, so editing those templates does not
+reach a home that already has them - delete the file in `${DEVBOX_DATA_DIR}` first, or apply the change by
+hand. Derived Git identity values are the exception: they are re-applied with `git config --global` on every
+run.
 
 ## What a redeploy cannot destroy
 
@@ -87,10 +94,13 @@ host-key generation, `authorized_keys` assembly, bootstrap, then `Server listeni
 ## Rolling back and backing up
 
 A rollback is an ordinary deploy of an earlier commit - the image is built from the repo, so there is no
-separate artifact to revert:
+separate artifact to revert. `bin/push` syncs the working tree, so commit or stash first, otherwise the
+in-flight edits are what ships:
 
 ```bash
+git stash                                                      # or commit
 git switch --detach <good-commit> && ./bin/push workstation --up
+git switch - && git stash pop                                  # back to where you were
 ```
 
 State lives outside the repo, so back it up from the host and stream it to the laptop:

@@ -9,7 +9,8 @@ Setup has four phases with a hard ordering: laptop key → `~/.ssh/config` → d
 workstation → in-container identity steps. Each phase ends with a check that must pass before moving on,
 because a failure two phases later is almost always an unverified earlier phase.
 
-Full reference: `docs/setup.md`. Read it when a value or flag is not spelled out here.
+The literal command and config blocks live in `docs/setup.md` - read the section this skill points you at
+rather than retyping them from memory, so a changed default is picked up instead of being reintroduced.
 
 ## Phase 1 - the laptop key (on the laptop)
 
@@ -26,29 +27,11 @@ serve interactive `ssh devbox`; the two coexist.
 
 ## Phase 2 - `~/.ssh/config` (on the laptop)
 
-Two entries for the same machine on different ports: `2222` is the workstation's own sshd, `2223` is the
-container's.
-
-```
-Host workstation
-  HostName workstation
-  Port 2222
-  User vit
-  IdentitiesOnly yes
-  IdentityFile ~/.ssh/devbox
-  ServerAliveInterval 30
-
-Host devbox
-  HostName workstation
-  Port 2223
-  User dev
-  IdentitiesOnly yes
-  IdentityFile ~/.ssh/devbox
-  ServerAliveInterval 30
-```
-
-`IdentitiesOnly yes` is load-bearing: without it the agent offers every key it holds and the server rejects
-the connection with `Too many authentication failures` before reaching the right one.
+Two `Host` entries for the same machine on different ports: `2222` is the workstation's own sshd (needed by
+`bin/push`), `2223` is the container's. Copy both blocks verbatim from
+`docs/setup.md#2-add-the-sshconfig-blocks`; the field that people drop and then debug for an hour is
+`IdentitiesOnly yes`, because without it the agent offers every key it holds and the server rejects the
+connection with `Too many authentication failures` before reaching the right one.
 
 Check: `ssh -G devbox | grep -E '^(hostname|port|user|identityfile|identitiesonly) '` then
 `ssh workstation true`.
@@ -111,15 +94,16 @@ Verification of the identity wiring lives in `docs/git.md`; the short version is
 
 ## When setup does not work
 
-| Symptom                                 | Cause and fix                                                   |
-|-----------------------------------------|-----------------------------------------------------------------|
-| `up` aborts on empty `BIND_ADDR`        | Preflight working as designed. Tailscale up, then `env`         |
-| `Too many authentication failures`      | Missing `IdentitiesOnly yes` in the `Host devbox` block         |
-| `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS` or on GitHub; restart |
-| herdr machine stuck `offline`           | Passphrase-protected or agent-only key; use the file key        |
-| `Host key verification failed`          | Data dir was wiped; `ssh-keygen -R '[workstation]:2223'`      |
-| `Permission denied` writing `/home/dev` | `${DEVBOX_DATA_DIR}` not owned by `HOST_UID:HOST_GID`           |
-| SSH itself is the broken thing          | `./bin/devbox shell` on the host bypasses the container's sshd  |
+| Symptom                                 | Cause and fix                                                      |
+|-----------------------------------------|--------------------------------------------------------------------|
+| `up` aborts on empty `BIND_ADDR`        | Preflight working as designed. Tailscale up, then `env`            |
+| `Too many authentication failures`      | Missing `IdentitiesOnly yes` in the `Host devbox` block            |
+| `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS` or on GitHub; restart    |
+| herdr machine stuck `offline`           | Passphrase-protected or agent-only key; use the file key           |
+| `Host key verification failed`          | Data dir was wiped; `ssh-keygen -R '[workstation]:2223'`         |
+| `Permission denied` writing `/home/dev` | `${DEVBOX_DATA_DIR}` not owned by `HOST_UID:HOST_GID`              |
+| SSH itself is the broken thing          | `./bin/devbox shell` on the host bypasses the container's sshd     |
+| `git push` hangs on a host-key prompt   | Key seeding failed; `ssh-keyscan github.com >> ~/.ssh/known_hosts` |
 
 `authorized_keys` is rebuilt on every container start from `https://github.com/<DEVBOX_GITHUB_USER>.keys` plus
 `DEVBOX_EXTRA_AUTHORIZED_KEYS`, so key changes take a restart, not a manual edit.
