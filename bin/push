@@ -16,13 +16,14 @@ log_error() {
 
 usage() {
   cat <<'USAGE'
-Usage: ./bin/push [host] [--up]
+Usage: ./bin/push [host] [--up] [--force]
 
 Arguments:
-  host    SSH host to deploy to (default: $DEVBOX_HOST, then 'workstation')
+  host     SSH host to deploy to (default: $DEVBOX_HOST, then 'workstation')
 
 Options:
-  --up    Run './bin/devbox up' on the host after syncing
+  --up     Run './bin/devbox up' on the host after syncing
+  --force  Pass --force to that 'up': recreate even with live SSH sessions
 
 Environment:
   DEVBOX_HOST         default SSH host
@@ -33,10 +34,12 @@ USAGE
 host="${DEVBOX_HOST:-workstation}"
 remote_path="${DEVBOX_REMOTE_PATH:-~/devbox}"
 run_up=0
+force=''
 
 for arg in "$@"; do
   case "${arg}" in
   --up) run_up=1 ;;
+  -f | --force) force=' --force' ;;
   -h | --help)
     usage
     exit 0
@@ -61,6 +64,8 @@ log_success "Synced to ${host}:${remote_path}."
 
 if ((run_up)); then
   log_info "Bringing the devbox up on ${host}..."
-  # shellcheck disable=SC2029 # remote_path is meant to expand locally
-  ssh "${host}" "cd ${remote_path} && ./bin/devbox up"
+  # -t so the container's session guard can prompt: an `up` that recreates the
+  # container kills every live SSH session without telling the client.
+  # shellcheck disable=SC2029 # remote_path and force are meant to expand locally
+  ssh -t "${host}" "cd ${remote_path} && ./bin/devbox up${force}"
 fi

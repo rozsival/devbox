@@ -68,7 +68,7 @@ docs/                 this documentation
 ## ⚡ Cheat sheet
 
 ```bash
-./bin/push workstation --up        # deploy + start (repeatable, non-destructive)
+./bin/push workstation --up        # deploy + start (keeps state; asks before killing SSH sessions)
 ssh devbox                           # shell in the container
 herdr                                # attach panes; they survive client exit
 ssh -N -L 5173:localhost:5173 devbox # reach a dev server

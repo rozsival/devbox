@@ -61,10 +61,11 @@ leaves the container running, so a no-op `up` never asks.
 ## `bin/push`
 
 ```
-Usage: ./bin/push [host] [--up]
+Usage: ./bin/push [host] [--up] [--force]
 
-  host    SSH host to deploy to (default: $DEVBOX_HOST, then 'workstation')
-  --up    Run './bin/devbox up' on the host after syncing
+  host     SSH host to deploy to (default: $DEVBOX_HOST, then 'workstation')
+  --up     Run './bin/devbox up' on the host after syncing
+  --force  Pass --force to that 'up': recreate even with live SSH sessions
 
 Environment:
   DEVBOX_HOST         default SSH host
@@ -74,9 +75,13 @@ Environment:
 The sync is `rsync -az --delete` excluding `.git`, `.env`, `data/` and `.DS_Store`. It checks for `rsync` on
 both sides first and prints the exact remedy if it is missing.
 
+`--up` runs the remote `up` over `ssh -t`, so when that `up` would recreate the container with sessions
+attached its prompt reaches your terminal instead of failing the push. `--force` answers it up front.
+
 ```bash
 ./bin/push workstation              # sync only
 ./bin/push workstation --up         # sync, then build and start
+./bin/push workstation --up --force # ... even if SSH sessions are connected
 DEVBOX_REMOTE_PATH=~/devbox-test ./bin/push workstation
 ```
 

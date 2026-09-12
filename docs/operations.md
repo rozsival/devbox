@@ -98,9 +98,11 @@ message and the client just sees the socket close. Three things do that:
 1. **A deploy.** `./bin/devbox up` after an `.env`, `docker-compose.yml` or `Dockerfile` change recreates the
    container; `rebuild` and `down` always do. All three now count live sessions and prompt first, and
    `./bin/devbox sessions` shows who is connected before you deploy.
-2. **A Docker restart on the host.** Upgrading `docker-ce` or `containerd.io` restarts the daemon and every
-   container with it - `grep -h Upgrade /var/log/apt/history.log | grep -E 'docker|containerd'` dates it.
-   `unattended-upgrades` can do this unattended, around 06:00 by default.
+2. **A Docker restart on the host.** A manual `sudo apt upgrade` that pulls `docker-ce` or `containerd.io`
+   restarts the daemon and every container with it - `grep -h Upgrade /var/log/apt/history.log |
+   grep -E 'docker|containerd'` dates it. `unattended-upgrades` will *not* do this on its own:
+   `Allowed-Origins` in `/etc/apt/apt.conf.d/50unattended-upgrades` lists only Ubuntu and ESM origins, and
+   Docker ships from `download.docker.com`. Verify before blaming it.
 3. **A host reboot or OOM kill.** `docker inspect devbox --format '{{.State.StartedAt}} {{.State.OOMKilled}}
    {{.RestartCount}}'` separates the two.
 

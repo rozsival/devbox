@@ -69,7 +69,8 @@ it reaches the project tree and the internet, never the host filesystem or the h
   `logs`, `keys`, `doctor`); `up`/`down`/`rebuild` refuse to drop live SSH sessions without `--force`
 - `bin/sync-omp` - laptop-side: copies `~/.omp/agent/config.yml` into the devbox over `Host devbox`; only
   the preset, never the per-machine OMP state
-- `bin/push` - laptop-side rsync deploy; excludes `.git`, `.env`, and `data/`
+- `bin/push` - laptop-side rsync deploy; excludes `.git`, `.env`, and `data/`. `--up` runs the remote `up`
+  over `ssh -t` so the live-session prompt is answerable; `--force` forwards past it
 - `.agents/skills/` - three skills mirroring the docs for agents: `devbox-basics` (architecture, boundaries,
   entry routes), `devbox-setup` (four ordered setup phases plus connection failures), `devbox-deploy`
   (sync vs apply, what a redeploy cannot destroy). They must stay consistent with `docs/`; when a command or

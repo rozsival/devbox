@@ -15,10 +15,14 @@ Full reference: `docs/cli.md` for flags, `docs/operations.md` for restart, backu
 
 ```bash
 ./bin/push workstation --up     # rsync, then ./bin/devbox up on the host
+./bin/push workstation --up --force   # ... without the live-session prompt
 ```
 
 `bin/push` is `rsync -az --delete` excluding `.git`, `.env`, `data/` and `.DS_Store`. Host defaults to
 `$DEVBOX_HOST` then `workstation`; remote path to `$DEVBOX_REMOTE_PATH` then `~/devbox`.
+
+`--up` runs the remote `up` over `ssh -t` so the live-session prompt below can be answered from the laptop;
+in a non-interactive context answer it up front with `--force`.
 
 `bin/devbox` only ever runs on the workstation - it drives the local Docker daemon. From the laptop that is
 `ssh workstation 'cd ~/devbox && ./bin/devbox <cmd>'`, or just `--up`.
