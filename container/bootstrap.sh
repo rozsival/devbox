@@ -130,23 +130,38 @@ fi
 install -d -m 755 "${HOME_DIR}/.bashrc.d"
 install -m 644 "${TEMPLATE_DIR}/.bashrc.d/devbox.sh" "${HOME_DIR}/.bashrc.d/devbox.sh"
 
+# The bind mount shadows the image's /home/dev, so a fresh data directory has no
+# dotfiles at all - and without ~/.profile a login shell (herdr panes,
+# `./bin/devbox shell`) never sources ~/.bashrc. Seed the distro skeleton;
+# `cp -n` never touches a file the user already has.
+cp -n /etc/skel/.bashrc /etc/skel/.profile /etc/skel/.bash_logout "${HOME_DIR}/" 2>/dev/null || true
+
 bashrc="${HOME_DIR}/.bashrc"
 touch "${bashrc}"
 if ! grep -q '.bashrc.d' "${bashrc}"; then
   log_info 'Registering ~/.bashrc.d/*.sh in ~/.bashrc...'
-  cat >>"${bashrc}" <<'BASHRC'
-
+  # Prepended, not appended: Ubuntu's skeleton ~/.bashrc returns early for
+  # non-interactive shells, and `ssh devbox <cmd>` (how agents and tooling call
+  # in) is exactly that. devbox.sh guards its own interactive-only parts.
+  loader="$(mktemp)"
+  cat >"${loader}" <<'BASHRC'
 # -- devbox -------------------------------------------------------------------
 for devbox_rc in "$HOME"/.bashrc.d/*.sh; do
   [ -r "$devbox_rc" ] && . "$devbox_rc"
 done
 unset devbox_rc
+
 BASHRC
+  cat "${bashrc}" >>"${loader}"
+  mv "${loader}" "${bashrc}"
+  chmod 644 "${bashrc}"
 fi
 
 if ! grep -q worktrunk "${bashrc}"; then
   log_info 'Installing the worktrunk shell integration...'
-  wt config shell install || log_warn 'wt config shell install failed; run it by hand.'
+  # `wt config shell install` has no --yes flag and reads a confirmation from
+  # stdin, which is closed here; feed it one.
+  printf 'y\n' | wt config shell install bash || log_warn 'wt config shell install failed; run it by hand.'
 fi
 
 # -- 10. gh -------------------------------------------------------------------

@@ -123,8 +123,12 @@ RUN set -eux; \
   . "$NVM_DIR/nvm.sh"; \
   nvm install "${NODE_VERSION}"; \
   nvm alias default "${NODE_VERSION}"; \
-  corepack enable; \
-  corepack prepare "pnpm@${PNPM_VERSION}" --activate
+  corepack enable yarn; \
+  npm install -g "pnpm@${PNPM_VERSION}"
+# pnpm is installed with npm rather than `corepack prepare`: pnpm 12 ships a
+# native binary as an optional dependency, and the corepack cache holds only the
+# JS wrapper - so every corepack-shimmed `pnpm` call re-downloads that binary.
+# corepack is enabled for yarn alone; its pnpm shim would shadow the real one.
 
 # Same reason as the pinned binaries above: non-interactive SSH sessions get the
 # default PATH and never source ~/.bashrc, so the toolchain needs a stable home.
