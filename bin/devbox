@@ -251,15 +251,17 @@ cmd_doctor() {
   # shell is a broken devbox even though the loop itself would succeed.
   # shellcheck disable=SC2016 # the probe list must expand inside the container
   if ! compose exec -T "${SERVICE}" bash -lc '
-    # Without pipefail the status comes from head, not from the probed tool.
-    set -o pipefail
     status=0
     for probe in "herdr --version" "omp --version" "node -v" "pnpm -v" "gh --version" \
       "lazygit --version" "wt --version" "terraform version" "op --version" "git --version"; do
-      if output="$($probe 2>&1 | head -1)"; then
-        printf "  %-12s %s\n" "${probe%% *}" "$output"
+      # No pipe into head: a multi-line tool would take SIGPIPE (141) once head
+      # exits, and the real exit code is the whole point of this loop.
+      if output="$($probe 2>&1)"; then
+        IFS= read -r first <<< "$output"
+        printf "  %-12s %s\n" "${probe%% *}" "$first"
       else
-        printf "  %-12s FAILED: %s\n" "${probe%% *}" "$output"
+        IFS= read -r first <<< "$output"
+        printf "  %-12s FAILED: %s\n" "${probe%% *}" "$first"
         status=1
       fi
     done
