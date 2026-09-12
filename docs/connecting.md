@@ -1,7 +1,7 @@
 # 🔗 Connecting
 
-Three ways into the container, all landing as user `dev` in the same bind-mounted `/home/dev`. Work happens
-**inside** the container - the laptop's `~/projects` and the workstation's `~/projects` are different trees.
+Three ways into the container, all landing as user `dev` in the same bind-mounted `/home/dev`. Work happens **inside**
+the container - the laptop's `~/projects` and the workstation's `~/projects` are different trees.
 
 | Route                | From        | Use it for                                                   |
 |----------------------|-------------|--------------------------------------------------------------|
@@ -98,8 +98,8 @@ container rebuilds. If the data directory was wiped, remove the stale line with
 
 **Which tools resolve in a non-interactive `ssh devbox '<cmd>'`?**
 All of them. Two mechanisms cover it: the pinned binaries live in `/usr/local/bin` (which includes
-`node`/`npm`/`npx`/`corepack`/`pnpm`, symlinked out of `/opt/nvm`), and `~/.bashrc.d/devbox.sh` is loaded
-*above* Ubuntu's non-interactive early return, so `~/.local/bin` - where OMP installs - is on the `PATH` too.
+`node`/`npm`/`npx`/`corepack`/`pnpm`, symlinked out of `/opt/nvm`), and `~/.bashrc.d/devbox.sh` is loaded *above*
+Ubuntu's non-interactive early return, so `~/.local/bin` - where OMP installs - is on the `PATH` too.
 Verify with `ssh devbox 'command -v omp node pnpm herdr'`.
 
 **Can I use VS Code / JetBrains Remote?**

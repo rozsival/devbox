@@ -71,6 +71,7 @@ individually), and treat a compromise as "revoke two keys and one `gh` token", n
 **Why not gVisor, Firecracker, or a VM?**
 Overkill for the actual risk (a hostile dependency, not a targeted attacker) and it breaks the herdr
 attach model. The cheap, high-value controls - non-root, no socket, dropped capabilities, address-scoped port
+
 - are all in place.
 
 **Should I enable user namespace remapping on the host?**
