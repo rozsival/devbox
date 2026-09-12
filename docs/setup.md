@@ -97,6 +97,18 @@ herdr machine add devbox --label "Workstation devbox"  # interactive terminal; v
 herdr                                              # `Workstation devbox` appears next to `Local`
 ```
 
+## 5. Optional but recommended
+
+Two extras that are deliberately not part of `bootstrap`, so a first start stays fast and offline-safe:
+
+```bash
+ssh workstation 'cd ~/devbox && ./bin/devbox skills'   # 3 global agent skills + agent-browser + Chrome
+./bin/sync-omp                                           # laptop OMP preset → devbox
+```
+
+Both are idempotent and can be re-run at any time. Details in
+[Toolchain](toolchain.md#agent-skills-and-browser-automation).
+
 ## `.env` reference
 
 | Variable                        | Default                 | Purpose                                   |

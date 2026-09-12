@@ -17,6 +17,11 @@ esac
 export NVM_DIR=/opt/nvm
 export COREPACK_HOME=/opt/corepack
 
+# `npm i -g` writes into the bind-mounted home instead of /opt/nvm: the bins land
+# on the PATH set above - so non-interactive `ssh devbox <cmd>` sees them - and
+# they survive an image rebuild, which a global install under /opt would not.
+export NPM_CONFIG_PREFIX="$HOME/.local"
+
 export EDITOR=nano
 
 # Interactive-only: prompt, aliases, and the ~100ms nvm shell function.

@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Laptop-side: copy this machine's OMP preset into the devbox so panes there run
+# with the same model roles, theme and feature flags. Only config.yml is synced -
+# it is the preset. Everything else under ~/.omp/agent (agent.db, history.db,
+# sessions, memories, models.yml) is per-machine state and is left alone.
+set -euo pipefail
+
+log_info() { echo -e "\033[0;34m[INFO]\033[0m  $*"; }
+log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
+log_error() {
+  echo -e "\033[0;31m[ERROR]\033[0m $*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: ./bin/sync-omp [ssh-host]
+
+Copies ~/.omp/agent/config.yml to <ssh-host>:~/.omp/agent/config.yml, keeping one
+backup as config.yml.bak on the remote side.
+
+Arguments:
+  ssh-host    devbox SSH host from ~/.ssh/config (default: $DEVBOX_SSH_HOST, then 'devbox')
+
+Environment:
+  DEVBOX_SSH_HOST   default SSH host
+  OMP_CONFIG        source file (default: ~/.omp/agent/config.yml)
+USAGE
+}
+
+host="${DEVBOX_SSH_HOST:-devbox}"
+
+for arg in "$@"; do
+  case "${arg}" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  -*) log_error "Unknown option: ${arg}" ;;
+  *) host="${arg}" ;;
+  esac
+done
+
+src="${OMP_CONFIG:-${HOME}/.omp/agent/config.yml}"
+[[ -f "${src}" ]] || log_error "No OMP config at ${src}"
+
+# The host entry is the container's sshd (port 2223), not the workstation's, so
+# the file lands inside /home/dev on the bind mount.
+log_info "Backing up the current preset on ${host}..."
+ssh "${host}" '
+  set -eu
+  mkdir -p ~/.omp/agent
+  [ -f ~/.omp/agent/config.yml ] && cp -p ~/.omp/agent/config.yml ~/.omp/agent/config.yml.bak
+  exit 0
+'
+
+log_info "Syncing ${src} to ${host}:~/.omp/agent/config.yml..."
+rsync -az "${src}" "${host}:.omp/agent/config.yml"
+log_success "OMP preset synced to ${host}."
+log_info 'Restart any running OMP session there to pick it up.'

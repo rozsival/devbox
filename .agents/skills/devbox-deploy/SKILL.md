@@ -25,14 +25,16 @@ Full reference: `docs/cli.md` for flags, `docs/operations.md` for restart, backu
 
 ## Which apply step does the change need
 
-| Changed                               | Apply with                      | Why                               |
-|---------------------------------------|---------------------------------|-----------------------------------|
-| `docker-compose.yml`, `.env`          | `up`                            | Config hash change recreates      |
-| `Dockerfile`, apt list, install block | `up`                            | Rebuilds changed layers           |
-| A pinned `ARG <TOOL>_VERSION`         | `up`, or `rebuild` for no cache | The `ARG` invalidates that layer  |
-| `container/*`, `home/*`               | `up`                            | In the build context, so recreate |
-| Re-apply user setup only              | `bootstrap`                     | No restart, no lost panes         |
-| Only `bin/devbox` or `bin/push`       | nothing                         | Read at invocation, on the host   |
+| Changed                               | Apply with                       | Why                               |
+|---------------------------------------|----------------------------------|-----------------------------------|
+| `docker-compose.yml`, `.env`          | `up`                             | Config hash change recreates      |
+| `Dockerfile`, apt list, install block | `up`                             | Rebuilds changed layers           |
+| A pinned `ARG <TOOL>_VERSION`         | `up`, or `rebuild` for no cache  | The `ARG` invalidates that layer  |
+| `container/*`, `home/*`               | `up`                             | In the build context, so recreate |
+| Re-apply user setup only              | `bootstrap`                      | No restart, no lost panes         |
+| Only a `bin/*` script                 | nothing                          | Read at invocation, on the host   |
+| `container/skills.sh`                 | `up`, then `./bin/devbox skills` | Script is only run on demand      |
+| `~/.omp/agent/config.yml` (laptop)    | `./bin/sync-omp`                 | Personal state, not repo content  |
 
 `up` = `docker compose up -d --build` behind a preflight (`BIND_ADDR` non-empty; `${DEVBOX_DATA_DIR}` present
 and owned by `HOST_UID:HOST_GID`). `rebuild` = `docker compose build --no-cache && docker compose up -d`.

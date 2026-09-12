@@ -14,6 +14,7 @@ Usage: ./bin/devbox <command>
   down              Stop and remove the container
   rebuild           Rebuild the image from scratch and restart
   bootstrap         Re-run the in-container user setup
+  skills            Install the optional agent skills and agent-browser (recommended)
   shell             Open a login shell inside the container
   logs [-f]         Show container logs (last 100 lines; -f follows)
   keys              Print the devbox public keys and sshd host-key fingerprint
@@ -29,6 +30,9 @@ Every command loads `.env` first and fails with a pointer to `.env.example` if i
 - **`down`** - `docker compose down`. The bind mount and `.env` are untouched.
 - **`rebuild`** - `docker compose build --no-cache && docker compose up -d`. Use after a `Dockerfile` change.
 - **`bootstrap`** - `docker compose exec` of `container/bootstrap.sh`; idempotent and reprints the checklist.
+- **`skills`** - `docker compose exec` of `container/skills.sh`: the three global agent skills plus the
+  `agent-browser` CLI and its Chrome build. Optional, idempotent, and separate from `bootstrap` because the
+  first run downloads ~180 MB. See [Toolchain](toolchain.md#agent-skills-and-browser-automation).
 - **`shell`** - `docker compose exec -it devbox bash -l`. Works even when sshd or Tailscale is broken.
 - **`logs`** - `--tail 100` by default; `-f` follows.
 - **`keys`** - `id_personal.pub`, `id_work.pub` and the sshd host-key fingerprint: the paste targets for
@@ -67,10 +71,26 @@ both sides first and prints the exact remedy if it is missing.
 DEVBOX_REMOTE_PATH=~/devbox-test ./bin/push workstation
 ```
 
+## `bin/sync-omp`
+
+```
+Usage: ./bin/sync-omp [ssh-host]
+
+  ssh-host    devbox SSH host from ~/.ssh/config (default: $DEVBOX_SSH_HOST, then 'devbox')
+
+Environment:
+  DEVBOX_SSH_HOST   default SSH host
+  OMP_CONFIG        source file (default: ~/.omp/agent/config.yml)
+```
+
+Copies this laptop's OMP preset into the devbox and keeps one `config.yml.bak` there. It talks to the
+container's sshd (`Host devbox`, port 2223), not the workstation's, so the file lands inside the bind-mounted
+`/home/dev`. Unlike `bin/push` it is not part of a deploy - the preset is personal state, not repo content.
+
 ## ❓ FAQ
 
 **Why plain bash instead of bashly, like `workstation`?**
-Nine commands and no code-generation step. `bin/src` plus a `pnpm run build:cli` pipeline would be pure
+Ten commands and no code-generation step. `bin/src` plus a `pnpm run build:cli` pipeline would be pure
 overhead here. Keep it hand-written.
 
 **Can I run `bin/devbox` from the laptop?**

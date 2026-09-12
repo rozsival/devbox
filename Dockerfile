@@ -61,6 +61,44 @@ RUN sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen && locale-gen
 ENV LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 
+# Shared libraries Chrome needs to start, for the optional `agent-browser`
+# browser-automation stack (`./bin/devbox skills`). The upstream installer's
+# `--with-deps` path runs `apt-get` as root, which this container cannot do at
+# runtime, so the libraries are baked in and only the ~180 MB Chrome build is
+# downloaded into the bind-mounted home. This is the headless set: GTK, Vulkan
+# and CJK fonts are deliberately omitted (~300 MB) - headed runs need
+# `agent-browser install --with-deps` in an image rebuild.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    fonts-freefont-ttf \
+    fonts-noto-color-emoji \
+    libasound2t64 \
+    libatk-bridge2.0-0t64 \
+    libatk1.0-0t64 \
+    libatspi2.0-0t64 \
+    libcairo2 \
+    libcups2t64 \
+    libdbus-1-3 \
+    libdrm2 \
+    libfontconfig1 \
+    libfreetype6 \
+    libgbm1 \
+    libglib2.0-0t64 \
+    libnspr4 \
+    libnss3 \
+    libpango-1.0-0 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxkbcommon0 \
+    libxrandr2 \
+    libxshmfence1 \
+  && rm -rf /var/lib/apt/lists/*
+
 # The base image ships an `ubuntu` user on UID 1000; reclaim the id first so
 # `dev` can own it and match the host user of the bind mount.
 RUN if getent passwd "${HOST_UID}" >/dev/null; then userdel -r "$(getent passwd "${HOST_UID}" | cut -d: -f1)" 2>/dev/null || true; fi \

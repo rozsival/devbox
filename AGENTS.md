@@ -24,7 +24,7 @@ it reaches the project tree and the internet, never the host filesystem or the h
    interface and warns on every scripted call
 2. **`bin/devbox` is hand-written bash, not bashly** - `set -euo pipefail`, `log_info`/`log_success`/
    `log_warn`/`log_error` helpers matching workstation's prefixes. Do not introduce a code-generation step
-   for ~9 commands
+   for ~10 commands
 3. **Pinned versions only** - every external binary comes from an explicit `ARG <TOOL>_VERSION` and is
    checksum-verified where upstream publishes a checksum file. Never invent a hash
 4. **No root in the container** - no `privileged`, no `cap_add`, no `/var/run/docker.sock` mount. `sshd` runs
@@ -41,9 +41,9 @@ it reaches the project tree and the internet, never the host filesystem or the h
   - `docs/setup.md` - prerequisites, laptop key, `~/.ssh/config`, first deploy, `.env` reference
   - `docs/connecting.md` - herdr panes, `ssh devbox`, `./bin/devbox shell`, cloning, port forwarding
   - `docs/git.md` - the two identities, clone rules, signing, GitHub key registration
-  - `docs/toolchain.md` - pinned versions, install locations, OMP, adding a tool
+  - `docs/toolchain.md` - pinned versions, install locations, OMP, agent skills, adding a tool
   - `docs/secrets.md` - `op`, `devenv`, `gh` tokens, GitHub App credentials, manual checklist
-  - `docs/cli.md` - `bin/devbox` and `bin/push` reference
+  - `docs/cli.md` - `bin/devbox`, `bin/push` and `bin/sync-omp` reference
   - `docs/networking.md` - exposure model, why UFW cannot block a published port, tunnels
   - `docs/operations.md` - redeploy, persistence, backup, health, troubleshooting
   - `docs/security.md` - boundaries, trust assumptions, deliberate limits
@@ -59,9 +59,15 @@ it reaches the project tree and the internet, never the host filesystem or the h
   the two-identity Git config, shell, `gh`, `op`, and the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels) and `MaxSessions 32` (herdr channels)
+- `container/skills.sh` - optional, explicitly invoked (`./bin/devbox skills`): pinned `agent-browser` CLI +
+  Chrome build, then `agent-browser`, `skill-creator` and `find-skills` installed globally with
+  `npx skills add --global --agent '*' --yes`. Chrome's shared libraries are in the `Dockerfile` because
+  `--with-deps` needs root; `NPM_CONFIG_PREFIX=$HOME/.local` keeps the binaries on the bind mount
 - `home/` - templates installed into `/home/dev` by bootstrap; generated files, not user-edited
-- `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `shell`, `logs`, `keys`,
-  `doctor`)
+- `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `logs`,
+  `keys`, `doctor`)
+- `bin/sync-omp` - laptop-side: copies `~/.omp/agent/config.yml` into the devbox over `Host devbox`; only
+  the preset, never the per-machine OMP state
 - `bin/push` - laptop-side rsync deploy; excludes `.git`, `.env`, and `data/`
 - `.agents/skills/` - three skills mirroring the docs for agents: `devbox-basics` (architecture, boundaries,
   entry routes), `devbox-setup` (four ordered setup phases plus connection failures), `devbox-deploy`

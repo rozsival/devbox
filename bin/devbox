@@ -28,6 +28,7 @@ Commands:
   down              Stop and remove the container
   rebuild           Rebuild the image from scratch and restart
   bootstrap         Re-run the in-container user setup
+  skills            Install the optional agent skills and agent-browser (recommended)
   shell             Open a login shell inside the container
   logs [-f]         Show container logs (last 100 lines; -f follows)
   keys              Print the devbox public keys and sshd host-key fingerprint
@@ -155,6 +156,11 @@ cmd_rebuild() {
 cmd_bootstrap() {
   require_env_file
   compose exec -T "${SERVICE}" /opt/devbox/container/bootstrap.sh
+}
+
+cmd_skills() {
+  require_env_file
+  compose exec -T "${SERVICE}" /opt/devbox/container/skills.sh
 }
 
 cmd_shell() {
@@ -285,6 +291,7 @@ main() {
   down) cmd_down "$@" ;;
   rebuild) cmd_rebuild "$@" ;;
   bootstrap) cmd_bootstrap "$@" ;;
+  skills) cmd_skills "$@" ;;
   shell) cmd_shell "$@" ;;
   logs) cmd_logs "$@" ;;
   keys) cmd_keys "$@" ;;

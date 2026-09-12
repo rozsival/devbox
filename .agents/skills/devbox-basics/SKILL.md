@@ -66,6 +66,13 @@ Existing `git@github.com:` remotes inside that tree are rewritten by `insteadOf`
 Both keys are generated inside the container and are registered on GitHub twice - once as an Authentication
 key, once as a Signing key - so commits from agents are verified.
 
+## Two optional extras, not installed by default
+
+`./bin/devbox skills` (on the workstation) installs `agent-browser`, `skill-creator` and `find-skills`
+globally under `~/.agents/skills`, plus the `agent-browser` CLI and a Chrome build - so panes can drive a
+real headless browser. `./bin/sync-omp` (on the laptop) copies `~/.omp/agent/config.yml` into the devbox so
+its panes share the laptop's OMP preset. Neither runs during bootstrap; both are idempotent.
+
 ## Where to look things up
 
 Answer from these files rather than from memory; each ends with an FAQ section covering the failures actually
@@ -76,9 +83,9 @@ hit in practice.
 | First deploy, `.env` reference, laptop key, SSH cfg  | `docs/setup.md`      |
 | Getting a shell, cloning, port forwarding            | `docs/connecting.md` |
 | Identity split, signing, verification                | `docs/git.md`        |
-| What is installed and at which pinned version        | `docs/toolchain.md`  |
+| Installed tools, pinned versions, agent skills       | `docs/toolchain.md`  |
 | `op`, `devenv`, `gh` tokens, App credentials         | `docs/secrets.md`    |
-| Every `bin/devbox` / `bin/push` command              | `docs/cli.md`        |
+| Every `bin/devbox` / `bin/push` / `bin/sync-omp` cmd | `docs/cli.md`        |
 | Exposure model, why UFW cannot help                  | `docs/networking.md` |
 | Redeploy, restart, backup, `doctor`, troubleshooting | `docs/operations.md` |
 | Boundaries and what an escaped agent reaches         | `docs/security.md`   |

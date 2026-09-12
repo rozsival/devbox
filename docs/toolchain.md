@@ -57,6 +57,58 @@ Local workstation models are opt-in: copy `harnesses/omp.yml` from the `workstat
 `~/.omp/agent/models.yml` inside the devbox and point the provider `baseUrl` at the workstation's Tailscale
 address.
 
+Syncing the preset from the laptop, so panes in the devbox use the same model roles, theme and feature
+flags:
+
+```bash
+./bin/sync-omp              # laptop → devbox:~/.omp/agent/config.yml
+./bin/sync-omp devbox-2     # a different ~/.ssh/config host
+```
+
+Only `config.yml` moves. `agent.db`, `history.db`, `sessions/`, `memories/` and `models.yml` are
+per-machine state and are never touched. The previous file is kept as `config.yml.bak` on the devbox, and a
+running OMP session has to be restarted to pick the new preset up.
+
+## Agent skills and browser automation
+
+Optional, recommended, and not part of `bootstrap` because the first run downloads a ~180 MB Chrome build:
+
+```bash
+ssh workstation 'cd ~/devbox && ./bin/devbox skills'
+```
+
+`container/skills.sh` installs three skills globally and universally - under `~/.agents/skills`, linked into
+every agent directory the CLI knows, so OMP, Claude Code and Codex panes all see the same set:
+
+| Skill           | Source                      | What it is for                                       |
+|-----------------|-----------------------------|------------------------------------------------------|
+| `agent-browser` | `vercel-labs/agent-browser` | Browser automation: navigate, fill, screenshot, test |
+| `skill-creator` | `anthropics/skills`         | Authoring, editing and evaluating skills             |
+| `find-skills`   | `vercel-labs/skills`        | Discovering and installing more skills mid-task      |
+
+It also installs the pinned `agent-browser` CLI and its Chrome build:
+
+```bash
+agent-browser open https://example.com
+agent-browser snapshot          # accessibility tree, with refs to act on
+agent-browser close
+```
+
+Three things make this work in an unprivileged container:
+
+- **Chrome's shared libraries are in the image.** `agent-browser install --with-deps` shells out to
+  `apt-get` as root, which `dev` cannot do, so the ~26 packages Chrome links against are installed in the
+  `Dockerfile`. This is the headless set - GTK, Vulkan and CJK fonts are omitted on purpose (~300 MB).
+- **Global npm installs go to the bind mount.** `NPM_CONFIG_PREFIX=$HOME/.local` (set in
+  `home/.bashrc.d/devbox.sh` and again in `container/skills.sh`), so the binaries stay on the
+  non-interactive `PATH` and survive an image rebuild. A global install under `/opt/nvm` would not.
+- **Chrome itself lives in `~/.agent-browser/browsers`.** Also the bind mount, so a rebuild does not
+  re-download it.
+
+Re-running `./bin/devbox skills` is safe: npm and `npx skills add` overwrite in place and Chrome is skipped
+when already present. Bump `SKILLS_CLI_VERSION` or `AGENT_BROWSER_VERSION` in `container/skills.sh` to move
+a pin, or export either variable to move one for a single run.
+
 ## Node and pnpm
 
 ```bash
@@ -122,3 +174,17 @@ until the next image rebuild. Pin the default by bumping `NODE_VERSION`.
 **`starship` prompt is missing over `ssh devbox '<cmd>'`?**
 Expected - the prompt, aliases and nvm loading are interactive-guarded in `home/.bashrc.d/devbox.sh`. `PATH`
 is not guarded, so tools still resolve.
+
+**`./bin/devbox skills` printed `Failed to install 2`?**
+Cosmetic. `--agent '*'` targets every agent the CLI knows and two of them - Eve and PromptScript - do not
+support global installs. The three skills still land in `~/.agents/skills`; `npx skills list --global`
+confirms it.
+
+**Does `agent-browser` need `--no-sandbox` here?**
+No. It launches and drives Chrome headless as `dev` with `cap_drop: [ALL]` unchanged; verified with
+`agent-browser open` plus `snapshot`. Headed mode is what needs the omitted GTK packages and a virtual
+display.
+
+**Do the skills survive a rebuild?**
+Yes - `~/.agents/skills` is on the bind mount. Only the Chrome shared libraries live in the image, and they
+are rebuilt with it. `npx skills update --global -y` refreshes the skills themselves.
