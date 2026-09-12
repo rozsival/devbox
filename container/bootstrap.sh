@@ -189,7 +189,6 @@ for account in personal work; do
   email_var="OP_${account^^}_EMAIL"
   # An unset address stays fillable rather than printing empty quotes.
   address="${!address_var:-<sign-in-address>}"
-  [[ -n "${address}" ]] || address='<sign-in-address>'
   email="${!email_var:-}"
 
   if [[ -n "${email}" ]] && ! grep -qxF -- "${account}" <<<"${op_shorthands}"; then
