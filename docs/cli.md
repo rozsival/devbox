@@ -10,12 +10,13 @@ Two entrypoints, both hand-written bash with `set -euo pipefail`: `bin/devbox` r
 Usage: ./bin/devbox <command>
 
   env               Create .env from .env.example and sync BIND_ADDR, HOST_UID, HOST_GID
-  up                Preflight, then build and start the container
-  down              Stop and remove the container
-  rebuild           Rebuild the image from scratch and restart
+  up [--force]      Preflight, then build and start the container
+  down [--force]    Stop and remove the container
+  rebuild [--force] Rebuild the image from scratch and restart
   bootstrap         Re-run the in-container user setup
   skills            Install the optional agent skills and agent-browser (recommended)
   shell             Open a login shell inside the container
+  sessions          List the SSH sessions connected to the container
   logs [-f]         Show container logs (last 100 lines; -f follows)
   keys              Print the devbox public keys and sshd host-key fingerprint
   doctor            Check host wiring, exposure, and the in-container toolchain
@@ -23,10 +24,16 @@ Usage: ./bin/devbox <command>
 
 Every command loads `.env` first and fails with a pointer to `.env.example` if it is missing.
 
+`up`, `down` and `rebuild` count established SSH sessions first. Recreating or stopping the container kills
+them mid-keystroke and the client prints nothing at all, so with sessions live they prompt on a terminal and
+refuse outright in a script; `--force` (`-f`) skips the prompt. A `docker compose up` that changes nothing
+leaves the container running, so a no-op `up` never asks.
+
 - **`env`** - never clobbers an existing `.env`; rewrites `BIND_ADDR` from `tailscale ip -4` and
   `HOST_UID`/`HOST_GID` from the current user.
 - **`up`** - preflight (`BIND_ADDR` non-empty; `DEVBOX_DATA_DIR` present and owned by `HOST_UID:HOST_GID`,
-  created with `install -d` when absent), then `docker compose up -d --build`.
+  created with `install -d` when absent), `docker compose build`, then `docker compose up -d`. The build
+  runs before the session check because a fresh image is itself a reason for compose to recreate.
 - **`down`** - `docker compose down`. The bind mount and `.env` are untouched.
 - **`rebuild`** - `docker compose build --no-cache && docker compose up -d`. Use after a `Dockerfile` change.
 - **`bootstrap`** - `docker compose exec` of `container/bootstrap.sh`; idempotent and reprints the checklist.
@@ -34,6 +41,8 @@ Every command loads `.env` first and fails with a pointer to `.env.example` if i
   `agent-browser` CLI and its Chrome build. Optional, idempotent, and separate from `bootstrap` because the
   first run downloads ~180 MB. See [Toolchain](toolchain.md#agent-skills-and-browser-automation).
 - **`shell`** - `docker compose exec -it devbox bash -l`. Works even when sshd or Tailscale is broken.
+- **`sessions`** - established connections to the container's sshd plus the last 10 `Accepted`/`Disconnected`
+  lines, for tracing a disconnect after the fact.
 - **`logs`** - `--tail 100` by default; `-f` follows.
 - **`keys`** - `id_personal.pub`, `id_work.pub` and the sshd host-key fingerprint: the paste targets for
   GitHub.

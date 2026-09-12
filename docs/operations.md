@@ -91,6 +91,22 @@ the bind mount. Pin it in the `Dockerfile` instead - see [Toolchain](toolchain.m
 **`wt switch` does not change directory**
 It was run inside a pipeline, so its `cd` happened in a subshell. Run it directly.
 
+**`ssh devbox` closes mid-session with no error**
+The container went away under the session. sshd was killed with it, so nothing was left to send a disconnect
+message and the client just sees the socket close. Three things do that:
+
+1. **A deploy.** `./bin/devbox up` after an `.env`, `docker-compose.yml` or `Dockerfile` change recreates the
+   container; `rebuild` and `down` always do. All three now count live sessions and prompt first, and
+   `./bin/devbox sessions` shows who is connected before you deploy.
+2. **A Docker restart on the host.** Upgrading `docker-ce` or `containerd.io` restarts the daemon and every
+   container with it - `grep -h Upgrade /var/log/apt/history.log | grep -E 'docker|containerd'` dates it.
+   `unattended-upgrades` can do this unattended, around 06:00 by default.
+3. **A host reboot or OOM kill.** `docker inspect devbox --format '{{.State.StartedAt}} {{.State.OOMKilled}}
+   {{.RestartCount}}'` separates the two.
+
+A session that merely *hangs* is the opposite case: that is the network, and `ClientAliveInterval 30` with
+`ClientAliveCountMax 6` in `container/sshd_config` ends it after ~3 minutes of an unreachable client.
+
 ## ❓ FAQ
 
 **Does the container come back after a host reboot?**

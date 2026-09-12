@@ -65,8 +65,8 @@ it reaches the project tree and the internet, never the host filesystem or the h
   because `--with-deps` needs root. Global npm installs pass `--prefix "$HOME/.local"` per call so the bins
   stay on the bind mount; never export `NPM_CONFIG_PREFIX` - nvm then refuses to activate its default Node
 - `home/` - templates installed into `/home/dev` by bootstrap; generated files, not user-edited
-- `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `logs`,
-  `keys`, `doctor`)
+- `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`,
+  `logs`, `keys`, `doctor`); `up`/`down`/`rebuild` refuse to drop live SSH sessions without `--force`
 - `bin/sync-omp` - laptop-side: copies `~/.omp/agent/config.yml` into the devbox over `Host devbox`; only
   the preset, never the per-machine OMP state
 - `bin/push` - laptop-side rsync deploy; excludes `.git`, `.env`, and `data/`

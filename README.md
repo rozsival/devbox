@@ -73,5 +73,6 @@ ssh devbox                           # shell in the container
 herdr                                # attach panes; they survive client exit
 ssh -N -L 5173:localhost:5173 devbox # reach a dev server
 ssh workstation 'cd ~/devbox && ./bin/devbox doctor'
+ssh workstation 'cd ~/devbox && ./bin/devbox sessions'   # who is connected (a recreate kills them)
 ./bin/sync-omp                       # push this laptop's OMP preset into the devbox
 ```

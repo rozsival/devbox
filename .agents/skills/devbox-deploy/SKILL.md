@@ -36,8 +36,15 @@ Full reference: `docs/cli.md` for flags, `docs/operations.md` for restart, backu
 | `container/skills.sh`                 | `up`, then `./bin/devbox skills` | Script is only run on demand      |
 | `~/.omp/agent/config.yml` (laptop)    | `./bin/sync-omp`                 | Personal state, not repo content  |
 
-`up` = `docker compose up -d --build` behind a preflight (`BIND_ADDR` non-empty; `${DEVBOX_DATA_DIR}` present
-and owned by `HOST_UID:HOST_GID`). `rebuild` = `docker compose build --no-cache && docker compose up -d`.
+`up` = `docker compose build` then `docker compose up -d` behind a preflight (`BIND_ADDR` non-empty;
+`${DEVBOX_DATA_DIR}` present and owned by `HOST_UID:HOST_GID`). `rebuild` = `docker compose build --no-cache
+&& docker compose up -d`.
+
+A recreate kills every live SSH session instantly, and the client prints no reason at all - it looks like
+`ssh devbox` closed itself. `up`, `down` and `rebuild` therefore count established sessions first: with any
+connected they prompt on a terminal and refuse in a script, and `--force` skips that. Check first with
+`./bin/devbox sessions`, which also prints sshd's recent `Accepted`/`Disconnected` lines. Only `bootstrap`
+and `skills` are safe with panes attached: both are `docker compose exec` into the running container.
 
 `container/` and `home/` are both bind-mounted `:ro` *and* `COPY`d into the image as a fallback (the
 `COPY container/` / `COPY home/` lines in the `Dockerfile`). The mount means the new bytes are visible

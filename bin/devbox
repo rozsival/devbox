@@ -24,15 +24,18 @@ Usage: ./bin/devbox <command>
 
 Commands:
   env               Create .env from .env.example and sync BIND_ADDR, HOST_UID, HOST_GID
-  up                Preflight, then build and start the container
-  down              Stop and remove the container
-  rebuild           Rebuild the image from scratch and restart
+  up [--force]      Preflight, then build and start the container
+  down [--force]    Stop and remove the container
+  rebuild [--force] Rebuild the image from scratch and restart
   bootstrap         Re-run the in-container user setup
   skills            Install the optional agent skills and agent-browser (recommended)
   shell             Open a login shell inside the container
+  sessions          List the SSH sessions connected to the container
   logs [-f]         Show container logs (last 100 lines; -f follows)
   keys              Print the devbox public keys and sshd host-key fingerprint
   doctor            Check host wiring, exposure, and the in-container toolchain
+
+--force skips the "live SSH sessions will be killed" prompt on up, down and rebuild.
 USAGE
 }
 
@@ -69,6 +72,53 @@ upsert_env_key() {
 
 compose() {
   (cd "${REPO_ROOT}" && docker compose "$@")
+}
+
+# Counts client connections to the container's sshd. Every recreate, stop or
+# restart of the container kills them mid-keystroke with no message on the
+# client - the disconnect that looks like "ssh devbox just closed" - so the
+# destructive commands ask first.
+ssh_sessions() {
+  compose exec -T "${SERVICE}" \
+    sh -c "ss -tnH state established '( sport = :2222 )' | wc -l" 2>/dev/null |
+    tr -cd '0-9' || true
+}
+
+# `up` only drops sessions when compose decides to recreate; a no-op `up` is
+# safe, so ask compose instead of guessing.
+compose_would_recreate() {
+  compose up -d --dry-run 2>&1 | grep -qE 'Recreate|Starting|Created'
+}
+
+guard_ssh_sessions() {
+  local action="$1" force="$2" count
+  count="$(ssh_sessions)"
+  [[ -n "${count}" && "${count}" -gt 0 ]] || return 0
+
+  log_warn "${count} SSH session(s) are connected to the devbox."
+  log_warn "${action} kills them instantly and the client prints no reason."
+  if [[ "${force}" == 'true' ]]; then
+    log_warn 'Continuing because --force was given.'
+    return 0
+  fi
+  if [[ -t 0 ]]; then
+    local reply
+    read -rp "Continue anyway? [y/N] " reply
+    [[ "${reply}" =~ ^[Yy]$ ]] || log_error 'Aborted.'
+    return 0
+  fi
+  log_error 'Refusing to continue with live sessions - re-run with --force.'
+}
+
+# Shared flag parsing for the destructive commands.
+parse_force() {
+  local arg
+  for arg in "$@"; do
+    case "${arg}" in
+    -f | --force) printf 'true' ;;
+    *) log_error "Unknown option: ${arg}" ;;
+    esac
+  done
 }
 
 tailscale_addr() {
@@ -135,19 +185,33 @@ preflight() {
 }
 
 cmd_up() {
+  local force
+  force="$(parse_force "$@")"
   preflight
-  compose up -d --build
+  # Build before asking compose what it would do: a fresh image is itself a
+  # reason to recreate, and the build touches no running container.
+  compose build
+  if compose_would_recreate; then
+    guard_ssh_sessions 'Recreating the container' "${force}"
+  fi
+  compose up -d
   log_success "devbox is up on $(env_get BIND_ADDR):$(env_get DEVBOX_SSH_PORT)."
 }
 
 cmd_down() {
+  local force
+  force="$(parse_force "$@")"
   require_env_file
+  guard_ssh_sessions 'Stopping the container' "${force}"
   compose down
   log_success 'devbox is down.'
 }
 
 cmd_rebuild() {
+  local force
+  force="$(parse_force "$@")"
   preflight
+  guard_ssh_sessions 'Rebuilding the container' "${force}"
   compose build --no-cache
   compose up -d
   log_success 'devbox rebuilt.'
@@ -166,6 +230,21 @@ cmd_skills() {
 cmd_shell() {
   require_env_file
   compose exec "${SERVICE}" bash -l
+}
+
+cmd_sessions() {
+  require_env_file
+  # Peer address plus the login records sshd wrote, so an unexplained disconnect
+  # can be traced: "Accepted publickey" without a matching close means the
+  # container went away under the session.
+  compose exec -T "${SERVICE}" \
+    sh -c "ss -tnH state established '( sport = :2222 )' | awk '{ print \"  peer \" \$4 }'" ||
+    log_error 'Could not reach the container - is it running?'
+  echo
+  echo 'Recent sshd events:'
+  compose logs --tail 200 "${SERVICE}" 2>/dev/null |
+    grep -E 'Accepted|Connection closed|Disconnected|Timeout|Received disconnect' |
+    tail -10 || echo '  (none)'
 }
 
 cmd_logs() {
@@ -293,6 +372,7 @@ main() {
   bootstrap) cmd_bootstrap "$@" ;;
   skills) cmd_skills "$@" ;;
   shell) cmd_shell "$@" ;;
+  sessions) cmd_sessions "$@" ;;
   logs) cmd_logs "$@" ;;
   keys) cmd_keys "$@" ;;
   doctor) cmd_doctor "$@" ;;
