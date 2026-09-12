@@ -32,6 +32,17 @@ herdr machine add devbox --label "Workstation devbox"
 herdr                                    # `devbox` appears next to `Local`
 ```
 
+Access uses a dedicated, passphrase-less laptop key rather than the 1Password SSH agent. That is not a
+preference: 1Password asks for per-use authorization, and herdr's background saved-machine connections are
+non-interactive - they cannot answer that prompt, so the machine would flap between `connecting` and
+`offline`. Create it once, authorize it, and keep it out of the agent:
+
+```bash
+ssh-keygen -t ed25519 -N '' -C laptop-devbox -f ~/.ssh/devbox
+# workstation (for ./bin/push): append ~/.ssh/devbox.pub to ~/.ssh/authorized_keys there
+# devbox: put the same public key in DEVBOX_EXTRA_AUTHORIZED_KEYS in .env, then ./bin/devbox up
+```
+
 Required `~/.ssh/config` entries on the laptop:
 
 ```
@@ -40,21 +51,21 @@ Host workstation
   Port 2222
   User vit
   IdentitiesOnly yes
-  IdentityFile ~/.ssh/workstation.pub
+  IdentityFile ~/.ssh/devbox
+  ServerAliveInterval 30
 
 Host devbox
   HostName workstation
   Port 2223
   User dev
   IdentitiesOnly yes
-  IdentityFile ~/.ssh/workstation.pub
+  IdentityFile ~/.ssh/devbox
   ServerAliveInterval 30
 ```
 
-`authorized_keys` inside the devbox is seeded from `https://github.com/<DEVBOX_GITHUB_USER>.keys`, so the key
-that authenticates to GitHub is the key that authenticates to the devbox. herdr's background saved-machine
-connections are non-interactive and cannot answer a passphrase prompt - keep the key in an agent
-(`ssh-add -l`) or point `IdentityAgent` at the 1Password socket.
+`authorized_keys` inside the devbox is assembled on every container start from
+`https://github.com/<DEVBOX_GITHUB_USER>.keys` plus `DEVBOX_EXTRA_AUTHORIZED_KEYS`, so rotating a key on
+GitHub is a restart, not a manual edit. Any key in the agent still works for interactive `ssh devbox`.
 
 ## 🔌 Exposure
 

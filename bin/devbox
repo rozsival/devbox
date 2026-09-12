@@ -247,13 +247,26 @@ cmd_doctor() {
   fi
 
   log_info 'Toolchain versions:'
+  # Each probe's exit status matters: a tool missing from the PATH of a login
+  # shell is a broken devbox even though the loop itself would succeed.
   # shellcheck disable=SC2016 # the probe list must expand inside the container
-  compose exec -T "${SERVICE}" bash -lc '
+  if ! compose exec -T "${SERVICE}" bash -lc '
+    # Without pipefail the status comes from head, not from the probed tool.
+    set -o pipefail
+    status=0
     for probe in "herdr --version" "omp --version" "node -v" "pnpm -v" "gh --version" \
       "lazygit --version" "wt --version" "terraform version" "op --version" "git --version"; do
-      printf "  %-12s %s\n" "${probe%% *}" "$($probe 2>&1 | head -1)"
+      if output="$($probe 2>&1 | head -1)"; then
+        printf "  %-12s %s\n" "${probe%% *}" "$output"
+      else
+        printf "  %-12s FAILED: %s\n" "${probe%% *}" "$output"
+        status=1
+      fi
     done
-  ' || fail 'toolchain probe failed'
+    exit "$status"
+  '; then
+    fail 'one or more toolchain probes failed'
+  fi
 
   if ((failures > 0)); then
     log_error "${failures} check(s) failed."
