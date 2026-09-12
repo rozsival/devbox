@@ -15,14 +15,16 @@ Full reference: `docs/cli.md` for flags, `docs/operations.md` for restart, backu
 
 ```bash
 ./bin/push workstation --up     # rsync, then ./bin/devbox up on the host
-./bin/push workstation --up --force   # ... without the live-session prompt
 ```
 
 `bin/push` is `rsync -az --delete` excluding `.git`, `.env`, `data/` and `.DS_Store`. Host defaults to
 `$DEVBOX_HOST` then `workstation`; remote path to `$DEVBOX_REMOTE_PATH` then `~/devbox`.
 
-`--up` runs the remote `up` over `ssh -t` so the live-session prompt below can be answered from the laptop;
-in a non-interactive context answer it up front with `--force`.
+`--up` runs the remote `up` over `ssh -t`, so the live-session prompt below reaches a human at the terminal.
+An agent has no terminal, so that `up` refuses instead - and the refusal is the correct outcome, not an
+obstacle. Check with `./bin/devbox sessions` before deploying; if anything is connected, sync the files,
+report that the apply step is pending and whose session would die, and let the user decide. `--force` is
+only for when they have said to drop them: it kills their shells and panes with no message on their client.
 
 `bin/devbox` only ever runs on the workstation - it drives the local Docker daemon. From the laptop that is
 `ssh workstation 'cd ~/devbox && ./bin/devbox <cmd>'`, or just `--up`.
@@ -46,9 +48,10 @@ in a non-interactive context answer it up front with `--force`.
 
 A recreate kills every live SSH session instantly, and the client prints no reason at all - it looks like
 `ssh devbox` closed itself. `up`, `down` and `rebuild` therefore count established sessions first: with any
-connected they prompt on a terminal and refuse in a script, and `--force` skips that. Check first with
-`./bin/devbox sessions`, which also prints sshd's recent `Accepted`/`Disconnected` lines. Only `bootstrap`
-and `skills` are safe with panes attached: both are `docker compose exec` into the running container.
+connected they prompt on a terminal and refuse in a script - `--force` overrides that, and needs the user's
+say-so first. Check with `./bin/devbox sessions`, which also prints sshd's recent `Accepted`/`Disconnected`
+lines. Only `bootstrap` and `skills` are safe with panes attached: both are `docker compose exec` into the
+running container.
 
 `container/` and `home/` are both bind-mounted `:ro` *and* `COPY`d into the image as a fallback (the
 `COPY container/` / `COPY home/` lines in the `Dockerfile`). The mount means the new bytes are visible
