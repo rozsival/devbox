@@ -55,8 +55,8 @@ install -m 600 "${TEMPLATE_DIR}/.ssh/config.tpl" "${SSH_DIR}/config"
 known_hosts="${SSH_DIR}/known_hosts"
 if ! grep -q '^github.com ' "${known_hosts}" 2>/dev/null; then
   log_info 'Seeding GitHub host keys into known_hosts...'
-  if github_keys="$(curl -fsSL --max-time 15 https://api.github.com/meta | jq -r '.ssh_keys[]')" \
-    && [[ -n "${github_keys}" ]]; then
+  if github_keys="$(curl -fsSL --max-time 15 https://api.github.com/meta | jq -r '.ssh_keys[]')" &&
+    [[ -n "${github_keys}" ]]; then
     {
       [[ -f "${known_hosts}" ]] && cat "${known_hosts}"
       while IFS= read -r github_key; do

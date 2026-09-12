@@ -6,8 +6,8 @@
 
 # OMP installs here so `omp update` works without an image rebuild.
 case ":$PATH:" in
-  *":$HOME/.local/bin:"*) ;;
-  *) export PATH="$HOME/.local/bin:$PATH" ;;
+*":$HOME/.local/bin:"*) ;;
+*) export PATH="$HOME/.local/bin:$PATH" ;;
 esac
 
 # Node lives outside the bind-mounted home (the mount would shadow it), so nvm

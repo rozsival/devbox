@@ -36,19 +36,19 @@ run_up=0
 
 for arg in "$@"; do
   case "${arg}" in
-    --up) run_up=1 ;;
-    -h | --help)
-      usage
-      exit 0
-      ;;
-    -*) log_error "Unknown option: ${arg}" ;;
-    *) host="${arg}" ;;
+  --up) run_up=1 ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  -*) log_error "Unknown option: ${arg}" ;;
+  *) host="${arg}" ;;
   esac
 done
 
 command -v rsync >/dev/null 2>&1 || log_error 'rsync is missing locally - run: brew install rsync'
-ssh "${host}" 'command -v rsync >/dev/null 2>&1' \
-  || log_error "rsync is missing on ${host} - run: ssh ${host} 'sudo apt-get install -y rsync'"
+ssh "${host}" 'command -v rsync >/dev/null 2>&1' ||
+  log_error "rsync is missing on ${host} - run: ssh ${host} 'sudo apt-get install -y rsync'"
 
 log_info "Syncing ${REPO_ROOT}/ to ${host}:${remote_path}/..."
 rsync -az --delete \

@@ -39,7 +39,7 @@ services:
     security_opt:
       - 'no-new-privileges:true'
     healthcheck:
-      test: ['CMD-SHELL', 'ss -ltn | grep -q ":2222"']
+      test: [ 'CMD-SHELL', 'ss -ltn | grep -q ":2222"' ]
       interval: 30s
       timeout: 5s
       retries: 3

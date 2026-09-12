@@ -122,8 +122,8 @@ preflight() {
 
   if [[ ! -d "${data_dir}" ]]; then
     log_info "Creating ${data_dir} owned by ${host_uid}:${host_gid}..."
-    install -d -m 755 -o "${host_uid}" -g "${host_gid}" "${data_dir}" 2>/dev/null \
-      || log_error "Could not create ${data_dir} - run: sudo install -d -m 755 -o ${host_uid} -g ${host_gid} ${data_dir}"
+    install -d -m 755 -o "${host_uid}" -g "${host_gid}" "${data_dir}" 2>/dev/null ||
+      log_error "Could not create ${data_dir} - run: sudo install -d -m 755 -o ${host_uid} -g ${host_gid} ${data_dir}"
   fi
 
   owner_uid="$(stat -c '%u' "${data_dir}")"
@@ -280,20 +280,20 @@ main() {
   local command="${1:-}"
   shift || true
   case "${command}" in
-    env) cmd_env "$@" ;;
-    up) cmd_up "$@" ;;
-    down) cmd_down "$@" ;;
-    rebuild) cmd_rebuild "$@" ;;
-    bootstrap) cmd_bootstrap "$@" ;;
-    shell) cmd_shell "$@" ;;
-    logs) cmd_logs "$@" ;;
-    keys) cmd_keys "$@" ;;
-    doctor) cmd_doctor "$@" ;;
-    ''|-h|--help|help) usage ;;
-    *)
-      usage >&2
-      log_error "Unknown command: ${command}"
-      ;;
+  env) cmd_env "$@" ;;
+  up) cmd_up "$@" ;;
+  down) cmd_down "$@" ;;
+  rebuild) cmd_rebuild "$@" ;;
+  bootstrap) cmd_bootstrap "$@" ;;
+  shell) cmd_shell "$@" ;;
+  logs) cmd_logs "$@" ;;
+  keys) cmd_keys "$@" ;;
+  doctor) cmd_doctor "$@" ;;
+  '' | -h | --help | help) usage ;;
+  *)
+    usage >&2
+    log_error "Unknown command: ${command}"
+    ;;
   esac
 }
 
