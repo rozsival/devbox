@@ -54,9 +54,10 @@ resolve only while an `op` session is active.
 agent needs unattended must be a long-lived credential written once into the devbox - the `gh` token in
 `~/.config/gh`, a token in `~/.terraformrc` - rather than fetched per run through `op`.
 
-The escape hatch, if that becomes limiting: put an `OP_SERVICE_ACCOUNT_TOKEN` in `.env` on the host and use a
-dedicated shared vault. Service accounts cannot read Private vaults, so that is a vault migration, not a flag
-flip. No other part of the design changes.
+The escape hatch, if that becomes limiting: a 1Password service-account token plus a dedicated shared vault.
+That is not wired up - it would need `OP_SERVICE_ACCOUNT_TOKEN` added to `.env.example` and passed through the
+compose `environment:` block - and service accounts cannot read Private vaults, so it is a vault migration
+rather than a flag flip. No other part of the design changes.
 
 ## ❓ FAQ
 

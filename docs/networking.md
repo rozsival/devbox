@@ -70,7 +70,8 @@ block and the key.
 `./bin/devbox env` and `./bin/devbox up`; `doctor` flags the mismatch.
 
 **Can I publish a dev server properly instead of tunnelling?**
-Possible, not recommended - it would need a second address-scoped `ports` entry and a rebuild, and every such
+Possible, not recommended - it would need a second address-scoped `ports` entry and a container recreate
+(`./bin/devbox up`), and every such
 entry is a new boundary to audit. SSH forwarding needs no configuration and inherits the existing auth.
 
 **Does the container get its own IP on the Tailnet?**

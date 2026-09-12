@@ -101,7 +101,7 @@ to one workstation.
 
 **Can I `apt-get install` something inside the container?**
 No - `dev` is not root and there is no sudo. That is deliberate: the image is the record of what exists. Add
-it to the `Dockerfile` and rebuild. For throwaway tools, prefer `pnpm dlx`, `pipx`, or `python3 -m venv`.
+it to the `Dockerfile` and rebuild. For throwaway tools, prefer `pnpm dlx` or `python3 -m venv`.
 
 **Can I run Docker inside the devbox?**
 No. The host socket is not mounted; see [Security model](security.md). The answer if it ever becomes

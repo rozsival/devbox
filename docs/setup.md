@@ -5,10 +5,10 @@ verifiable on its own.
 
 ## Prerequisites
 
-| Where       | Requirement                                                                     |
-|-------------|---------------------------------------------------------------------------------|
-| Workstation | Ubuntu 26.04, Docker with compose v2, Tailscale up, `rsync`, host user UID 1000 |
-| Laptop      | `rsync`, an SSH client, `herdr` (`brew install herdr`)                          |
+| Where       | Requirement                                                                  |
+|-------------|------------------------------------------------------------------------------|
+| Workstation | Ubuntu 26.04, Docker with compose v2, Tailscale up, `rsync`, a known UID/GID |
+| Laptop      | `rsync`, an SSH client, and a [herdr](https://herdr.dev) client              |
 
 Check the workstation in one call:
 

@@ -15,7 +15,7 @@ bind mount: per-host, individually revocable on GitHub, and usable by unattended
 ## Cloning
 
 ```bash
-git clone github.com:rozsival/<repo> ~/projects/rozsival/<repo>     # personal
+git clone git@github.com:rozsival/<repo> ~/projects/rozsival/<repo>  # personal
 git clone github-work:<org>/<repo> ~/projects/work/<repo>     # work
 ```
 

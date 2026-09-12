@@ -82,10 +82,9 @@ Yes, because sshd never changes user. Dropping `CHOWN`/`SETUID`/`SETGID` is exac
 would have needed.
 
 **What if unprivileged sshd stops working after an OpenSSH update?**
-The documented fallback is a root-launched sshd that drops to `dev` per session: remove `user:` from the
-service, add `cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]`, have the entrypoint create `/run/sshd` and
-`chown` the home, and run bootstrap via `runuser -u dev`. It weakens boundary 2, so prefer fixing the
-unprivileged path.
+Fix the unprivileged path - it is the whole design. `cap_add` and a root-launched sshd are off the table per
+[AGENTS.md](../AGENTS.md) rule 4, and `./bin/devbox shell` still gets you in while sshd is broken, so there is
+no lock-out risk to trade the boundary away for.
 
 **Can I give an agent a narrower key?**
 Yes - use a GitHub App installation token or a fine-grained PAT for that agent's repos instead of the shared

@@ -83,8 +83,9 @@ once.
 **Permission denied writing to `/home/dev`**
 `${DEVBOX_DATA_DIR}` is not owned by `HOST_UID:HOST_GID`. `sudo chown -R 1000:1000 <dir>`.
 
-**A tool "disappeared" after a rebuild**
-It was installed by hand into the old image. Add it to the `Dockerfile` - see
+**A globally installed package "disappeared" after a rebuild**
+Anything written into the image layer is lost - `npm install -g <pkg>` and `nvm install <version>` write to
+`/opt`, not to the bind mount. Pin it in the `Dockerfile` instead - see
 [Toolchain](toolchain.md#adding-a-tool).
 
 **`wt switch` does not change directory**
@@ -100,14 +101,15 @@ without it, `up` again once it is.
 `./bin/devbox down`. State is on the bind mount; only running processes end.
 
 **Can I run two devboxes on one host?**
-Yes, with a second checkout: different `DEVBOX_SSH_PORT`, different `DEVBOX_DATA_DIR`, and a different compose
-project name. `DEVBOX_REMOTE_PATH` in `bin/push` controls where it lands.
+Only with an override: `container_name: devbox` is hard-coded in `docker-compose.yml`, and `bin/devbox`
+targets that service name. A second checkout needs a `docker-compose.override.yml` changing
+`container_name`, plus a distinct `DEVBOX_SSH_PORT`, `DEVBOX_DATA_DIR` and compose project name.
 
 **How do I see what changed before deploying?**
 Rehearse the sync with `-n`:
 
 ```bash
-rsync -azn --delete --exclude .git --exclude .env --exclude 'data/' ./ workstation:devbox/
+rsync -azni --delete --exclude .git --exclude .env --exclude 'data/' --exclude .DS_Store ./ workstation:devbox/
 ```
 
 **Is `bootstrap` safe to run while I am working in a pane?**

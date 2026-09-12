@@ -3,7 +3,7 @@ name: devbox
 services:
   # -- Remote development container -------------------------------------------
   # Unprivileged sshd owned by the `dev` user; the published port is the entire
-  # network boundary (see PORTS note in README.md).
+  # network boundary (see docs/networking.md).
   devbox:
     container_name: devbox
     build:

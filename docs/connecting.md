@@ -15,7 +15,8 @@ Three ways into the container, all landing as user `dev` in the same bind-mounte
 herdr                    # select "Workstation devbox" in the sidebar
 ```
 
-A pane opens with a login shell in `/home/dev`. Detach with `ctrl+b q`; the pane keeps running server-side, so
+A pane opens with a login shell in `/home/dev`. Detaching or quitting the client leaves the pane running
+server-side, so
 closing the laptop lid or killing the client does not interrupt a build, a clone, or an agent. Reconnecting
 restores the session shape.
 
@@ -55,7 +56,7 @@ Clone inside the container, and let the target directory pick the identity:
 
 ```bash
 ssh devbox
-git clone github.com:rozsival/<repo> ~/projects/rozsival/<repo>          # personal
+git clone git@github.com:rozsival/<repo> ~/projects/rozsival/<repo>       # personal
 git clone github-work:<org>/<repo> ~/projects/work/<repo>          # work, alias required
 ```
 
