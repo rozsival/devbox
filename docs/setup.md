@@ -16,8 +16,8 @@ Check the workstation in one call:
 ssh workstation 'docker --version && docker compose version && tailscale ip -4 && id -u && command -v rsync'
 ```
 
-A different host UID is fine - set `HOST_UID`/`HOST_GID` in `.env` before the first `up`, because the
-bind-mounted home must be owned by the user the container runs as.
+A different host UID is fine: `./bin/devbox env` picks `HOST_UID`/`HOST_GID` up from the current user, and the
+bind-mounted home is created owned by them.
 
 ## 1. Create the laptop key
 

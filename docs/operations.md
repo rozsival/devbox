@@ -83,10 +83,10 @@ once.
 **Permission denied writing to `/home/dev`**
 `${DEVBOX_DATA_DIR}` is not owned by `HOST_UID:HOST_GID`. `sudo chown -R 1000:1000 <dir>`.
 
-**A globally installed package "disappeared" after a rebuild**
-Anything written into the image layer is lost - `npm install -g <pkg>` and `nvm install <version>` write to
-`/opt`, not to the bind mount. Pin it in the `Dockerfile` instead - see
-[Toolchain](toolchain.md#adding-a-tool).
+**A globally installed package "disappeared"**
+Anything written to the container's writable layer is lost whenever the container is recreated (`rebuild`, or
+`down`/`up` onto a new image) - `npm install -g <pkg>` and `nvm install <version>` write to `/opt`, not to
+the bind mount. Pin it in the `Dockerfile` instead - see [Toolchain](toolchain.md#adding-a-tool).
 
 **`wt switch` does not change directory**
 It was run inside a pipeline, so its `cd` happened in a subshell. Run it directly.
