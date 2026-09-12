@@ -180,14 +180,19 @@ fi
 # its own env file: `op run` resolves one account per call.
 secrets_dir="${HOME_DIR}/.config/devbox"
 mkdir -p "${secrets_dir}"
-op_accounts="$(op account list 2>/dev/null || true)"
+# Guard on the shorthand rather than the email: `--account <shorthand>` is what
+# `devenv` and every `op` call select with, so an account added without one
+# still needs the hint.
+op_shorthands="$(op account list --format json 2>/dev/null | jq -r '.[].shorthand' 2>/dev/null || true)"
 for account in personal work; do
   address_var="OP_${account^^}_ADDRESS"
   email_var="OP_${account^^}_EMAIL"
-  address="${!address_var:-}"
+  # An unset address stays fillable rather than printing empty quotes.
+  address="${!address_var:-<sign-in-address>}"
+  [[ -n "${address}" ]] || address='<sign-in-address>'
   email="${!email_var:-}"
 
-  if [[ -n "${email}" ]] && ! grep -qiF -- "${email}" <<<"${op_accounts}"; then
+  if [[ -n "${email}" ]] && ! grep -qxF -- "${account}" <<<"${op_shorthands}"; then
     register_action "Add the ${account} 1Password account: op account add --address '${address}' --email '${email}' --shorthand ${account}"
     register_action "Sign in to ${account} per shell: eval \"\$(op signin --account ${account})\""
   fi
