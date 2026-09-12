@@ -73,6 +73,21 @@ globally under `~/.agents/skills`, plus the `agent-browser` CLI and a Chrome bui
 real headless browser. `./bin/sync-omp` (on the laptop) copies `~/.omp/agent/config.yml` into the devbox so
 its panes share the laptop's OMP preset. Neither runs during bootstrap; both are idempotent.
 
+## What credentials live in the box
+
+Authority is enumerated, never ambient. The container has **no 1Password account** (`op` is not installed)
+and **no Google user credential** (`gcloud` is not installed either). Three layers:
+
+- **Identity** - the two SSH keys, generated in the container, for clone/pull/push and signing
+- **Box-wide tool credentials** - `~/.config/devbox/secrets.env`, plain `KEY=value` at mode 600, sourced by
+  every shell including non-interactive `ssh devbox <cmd>`; holds `GH_TOKEN` (fine-grained, read-mostly) and
+  model API keys
+- **Per project** - that project's own `.env`, rendered on the laptop and copied in, so a leak stays scoped
+  to one project. GCP keys are per-project too, via `GOOGLE_APPLICATION_CREDENTIALS`
+
+The container is an isolation boundary for the host filesystem and a containment boundary for authority - it
+is **not** a confidentiality boundary. Outbound network is unrestricted, so assume anything inside can leave.
+
 ## Where to look things up
 
 Answer from these files rather than from memory; each ends with an FAQ section covering the failures actually
@@ -84,7 +99,7 @@ hit in practice.
 | Getting a shell, cloning, port forwarding            | `docs/connecting.md` |
 | Identity split, signing, verification                | `docs/git.md`        |
 | Installed tools, pinned versions, agent skills       | `docs/toolchain.md`  |
-| `op`, `devenv`, `gh` tokens, App credentials         | `docs/secrets.md`    |
+| Secret layers, `secrets.env`, `GH_TOKEN`, GCP ADC    | `docs/secrets.md`    |
 | Every `bin/devbox` / `bin/push` / `bin/sync-omp` cmd | `docs/cli.md`        |
 | Exposure model, why UFW cannot help                  | `docs/networking.md` |
 | Redeploy, restart, backup, `doctor`, troubleshooting | `docs/operations.md` |

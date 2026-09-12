@@ -1,5 +1,5 @@
 # Seeded once by container/bootstrap.sh; OMP owns the file afterwards.
-# `secrets.enabled` obfuscates any op-injected key found in the environment
-# before it can reach a provider.
+# `secrets.enabled` obfuscates any API key found in the environment - from
+# ~/.config/devbox/secrets.env or a project .env - before it can reach a provider.
 secrets:
   enabled: true

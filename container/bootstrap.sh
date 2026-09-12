@@ -123,7 +123,7 @@ creds_dir="${HOME_DIR}/.config/work/work-app"
 mkdir -p "${creds_dir}"
 chmod 700 "${creds_dir}"
 if [[ ! -f "${creds_dir}/app.pem" ]]; then
-  register_action "Place the work-app app credentials: printf '%s' '<app-id>' > ${creds_dir}/app-id && op read 'op://<vault>/<item>/private-key' > ${creds_dir}/app.pem && chmod 600 ${creds_dir}/app.pem"
+  register_action "Place the work-app app credentials: printf '%s' '<app-id>' > ${creds_dir}/app-id, copy the private key to ${creds_dir}/app.pem from the laptop, then chmod 600 ${creds_dir}/app.pem"
 fi
 
 # -- 9. Shell -----------------------------------------------------------------
@@ -165,48 +165,31 @@ if ! grep -q worktrunk "${bashrc}"; then
 fi
 
 # -- 10. gh -------------------------------------------------------------------
+# `gh auth status` also succeeds on a GH_TOKEN from secrets.env, which is the
+# intended path: a fine-grained, expiring, read-mostly token beats the full
+# read/write OAuth scopes `gh auth login --web` stores in plaintext here.
 gh config set git_protocol ssh
 if ! gh auth status >/dev/null 2>&1; then
-  register_action 'Authenticate gh: gh auth login --hostname github.com --git-protocol ssh --web'
-  # shellcheck disable=SC2016 # literal commands in messages
-  register_action 'Second account: repeat `gh auth login`, then switch with `gh auth switch`.'
+  register_action "Add a fine-grained GitHub token to ${HOME_DIR}/.config/devbox/secrets.env as GH_TOKEN (scopes: contents/actions/checks read, plus issues or pull-requests write only if agents should post)"
 fi
 
-# -- 11. 1Password ------------------------------------------------------------
-# Interactive by design: `op account add` needs the account's Secret Key and
-# master password, and sessions expire, so nothing here is automated. Both
-# accounts are added under their own shorthand, because `op` refuses to guess
-# which one a reference belongs to once several are present. Each account gets
-# its own env file: `op run` resolves one account per call.
+# -- 11. Tool credentials -----------------------------------------------------
+# One box-wide file of plain KEY=value pairs, sourced by every shell (see
+# home/.bashrc.d/devbox.sh) so `ssh devbox <cmd>` sees the same environment a
+# pane does. Deliberately not 1Password-backed: the container holds no vault
+# access, so values are written here by hand or rendered on the laptop and
+# copied in. Per-project secrets belong in the project's own .env, never here.
 secrets_dir="${HOME_DIR}/.config/devbox"
 mkdir -p "${secrets_dir}"
-# Guard on the shorthand rather than the email: `--account <shorthand>` is what
-# `devenv` and every `op` call select with, so an account added without one
-# still needs the hint.
-op_shorthands="$(op account list --format json 2>/dev/null | jq -r '.[].shorthand' 2>/dev/null || true)"
-for account in personal work; do
-  address_var="OP_${account^^}_ADDRESS"
-  email_var="OP_${account^^}_EMAIL"
-  # An unset address stays fillable rather than printing empty quotes.
-  address="${!address_var:-<sign-in-address>}"
-  email="${!email_var:-}"
-
-  if [[ -n "${email}" ]] && ! grep -qxF -- "${account}" <<<"${op_shorthands}"; then
-    register_action "Add the ${account} 1Password account: op account add --address '${address}' --email '${email}' --shorthand ${account}"
-    register_action "Sign in to ${account} per shell: eval \"\$(op signin --account ${account})\""
-  fi
-
-  env_file="${secrets_dir}/secrets.env"
-  devenv_hint='devenv <cmd>'
-  if [[ "${account}" != personal ]]; then
-    env_file="${secrets_dir}/secrets.${account}.env"
-    devenv_hint="OP_ACCOUNT=${account} devenv <cmd>"
-  fi
-  if [[ ! -f "${env_file}" ]]; then
-    install -m 600 "${TEMPLATE_DIR}/.config/devbox/secrets.env.example" "${env_file}"
-    register_action "Fill ${env_file} with ${account} op:// references, then run \`${devenv_hint}\`."
-  fi
-done
+chmod 700 "${secrets_dir}"
+secrets_file="${secrets_dir}/secrets.env"
+if [[ ! -f "${secrets_file}" ]]; then
+  install -m 600 "${TEMPLATE_DIR}/.config/devbox/secrets.env.example" "${secrets_file}"
+  register_action "Fill ${secrets_file} with GH_TOKEN and any model API keys, then reconnect."
+fi
+# A credential file that became group- or world-readable is worth fixing
+# silently; it is on the bind mount and survives every rebuild.
+chmod 600 "${secrets_file}"
 
 # -- 12. OMP config -----------------------------------------------------------
 omp_config_dir="${HOME_DIR}/.omp/agent"

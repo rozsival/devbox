@@ -13,8 +13,9 @@ it reaches the project tree and the internet, never the host filesystem or the h
 ## Stack
 
 - **Host**: Ubuntu 26.04 LTS, Docker with compose v2, Tailscale; repo lives at `~/devbox`
-- **Image**: `ubuntu:26.04` + pinned `herdr`, `gh`, `lazygit`, `wt` (worktrunk), `terraform`, `op`, and Node 24
-  / pnpm 12 through nvm in `/opt/nvm`
+- **Image**: `ubuntu:26.04` + pinned `herdr`, `gh`, `lazygit`, `wt` (worktrunk), `terraform`, and Node 24 /
+  pnpm 12 through nvm in `/opt/nvm`. No `op` and no `gcloud`: the container holds no vault and no Google
+  account (see `docs/secrets.md`)
 - **Runtime**: `sshd` on container port 2222, published as `${BIND_ADDR}:2223` and `127.0.0.1:2223`
 - **Config**: `.env` (from `.env.example`), `docker-compose.yml`, `container/*`, `home/*`
 
@@ -42,7 +43,7 @@ it reaches the project tree and the internet, never the host filesystem or the h
   - `docs/connecting.md` - herdr panes, `ssh devbox`, `./bin/devbox shell`, cloning, port forwarding
   - `docs/git.md` - the two identities, clone rules, signing, GitHub key registration
   - `docs/toolchain.md` - pinned versions, install locations, OMP, agent skills, adding a tool
-  - `docs/secrets.md` - `op`, `devenv`, `gh` tokens, GitHub App credentials, manual checklist
+  - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, GCP ADC, App credentials
   - `docs/cli.md` - `bin/devbox`, `bin/push` and `bin/sync-omp` reference
   - `docs/networking.md` - exposure model, why UFW cannot block a published port, tunnels
   - `docs/operations.md` - redeploy, persistence, backup, health, troubleshooting
@@ -56,7 +57,7 @@ it reaches the project tree and the internet, never the host filesystem or the h
 - `container/entrypoint.sh` - PID 1 as `dev`: home skeleton, host key, `authorized_keys`, bootstrap, then
   `exec sshd`. The order is load-bearing
 - `container/bootstrap.sh` - idempotent user setup: OMP, both SSH identities, `~/.ssh/config`, known_hosts,
-  the two-identity Git config, shell, `gh`, `op`, and the printed manual checklist
+  the two-identity Git config, shell, `gh`, the box-wide `secrets.env`, and the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels) and `MaxSessions 32` (herdr channels)
 - `container/skills.sh` - optional, explicitly invoked (`./bin/devbox skills`): pinned `agent-browser` CLI +

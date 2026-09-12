@@ -38,7 +38,7 @@ background connections), the two **`~/.ssh/config` blocks**, and a non-empty **`
 | [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, `devbox shell`, tunnels |
 | [Git identities](docs/git.md)      | Cloning repos, personal vs work, commit signing                  |
 | [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, agent skills, adding a tool       |
-| [Secrets](docs/secrets.md)         | `op`, `devenv`, `gh` tokens, GitHub App credentials                 |
+| [Secrets](docs/secrets.md)         | Box-wide vs per-project secrets, `gh` token, GCP ADC, App creds     |
 | [CLI reference](docs/cli.md)       | Every `bin/devbox`, `bin/push` and `bin/sync-omp` flag              |
 | [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding                |
 | [Operations](docs/operations.md)   | Redeploy, restart, backup, `doctor`, troubleshooting                |

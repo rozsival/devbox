@@ -17,7 +17,6 @@ ARG GH_VERSION=2.100.0
 ARG LAZYGIT_VERSION=0.65.0
 ARG WORKTRUNK_VERSION=0.77.0
 ARG TERRAFORM_VERSION=1.16.2
-ARG OP_VERSION=2.39.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -111,8 +110,11 @@ RUN if getent passwd "${HOST_UID}" >/dev/null; then userdel -r "$(getent passwd 
 # on the remote PATH and non-interactive runs fail rather than installing one, which
 # is exactly how saved-machine background connections run.
 #
-# Checksums are verified wherever upstream publishes a checksum file; `herdr` and
-# `op` publish none, so those rely on the pinned version plus TLS.
+# Checksums are verified wherever upstream publishes a checksum file; `herdr`
+# publishes none, so it relies on the pinned version plus TLS.
+#
+# No `op` here on purpose: the container holds no 1Password account. Secrets are
+# rendered on the laptop and pushed in - see docs/secrets.md.
 RUN set -eux; \
   tmp="$(mktemp -d)"; cd "$tmp"; \
   \
@@ -142,10 +144,6 @@ RUN set -eux; \
   awk -v f="terraform_${TERRAFORM_VERSION}_linux_amd64.zip" '$2 == f { print $1 "  terraform.zip" }' terraform.sums | sha256sum -c -; \
   unzip -q terraform.zip terraform; \
   install -m 0755 terraform /usr/local/bin/terraform; \
-  \
-  curl -fsSL -o op.zip "https://cache.agilebits.com/dist/1P/op2/pkg/v${OP_VERSION}/op_linux_amd64_v${OP_VERSION}.zip"; \
-  unzip -q op.zip op; \
-  install -m 0755 op /usr/local/bin/op; \
   \
   cd /; rm -rf "$tmp"
 

@@ -122,8 +122,9 @@ Both are idempotent and can be re-run at any time. Details in
 | `DEVBOX_EXTRA_AUTHORIZED_KEYS`  | *(empty)*               | Extra keys, newline-separated             |
 | `GIT_PERSONAL_NAME` / `_EMAIL`  | personal identity       | Applied to `~/.gitconfig`                 |
 | `GIT_WORK_NAME` / `_EMAIL`   | work identity        | Applied to `~/.config/work/.gitconfig` |
-| `OP_PERSONAL_ADDRESS`/`_EMAIL`  | personal 1Password      | Hint only, in the `op account add` line   |
-| `OP_WORK_ADDRESS`/`_EMAIL`   | work 1Password       | Hint only, in the `op account add` line   |
+
+`.env` holds no secrets: tool credentials go in `~/.config/devbox/secrets.env` inside the container and
+project secrets in each project's own `.env`. See [Secrets](secrets.md).
 
 ## ❓ FAQ
 

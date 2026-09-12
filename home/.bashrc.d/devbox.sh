@@ -33,16 +33,17 @@ if [[ $- == *i* ]]; then
   alias lg='lazygit'
 fi
 
-# Run a command with secrets injected from 1Password, e.g. `devenv omp`.
-# Selects the account by shorthand - `personal` unless OP_ACCOUNT says
-# otherwise - and the matching env file, because `op run` resolves references
-# against a single account per call:
-#   devenv omp                         personal -> ~/.config/devbox/secrets.env
-#   OP_ACCOUNT=work devenv omp      work  -> ~/.config/devbox/secrets.work.env
-# Needs an active session for that account: eval "$(op signin --account <name>)".
-devenv() {
-  local account="${OP_ACCOUNT:-personal}"
-  local env_file="$HOME/.config/devbox/secrets.env"
-  [[ "${account}" == personal ]] || env_file="$HOME/.config/devbox/secrets.${account}.env"
-  op run --account "${account}" --env-file="${env_file}" -- "$@"
-}
+# Box-wide tool credentials: plain KEY=value pairs, mode 600, on the bind mount.
+# Sourced outside the interactive guard on purpose - agents and tooling arrive
+# as `ssh devbox <cmd>`, which is non-interactive, and they need GH_TOKEN and
+# model keys just as much as a pane does. `set -a` exports every assignment
+# without repeating `export` in the file.
+#
+# Per-project secrets do NOT belong here: each project keeps its own .env, so a
+# leak stays scoped to one project. That includes GOOGLE_APPLICATION_CREDENTIALS
+# - projects use different GCP projects, so the ADC path is per-project too.
+if [ -r "$HOME/.config/devbox/secrets.env" ]; then
+  set -a
+  . "$HOME/.config/devbox/secrets.env"
+  set +a
+fi

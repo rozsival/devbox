@@ -31,17 +31,55 @@ ssh workstation 'cd ~/devbox && docker compose exec -T devbox ps -o user= -p 1' 
 ssh workstation 'cd ~/devbox && ./bin/devbox logs | grep "Server listening"'      # no "must be run as root"
 ```
 
+## What the container holds
+
+Authority is enumerated, not ambient. Each credential is scoped, separately revocable, and separately
+attributable:
+
+| Purpose                 | Credential                                | Reach                              |
+|-------------------------|-------------------------------------------|------------------------------------|
+| Clone, pull, push       | `~/.ssh/id_personal`, `~/.ssh/id_work` | what those GitHub accounts can push |
+| Commit author + signing | the same keys + the two-identity config   | verification only, grants nothing   |
+| Agent commits           | work-app GitHub App                 | the App's repos and permissions     |
+| Dashboards, CI, issues  | fine-grained PAT in `GH_TOKEN`            | named repos, read-mostly, expiring  |
+| LLM inference           | per-project GCP service-account key       | one dev project, predict-only       |
+| Project secrets         | that project's `.env`                     | one project                         |
+
+Notably absent: any 1Password account (`op` is not installed) and any Google user credential. See
+[Secrets](secrets.md).
+
 ## What an agent inside the devbox can reach
 
-**Can**: the whole `/home/dev` tree (both SSH keys, `gh` tokens, every project), the internet, the Tailnet
-from the container's network namespace, and anything a running `op` session unlocks.
+**Can**: the whole `/home/dev` tree - both SSH keys, `GH_TOKEN`, the App private key, every project's `.env`
+and every GCP key - plus the internet, and the Tailnet from the container's network namespace.
 
 **Cannot**: the host filesystem outside the data dir, the host Docker daemon, other containers' filesystems,
-root inside the container, and any port that is not published.
+root inside the container, any port that is not published, and any 1Password vault.
 
-The consequence to plan for: an agent with shell access has the same GitHub reach as you do through those
-keys. Keep the keys per-host and revocable (they are - both are generated in the devbox and registered
-individually), and treat a compromise as "revoke two keys and one `gh` token", not "rebuild a laptop".
+The consequence to plan for: an agent with shell access has the same GitHub push reach as you do through those
+keys. Treat a compromise as "revoke two SSH keys, one token, one App key and one service-account key", not
+"rebuild a laptop".
+
+## Accepted limits
+
+These are known and deliberate, not gaps to be closed later:
+
+1. **No egress filtering.** Outbound network is unrestricted, because the box needs the internet to work. An
+   agent that reads a poisoned issue or README can send whatever it holds anywhere. IAM and token scoping
+   limit what it can *reach*; nothing limits what it can *send*. This is why the container is a containment
+   boundary for authority and **not** a confidentiality boundary - assume anything inside can leave.
+2. **SSH keys can push wherever the accounts can.** Token scoping does not help: `git push` goes over SSH.
+   The backstop is server-side - branch protection with required reviews on the repos agents work in.
+3. **No isolation between projects.** One container, one `dev` user, one bind mount: an agent in project A can
+   read project B's `.env` and GCP key. Cloning something less trusted is the point at which per-project
+   containers or separate users stop being over-engineering.
+4. **Secrets are plaintext at rest.** `.env` files, `GH_TOKEN` and key files are unencrypted on the
+   workstation's disk, readable by the host user. Workstation disk encryption and host account hygiene are
+   part of this security model, not separate from it.
+
+An agent's own command allowlist - forbidding `op`, `gcloud` and similar - is a useful guardrail but not a
+control: a subverted agent can call the same APIs through an SDK without either binary. The boundary is what
+each credential is permitted to do.
 
 ## Deliberate boundaries
 
@@ -49,10 +87,11 @@ individually), and treat a compromise as "revoke two keys and one `gh` token", n
   point of the container. Project-level containers are therefore unavailable inside the devbox; if they are
   ever needed, the answer is a `docker:dind-rootless` sidecar plus `DOCKER_HOST`, not a socket mount.
 - **No root process at runtime.** See above.
-- **1Password stays interactive.** `op` sessions expire, so anything an agent needs unattended must be a
-  long-lived credential written once into the devbox (the `gh` token, `~/.terraformrc`) rather than fetched per
-  run through `op`. The escape hatch is an `OP_SERVICE_ACCOUNT_TOKEN` plus a dedicated shared vault (service
-  accounts cannot read Private vaults).
+- **No 1Password in the container.** A live `op` session is readable by any agent in that shell, turning a
+  one-project leak into every vault the account can read - while the project's secrets sit in a plaintext
+  `.env` regardless, because the app must read them. Secrets are rendered on the laptop and copied in.
+- **No Google user credential.** `gcloud auth application-default login` writes a non-expiring refresh token
+  for your whole Google identity. Projects get a service-account key scoped to their own GCP project instead.
 
 ## Trust assumptions
 
@@ -88,8 +127,15 @@ Fix the unprivileged path - it is the whole design. `cap_add` and a root-launche
 no lock-out risk to trade the boundary away for.
 
 **Can I give an agent a narrower key?**
-Yes - use a GitHub App installation token or a fine-grained PAT for that agent's repos instead of the shared
-`gh` token. Nothing in the design assumes the account-wide token.
+That is already the default: agents commit through the work-app GitHub App, which is scoped to specific
+repositories and permissions, and `gh` uses a fine-grained PAT rather than an account-wide OAuth token. The
+SSH keys remain broad because they are yours, for manual work - see accepted limit 2.
+
+**Would per-repo deploy keys be tighter than the account SSH keys?**
+Yes, and they were considered. A public key can be a deploy key on only one repository, so it means one
+generated key plus one `~/.ssh/config` alias per repo, alias-based clone URLs, and manual enrollment
+(needing repo admin) every time. Since agents already commit through the App, the remaining exposure is your
+own manual pushes, and branch protection covers that at a fraction of the friction.
 
 **How do I revoke access from a lost laptop?**
 Remove the key from GitHub (or from `DEVBOX_EXTRA_AUTHORIZED_KEYS`) and restart the container -

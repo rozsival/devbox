@@ -55,8 +55,8 @@ leaves the container running, so a no-op `up` never asks.
 3. Something listening on `BIND_ADDR:${DEVBOX_SSH_PORT}`, and **nothing** on `0.0.0.0`
 4. Container health status is `healthy`
 5. PID 1 runs as `dev` (no root process)
-6. Ten toolchain probes, each with its real exit code: `herdr`, `omp`, `node`, `pnpm`, `gh`, `lazygit`, `wt`,
-   `terraform`, `op`, `git`
+6. Nine toolchain probes, each with its real exit code: `herdr`, `omp`, `node`, `pnpm`, `gh`, `lazygit`, `wt`,
+   `terraform`, `git`
 
 ## `bin/push`
 

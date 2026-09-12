@@ -338,7 +338,7 @@ cmd_doctor() {
   if ! compose exec -T "${SERVICE}" bash -lc '
     status=0
     for probe in "herdr --version" "omp --version" "node -v" "pnpm -v" "gh --version" \
-      "lazygit --version" "wt --version" "terraform version" "op --version" "git --version"; do
+      "lazygit --version" "wt --version" "terraform version" "git --version"; do
       # No pipe into head: a multi-line tool would take SIGPIPE (141) once head
       # exits, and the real exit code is the whole point of this loop.
       if output="$($probe 2>&1)"; then

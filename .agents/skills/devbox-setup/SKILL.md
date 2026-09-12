@@ -1,6 +1,6 @@
 ---
 name: devbox-setup
-description: Sets up the devbox end to end - the dedicated laptop SSH key, the two ~/.ssh/config host blocks, the first deploy and .env on the workstation, herdr machine registration, and the in-container manual steps (GitHub keys, gh auth login, op account add, secrets.env, GitHub App credentials). Use this whenever someone is installing or re-installing the devbox, onboarding a new laptop, says they cannot connect, gets "Too many authentication failures", "Permission denied (publickey)", an empty BIND_ADDR preflight failure, or a herdr machine stuck offline, or asks which manual steps are still outstanding.
+description: Sets up the devbox end to end - the dedicated laptop SSH key, the two ~/.ssh/config host blocks, the first deploy and .env on the workstation, herdr machine registration, and the in-container manual steps (GitHub keys, GH_TOKEN in secrets.env, GitHub App credentials). Use this whenever someone is installing or re-installing the devbox, onboarding a new laptop, says they cannot connect, gets "Too many authentication failures", "Permission denied (publickey)", an empty BIND_ADDR preflight failure, or a herdr machine stuck offline, or asks which manual steps are still outstanding.
 ---
 
 # devbox setup
@@ -79,18 +79,21 @@ ssh workstation 'cd ~/devbox && ./bin/devbox keys'       # the two public keys +
 
 1. Add `id_personal.pub` **and** `id_work.pub` to GitHub twice each - once as an Authentication key, once
    as a Signing key. Without the Signing key registration commits push fine but show as unverified.
-2. `gh auth login --hostname github.com --git-protocol ssh --web`; a second account is a second
-   `gh auth login`, then `gh auth switch`. Tokens persist in `~/.config/gh` on the bind mount.
-3. Add **both** 1Password accounts under their shorthands - `op account add --address <OP_PERSONAL_ADDRESS>
-   --email <OP_PERSONAL_EMAIL> --shorthand personal` and the same with the `OP_WORK_*` values and
-   `--shorthand work`. Then `eval "$(op signin --account <shorthand>)"` per shell; sessions are per
-   account and the `OP_*` variables in `.env` are hints only, never used to log in.
-4. Fill `~/.config/devbox/secrets.env` (personal) and `~/.config/devbox/secrets.work.env` (work) with
-   `op://vault/item/field` references. `devenv <cmd>` wraps `op run --account personal --env-file`;
-   `OP_ACCOUNT=work devenv <cmd>` selects the other file. One account per call, and a single
-   unresolvable reference fails the whole command, so only add lines for items that exist.
-5. Place the work-app GitHub App credentials in `~/.config/work/work-app/` (`app-id` and
-   `app.pem`, mode 600). Bootstrap creates that directory and never fetches secrets.
+2. Put a **fine-grained** GitHub token in `~/.config/devbox/secrets.env` as `GH_TOKEN` - contents, actions
+   and checks read, plus issues or pull-requests write only if agents should post. Prefer this over
+   `gh auth login --web`, whose OAuth token carries account-wide write scopes in plaintext (no keyring in
+   the container). `gh auth status` succeeds on `GH_TOKEN` alone. `git push` needs no token: it goes over
+   SSH.
+3. Fill the rest of `~/.config/devbox/secrets.env` (mode 600) with plain `KEY=value` pairs for credentials
+   every project shares - model API keys for OMP. It is sourced by every shell, interactive or not. Never
+   put a single project's secrets there; those go in that project's own `.env`.
+4. Place the work-app GitHub App credentials in `~/.config/work/work-app/` (`app-id` and
+   `app.pem`, mode 600) if agents need them. Bootstrap creates that directory and never fetches secrets.
+
+There is no `op` step: the container holds no 1Password account and the binary is not installed. Project
+secrets are rendered on the laptop (`op inject -i .env.tpl -o .env`) and copied in; a project needing Google
+APIs gets a per-project service-account key, never `gcloud auth application-default login`. Reasoning and
+commands: `docs/secrets.md`.
 
 Verification of the identity wiring lives in `docs/git.md`; the short version is
 `ssh -T git@github.com` → `Hi rozsival!` and `ssh -T github-work` → `Hi rozsival-work!`.

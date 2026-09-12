@@ -14,12 +14,15 @@
 | `lazygit`        | `0.65.0`  | `/usr/local/bin/lazygit` (alias `lg`)              |
 | `wt` (worktrunk) | `0.77.0`  | `/usr/local/bin/wt` + `git-wt`                     |
 | `terraform`      | `1.16.2`  | `/usr/local/bin/terraform`                         |
-| `op`             | `2.39.0`  | `/usr/local/bin/op`                                |
 | `nvm`            | `0.40.7`  | `/opt/nvm`                                         |
 
 Plus from the Ubuntu archive: `git`, `git-lfs`, `starship`, `ripgrep`, `fd` (symlinked from `fdfind`), `jq`,
 `curl`, `rsync`, `build-essential`, `python3`, `openssh-server`/`-client`, `nano`, `less`, `procps`,
 `iproute2`.
+
+Deliberately absent: **`op`** (the container holds no 1Password account) and **`gcloud`** (projects reach
+Google APIs through a per-project service-account key, and ADC needs only the key file). Both decisions and
+their reasoning are in [Secrets](secrets.md).
 
 Print what is actually running:
 
@@ -50,8 +53,8 @@ omp update          # updates in place; no image rebuild
 ```
 
 `~/.omp/agent/config.yml` is seeded from `home/.omp/agent/config.yml` only if absent, with
-`secrets: { enabled: true }` so an `op`-injected key in the environment is obfuscated before it can reach a
-provider. Your edits are never overwritten.
+`secrets: { enabled: true }` so an API key in the environment - from `~/.config/devbox/secrets.env` or a
+project `.env` - is obfuscated before it can reach a provider. Your edits are never overwritten.
 
 Local workstation models are opt-in: copy `harnesses/omp.yml` from the `workstation` repo into
 `~/.omp/agent/models.yml` inside the devbox and point the provider `baseUrl` at the workstation's Tailscale
@@ -143,8 +146,8 @@ cannot reach your shell.
 3. Add the probe to the `doctor` list in `bin/devbox` if the version matters.
 4. `./bin/push workstation && ssh workstation 'cd ~/devbox && ./bin/devbox rebuild'`.
 
-Never invent a hash: when upstream publishes no checksum file (`herdr`, `op`), the pinned version plus TLS is
-the contract.
+Never invent a hash: when upstream publishes no checksum file (`herdr`), the pinned version plus TLS is the
+contract.
 
 Host-specific tweaks that should not live in the image go in `docker-compose.override.yml`: compose picks it
 up automatically and it is gitignored, so extra mounts, environment variables or resource limits stay local
