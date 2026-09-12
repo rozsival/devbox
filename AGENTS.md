@@ -60,9 +60,10 @@ it reaches the project tree and the internet, never the host filesystem or the h
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels) and `MaxSessions 32` (herdr channels)
 - `container/skills.sh` - optional, explicitly invoked (`./bin/devbox skills`): pinned `agent-browser` CLI +
-  Chrome build, then `agent-browser`, `skill-creator` and `find-skills` installed globally with
-  `npx skills add --global --agent '*' --yes`. Chrome's shared libraries are in the `Dockerfile` because
-  `--with-deps` needs root; `NPM_CONFIG_PREFIX=$HOME/.local` keeps the binaries on the bind mount
+  Chrome build, then `agent-browser`, `skill-creator` and `find-skills` via
+  `npx skills add --global --agent universal --yes`. Chrome's shared libraries are in the `Dockerfile`
+  because `--with-deps` needs root. Global npm installs pass `--prefix "$HOME/.local"` per call so the bins
+  stay on the bind mount; never export `NPM_CONFIG_PREFIX` - nvm then refuses to activate its default Node
 - `home/` - templates installed into `/home/dev` by bootstrap; generated files, not user-edited
 - `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `logs`,
   `keys`, `doctor`)

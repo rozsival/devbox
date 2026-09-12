@@ -17,10 +17,12 @@ esac
 export NVM_DIR=/opt/nvm
 export COREPACK_HOME=/opt/corepack
 
-# `npm i -g` writes into the bind-mounted home instead of /opt/nvm: the bins land
-# on the PATH set above - so non-interactive `ssh devbox <cmd>` sees them - and
-# they survive an image rebuild, which a global install under /opt would not.
-export NPM_CONFIG_PREFIX="$HOME/.local"
+# NPM_CONFIG_PREFIX is deliberately *not* exported here: nvm refuses to activate
+# its default Node when it is set ("nvm is not compatible with the
+# NPM_CONFIG_PREFIX environment variable"), and the same applies to `prefix=` in
+# ~/.npmrc. Global npm installs that must survive an image rebuild pass the
+# prefix per call instead: `npm i -g --prefix "$HOME/.local" <pkg>`, which puts
+# the binary in ~/.local/bin - already on the PATH set above.
 
 export EDITOR=nano
 

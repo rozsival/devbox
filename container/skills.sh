@@ -15,35 +15,36 @@ AGENT_BROWSER_VERSION="${AGENT_BROWSER_VERSION:-0.37.1}"
 
 readonly HOME_DIR="${HOME:-/home/dev}"
 export PATH="${HOME_DIR}/.local/bin:${PATH}"
-# Global npm installs land in the bind-mounted home, so they stay on the
-# non-interactive PATH and survive an image rebuild. Set here as well as in
-# ~/.bashrc.d/devbox.sh, because this script also runs through `compose exec`.
-export NPM_CONFIG_PREFIX="${HOME_DIR}/.local"
 
 # -- 1. agent-browser ---------------------------------------------------------
-# npm 11 blocks lifecycle scripts by default; the allow-list opts this one
-# package in, which is what fetches the platform binary. `agent-browser install`
-# then downloads Chrome into ~/.agent-browser/browsers (bind mount, so a rebuild
-# does not re-download it). Its `--with-deps` flag is unusable here - it shells
-# out to `apt-get` as root - so the shared libraries are baked into the image.
+# `--prefix` (not NPM_CONFIG_PREFIX, which makes nvm refuse to activate its
+# default Node) puts the binary in ~/.local/bin: on the non-interactive PATH and
+# on the bind mount, so an image rebuild does not lose it. npm 11 blocks
+# lifecycle scripts by default; the allow-list opts this one package in, which is
+# what fetches the platform binary. `agent-browser install` then downloads Chrome
+# into ~/.agent-browser/browsers - also the bind mount. Its `--with-deps` flag is
+# unusable here (it shells out to `apt-get` as root), so the shared libraries
+# Chrome links against are baked into the image instead.
 log_info "Installing agent-browser ${AGENT_BROWSER_VERSION}..."
-npm install -g --allow-scripts=agent-browser "agent-browser@${AGENT_BROWSER_VERSION}"
+npm install -g --prefix "${HOME_DIR}/.local" \
+  --allow-scripts=agent-browser "agent-browser@${AGENT_BROWSER_VERSION}"
 
 log_info 'Installing the Chrome build for agent-browser...'
 agent-browser install
 
 # -- 2. global agent skills ---------------------------------------------------
-# `--global` installs under ~/.agents/skills (the bind mount) and `--agent '*'`
-# links them into every agent directory the CLI knows, so OMP, Claude Code and
-# Codex panes all see the same set. `--yes` plus an explicit `--skill` keeps it
-# non-interactive: without both, the CLI prompts for scope and skill selection.
+# `--global --agent universal` installs to ~/.agents/skills and nothing else -
+# the directory every agent here reads, including OMP. `--agent '*'` would also
+# symlink the set into ~45 per-agent dotdirs for tools that are not installed.
+# `--yes` plus an explicit `--skill` keeps it non-interactive: without both, the
+# CLI prompts for scope and skill selection.
 skills_add() {
   local repo="$1" skill="$2"
   log_info "Installing skill ${skill} from ${repo}..."
   npx --yes "skills@${SKILLS_CLI_VERSION}" add "${repo}" \
     --skill "${skill}" \
     --global \
-    --agent '*' \
+    --agent universal \
     --yes
 }
 

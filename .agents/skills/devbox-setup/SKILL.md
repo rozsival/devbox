@@ -99,12 +99,11 @@ ssh workstation 'cd ~/devbox && ./bin/devbox skills'   # agent skills + agent-br
 ./bin/sync-omp                                           # laptop ~/.omp/agent/config.yml → devbox
 ```
 
-`skills` installs `agent-browser`, `skill-creator` and `find-skills` globally under `~/.agents/skills`, plus
-the `agent-browser` CLI and its Chrome build. It is separate from bootstrap because the first run downloads
-~180 MB, and it needs the Chrome shared libraries that the `Dockerfile` provides - so run it after an `up`
-that includes the current image, not against a stale one. `Failed to install 2` in its output is cosmetic:
-Eve and PromptScript reject global installs. Both commands are idempotent; details in
-`docs/toolchain.md#agent-skills-and-browser-automation`.
+`skills` installs `agent-browser`, `skill-creator` and `find-skills` into `~/.agents/skills` (the directory
+OMP reads), plus the `agent-browser` CLI and its Chrome build. It is separate from bootstrap because the
+first run downloads ~180 MB, and it needs the Chrome shared libraries that the `Dockerfile` provides - so run
+it after an `up` that includes the current image, not against a stale one. Both commands are idempotent;
+details in `docs/toolchain.md#agent-skills-and-browser-automation`.
 
 ## When setup does not work
 
