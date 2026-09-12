@@ -44,11 +44,11 @@ compose recreates the container - which re-runs the entrypoint and therefore boo
 the single answer for both. `up` with no changes at all is idempotent: compose reports
 `Container devbox Running` and nothing restarts.
 
-One caveat for `home/` specifically: bootstrap only regenerates `~/.bashrc.d/devbox.sh`. `~/.gitconfig`,
-`~/.ssh/config`, `secrets.env` and the OMP config are create-if-absent, so editing those templates does not
-reach a home that already has them - delete the file in `${DEVBOX_DATA_DIR}` first, or apply the change by
-hand. Derived Git identity values are the exception: they are re-applied with `git config --global` on every
-run.
+One caveat for `home/` specifically. Bootstrap rewrites two files unconditionally - `~/.bashrc.d/devbox.sh`
+and `~/.ssh/config` - because both are generated, not hand-edited, so template edits land on the next run.
+`~/.gitconfig`, `secrets.env` and the OMP config are create-if-absent: editing those templates does not
+reach a home that already has them, so delete the file under `${DEVBOX_DATA_DIR}` first or apply the change
+by hand. Derived Git identity values are re-applied with `git config --global` on every run regardless.
 
 ## What a redeploy cannot destroy
 

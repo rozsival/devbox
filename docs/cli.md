@@ -86,9 +86,9 @@ remote copy of a *tracked* directory will be removed - that is intentional, the 
 you need a cache-free image, e.g. after bumping a pinned version.
 
 **Does `bootstrap` overwrite my dotfiles?**
-Only `~/.bashrc.d/devbox.sh`, which is generated. `~/.gitconfig`, `~/.ssh/config`, `secrets.env` and the OMP
-config are created if absent and then left alone; derived Git identity values are re-applied with
-`git config --global` on each run.
+Only the two generated ones: `~/.bashrc.d/devbox.sh` and `~/.ssh/config`, both rewritten from the templates
+on every run. `~/.gitconfig`, `secrets.env` and the OMP config are created if absent and then left alone;
+derived Git identity values are re-applied with `git config --global` on each run.
 
 **`doctor` says `BIND_ADDR is X but Tailscale reports Y`.**
 The node's Tailscale address changed. `./bin/devbox env && ./bin/devbox up`.
