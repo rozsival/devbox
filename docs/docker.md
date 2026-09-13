@@ -152,7 +152,9 @@ Three ways, in order of preference:
    gateway, the one interface the boundary table admits. An entry that names `127.0.0.1` is not - see *A
    compose file that binds 127.0.0.1* below.
 3. **From a devbox shell, via `localhost`** - run `devbox-ports`, which forwards `127.0.0.1:<port>` to
-   `host.docker.internal:<port>` for every port the daemon publishes, with one `socat` per port:
+   `host.docker.internal:<port>` for every gateway-published port, with one `socat` per port. A
+   loopback-bound publish is skipped with a warning naming the container, because a forward there would
+   relay to nothing:
 
 ```bash
 docker compose up -d
@@ -268,10 +270,11 @@ The daemon is down or unprovisioned. On the host: `sudo ./bin/rootless-docker --
 `systemctl --user --machine=dev@.host status docker` for the daemon's own log.
 
 **A service is running but nothing in the devbox can reach its port.**
-Check what the daemon bound: `docker port <container>`. An address of `127.0.0.1:<port>` is the *host's*
-loopback and unreachable from here - the project's compose file publishes with an explicit loopback prefix.
-Parameterise it and set `DOCKER_BIND_IP` (see *A compose file that binds 127.0.0.1*). An address of
-`172.17.0.1:<port>` is correct; if `localhost` still fails there, the mirror is missing - run `devbox-ports`.
+Run `devbox-ports`: it names the case. A `[WARN]` that the container publishes on `127.0.0.1` means the
+project's compose file binds the *host's* loopback, which this container has no route to - parameterise the
+address and set `DOCKER_BIND_IP` (see *A compose file that binds 127.0.0.1*). An `[OK]` line means the port
+is on the gateway and now mirrored, so `localhost:<port>` works. `docker port <container>` shows the same
+thing first-hand.
 
 **A bind mount is empty inside a project container.**
 Path identity was broken - either the project lives outside `/home/dev`, or `DEVBOX_DATA_DIR` is not

@@ -53,16 +53,25 @@ cmd_sync() {
     log_error "${GATEWAY_HOST} does not resolve - the container needs the host-gateway extra_hosts entry."
 
   mkdir -p "${STATE_DIR}"
-  local mirrored=0 container port proto spec
-  # One inspect per container, printing "<containerPort>/<proto> <hostPort>"
+  local mirrored=0 skipped=0 container port proto spec host_ip
+  # One inspect per container, printing "<containerPort>/<proto> <hostIp> <hostPort>"
   # lines; a container with no published port prints nothing.
   while read -r container; do
     [[ -n "${container}" ]] || continue
-    while read -r spec port; do
+    while read -r spec host_ip port; do
       [[ -n "${port}" ]] || continue
       proto="${spec#*/}"
       # UDP would need a second socat mode and no dev service here uses it.
       [[ "${proto}" == 'tcp' ]] || continue
+      # A loopback-bound publish is on the *host's* loopback: this container has
+      # no route to it, so a forward would succeed and then relay to nothing.
+      # The project's compose file has to publish on the gateway instead.
+      if [[ "${host_ip}" == 127.* || "${host_ip}" == '::1' ]]; then
+        log_warn "${container} publishes ${port} on ${host_ip}, the host's loopback; unreachable here."
+        log_warn "  set DOCKER_BIND_IP=${gateway} for that project - see docs/docker.md."
+        skipped=$((skipped + 1))
+        continue
+      fi
       if forward_alive "${port}"; then
         continue
       fi
@@ -76,11 +85,17 @@ cmd_sync() {
       log_success "127.0.0.1:${port} -> ${GATEWAY_HOST}:${port} (${container})"
       mirrored=$((mirrored + 1))
     done < <(docker inspect -f \
-      '{{ range $p, $bindings := .NetworkSettings.Ports }}{{ range $bindings }}{{ $p }} {{ .HostPort }}
+      '{{ range $p, $b := .NetworkSettings.Ports }}{{ range $b }}{{ $p }} {{ or .HostIp "0.0.0.0" }} {{ .HostPort }}
 {{ end }}{{ end }}' "${container}")
   done < <(docker ps --format '{{.Names}}')
 
-  if ((mirrored == 0)); then
+  # `or` above keeps the field count at three: an empty HostIp means a wildcard
+  # bind, and a missing field would shift ${port} out of the read and drop the
+  # publish without a word.
+  if ((skipped > 0)); then
+    log_warn "${skipped} loopback-bound port(s) skipped."
+  fi
+  if ((mirrored == 0)) && ((skipped == 0)); then
     log_info 'Nothing new to mirror.'
   fi
   cmd_status
