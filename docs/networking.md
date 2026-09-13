@@ -65,10 +65,12 @@ ssh -N -L 8080:localhost:8080 -L 5432:localhost:5432 devbox &   # several at onc
 `AllowAgentForwarding no` keep the rest closed. Remote (`-R`) forwards work the same way if the devbox needs
 to reach something on the laptop.
 
-Project containers (see [Docker](docker.md)) publish onto the `docker0` gateway - the devbox container's own
-bridge gateway - never onto `0.0.0.0`, so a published port is reachable inside the devbox at
-`host.docker.internal:<port>`, and `devbox-ports` mirrors it onto `127.0.0.1:<port>`. Tunnel from the laptop
-either way:
+Project containers (see [Docker](docker.md)) publish onto the `docker0` gateway by default - the devbox
+container's own bridge gateway - so a published port is reachable inside the devbox at
+`host.docker.internal:<port>`, and `devbox-ports` mirrors it onto `127.0.0.1:<port>`. A `ports:` entry that
+names an address overrides that default: `0.0.0.0` still cannot be reached from off the host, because the
+boundary table drops it, while `127.0.0.1` binds the *host's* loopback and is invisible to the devbox
+entirely. Tunnel from the laptop either way:
 
 ```bash
 ssh -N -L 5432:localhost:5432 devbox &                  # after `devbox-ports` mirrors the port

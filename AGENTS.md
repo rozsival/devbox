@@ -63,8 +63,10 @@ the host's root Docker daemon.
   mounts the *directory* because rootlesskit recreates the socket inode on every daemon restart, and
   `network_mode: bridge` keeps the container on `docker0`, the one interface the project-port boundary
   admits, and which - unlike a compose-managed bridge - is not removed by `down`
-- `container/entrypoint.sh` - PID 1 as `dev`: home skeleton, host key, `authorized_keys`, bootstrap, then
-  `exec sshd`. The order is load-bearing
+- `container/entrypoint.sh` - PID 1 as `dev`: home skeleton, host key, `authorized_keys`, bootstrap, the
+  project-port mirror, then `exec sshd`. The order is load-bearing; the mirror comes last because forwards
+  live in this container's netns and are lost on every recreate, and it is best-effort because an
+  unreachable project daemon must not cost SSH access
 - `container/bootstrap.sh` - idempotent user setup: OMP, both SSH identities, `~/.ssh/config`, known_hosts,
   the two-identity Git config, shell, `gh`, the box-wide `secrets.env`, and the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding

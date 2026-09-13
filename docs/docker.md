@@ -147,21 +147,70 @@ Three ways, in order of preference:
 
 1. **From another container in the same stack** - unchanged. Compose networks and service DNS work exactly as
    they do on a laptop; `postgres:5432` resolves.
-2. **From a devbox shell, via `host.docker.internal`** - every published port is reachable there: the name
-   resolves to the devbox bridge gateway, the one interface the boundary table admits.
+2. **From a devbox shell, via `host.docker.internal`** - every port published *on the gateway*, meaning a
+   `ports:` entry with no explicit host address, is reachable there: the name resolves to the devbox bridge
+   gateway, the one interface the boundary table admits. An entry that names `127.0.0.1` is not - see *A
+   compose file that binds 127.0.0.1* below.
 3. **From a devbox shell, via `localhost`** - run `devbox-ports`, which forwards `127.0.0.1:<port>` to
-   `host.docker.internal:<port>` for every published port with one `socat` per port:
+   `host.docker.internal:<port>` for every port the daemon publishes, with one `socat` per port:
 
 ```bash
 docker compose up -d
-devbox-ports            # sync (default); re-run after starting more services
+devbox-ports            # sync (default); re-run only when new ports appear
 devbox-ports status
 devbox-ports stop
 ```
 
 That last one exists so a project whose `.env` says `postgres://localhost:5432` needs no devbox-specific
-edit. From the laptop, tunnel as usual - `ssh -N -L 5432:localhost:5432 devbox &` reaches a mirrored port,
+edit. Each forward is a detached `socat`, so it outlives the shell that created it, every `docker compose
+restart` and every container rebuild - the port number is what it binds to, not the container. It dies only
+with the devbox container itself, and `container/entrypoint.sh` re-syncs on start, so a `./bin/devbox
+rebuild` restores the forwards before sshd accepts a connection. In practice `devbox-ports` is a command you
+run once after adding a service, not once per session.
+
+From the laptop, tunnel as usual - `ssh -N -L 5432:localhost:5432 devbox &` reaches a mirrored port,
 and `ssh -N -L 5432:host.docker.internal:5432 devbox &` reaches one without the mirror.
+
+## A compose file that binds 127.0.0.1
+
+A project that publishes with an explicit loopback prefix - `'127.0.0.1:5432:5432'`, common and correct on a
+laptop - is **unreachable from the devbox**. The daemon is a sibling, so that address is the *host's*
+loopback, and the devbox has no route to it; neither `host.docker.internal` nor `devbox-ports` can see the
+port, because nothing was published on the bridge gateway.
+
+Make the address a variable in the project's compose file, defaulting to today's behaviour:
+
+```yaml
+ports:
+  - '${DOCKER_BIND_IP:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432'
+```
+
+Then set `DOCKER_BIND_IP=172.17.0.1` in that project's `.env` inside the devbox - the gateway address, which
+`./bin/devbox doctor` prints and `host.docker.internal` resolves to. Laptops leave it unset and are
+unaffected. This is not a weaker bind: the boundary table drops connections to a published port from every
+interface except `lo` and `docker0`, including ports published to `0.0.0.0` (see *Where a published port is
+bound*).
+
+`work/agents` needs exactly this, plus one `devbox-ports` run:
+
+```bash
+cd ~/projects/work-agents
+echo 'DOCKER_BIND_IP=172.17.0.1' >>.env
+pnpm run docker:start
+devbox-ports
+pnpm dev                # apps on localhost:3000/4000-4002, natively in the box
+```
+
+The apps' own `localhost` URLs (`NEXT_PUBLIC_GATEWAY_URL`, `CORS_ORIGINS`, `AGENT_UPSTREAMS`, `AUTH_URL`)
+need no change: those processes run in the devbox, so its loopback is theirs. Renaming the two
+container-facing values to `host.docker.internal` instead of mirroring works for Postgres but breaks
+Langfuse: compose feeds `LANGFUSE_BASE_URL` to `NEXTAUTH_URL`, which must match the address the operator's
+browser uses over the tunnel. Leave it `localhost:3001` and mirror. A wrong value there fails silently -
+the OTel span processor drops spans rather than raising.
+
+`.env.local` holds the vault-injected credentials and cannot be generated in the devbox, which ships no `op`
+by design (see `docs/secrets.md`). Generate it on the laptop with `pnpm run env:inject` and copy it in once;
+`.worktreeinclude` then carries it into every `wt` worktree.
 
 ## Building images
 
@@ -217,6 +266,12 @@ Go dialled last, which makes it look like an IPv6 problem; it is not.
 **`docker` says "Cannot connect to the Docker daemon".**
 The daemon is down or unprovisioned. On the host: `sudo ./bin/rootless-docker --check`, then
 `systemctl --user --machine=dev@.host status docker` for the daemon's own log.
+
+**A service is running but nothing in the devbox can reach its port.**
+Check what the daemon bound: `docker port <container>`. An address of `127.0.0.1:<port>` is the *host's*
+loopback and unreachable from here - the project's compose file publishes with an explicit loopback prefix.
+Parameterise it and set `DOCKER_BIND_IP` (see *A compose file that binds 127.0.0.1*). An address of
+`172.17.0.1:<port>` is correct; if `localhost` still fails there, the mirror is missing - run `devbox-ports`.
 
 **A bind mount is empty inside a project container.**
 Path identity was broken - either the project lives outside `/home/dev`, or `DEVBOX_DATA_DIR` is not

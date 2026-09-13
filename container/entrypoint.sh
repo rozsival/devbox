@@ -75,6 +75,21 @@ if [[ "${DEVBOX_SKIP_BOOTSTRAP:-0}" != '1' ]]; then
   fi
 fi
 
-# -- 5. sshd ------------------------------------------------------------------
+# -- 5. Project port mirror ---------------------------------------------------
+# Forwards live in this container's netns, so recreating it drops them while the
+# project containers - owned by the sibling daemon - keep running and keep their
+# published ports. Re-syncing here is what makes `devbox-ports` a thing the user
+# never has to remember after a rebuild. Best-effort: the daemon may not be
+# provisioned, and an unreachable one must not cost SSH access.
+#
+# DOCKER_HOST is passed explicitly: ~/.bashrc.d/devbox.sh exports it for shells,
+# and PID 1 is not one.
+if DOCKER_HOST='unix:///run/devbox/docker.sock' /usr/local/bin/devbox-ports >/dev/null 2>&1; then
+  log_success 'Mirrored the project daemon ports onto 127.0.0.1.'
+else
+  log_info 'No project ports mirrored (the project daemon is not reachable yet).'
+fi
+
+# -- 6. sshd ------------------------------------------------------------------
 log_info 'Starting sshd on port 2222...'
 exec /usr/sbin/sshd -D -e -f /opt/devbox/container/sshd_config
