@@ -45,9 +45,9 @@ the host's root Docker daemon.
 - `docs/` - domain-scoped documentation, each file ending in an FAQ. Update the file that owns the domain
   rather than growing `README.md`:
   - `docs/setup.md` - prerequisites, laptop key, `~/.ssh/config`, first deploy, `.env` reference
-  - `docs/connecting.md` - herdr panes, `ssh devbox`, `./bin/devbox shell`, cloning, port forwarding
+  - `docs/connecting.md` - herdr panes, `ssh devbox`, Moshi on a phone, `./bin/devbox shell`, cloning, port forwarding
   - `docs/git.md` - the two identities, clone rules, signing, GitHub key registration
-  - `docs/toolchain.md` - pinned versions, install locations, OMP, agent skills, adding a tool
+  - `docs/toolchain.md` - pinned versions, install locations, OMP, Moshi/`moshi-hook`, agent skills, adding a tool
   - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, GCP ADC, App credentials
   - `docs/cli.md` - `bin/devbox`, `bin/push` and `bin/sync-omp` reference
   - `docs/networking.md` - exposure model, why UFW cannot block a published port, tunnels
@@ -64,11 +64,14 @@ the host's root Docker daemon.
   `network_mode: bridge` keeps the container on `docker0`, the one interface the project-port boundary
   admits, and which - unlike a compose-managed bridge - is not removed by `down`
 - `container/entrypoint.sh` - PID 1 as `dev`: home skeleton, host key, `authorized_keys`, bootstrap, the
-  project-port mirror, then `exec sshd`. The order is load-bearing; the mirror comes last because forwards
-  live in this container's netns and are lost on every recreate, and it is best-effort because an
-  unreachable project daemon must not cost SSH access
+  project-port mirror, the `moshi-hook` daemon, then `exec sshd`. The order is load-bearing; the mirror
+  comes last of the setup steps because forwards live in this container's netns and are lost on every
+  recreate, and both it and the hook daemon are best-effort because neither an unreachable project daemon
+  nor a missing hook daemon may cost SSH access. `moshi-hook serve` is backgrounded rather than supervised
+  because there is no systemd here: it becomes a child of `sshd` and is reaped by tini
 - `container/bootstrap.sh` - idempotent user setup: OMP, both SSH identities, `~/.ssh/config`, known_hosts,
-  the two-identity Git config, shell, `gh`, the box-wide `secrets.env`, and the printed manual checklist
+  the two-identity Git config, shell, `gh`, the box-wide `secrets.env`, `moshi-hook` plus its OMP
+  extension, and the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels) and `MaxSessions 32` (herdr channels)
 - `container/skills.sh` - optional, explicitly invoked (`./bin/devbox skills`): pinned `agent-browser` CLI +
@@ -80,7 +83,9 @@ the host's root Docker daemon.
 - `container/devbox-ports` - symlinked to `/usr/local/bin` by the `Dockerfile`, so a host edit is live
   without a rebuild; mirrors published project ports onto the container's own `127.0.0.1`
 - `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`,
-  `logs`, `keys`, `doctor`); `up`/`down`/`rebuild` refuse to drop live SSH sessions without `--force`
+  `logs`, `hook`, `keys`, `doctor`); `up`/`down`/`rebuild` refuse to drop live SSH sessions without
+  `--force`, and `hook` restarts the `moshi-hook` daemon with a detached `exec` precisely so it does not
+  have to
 - `bin/rootless-docker` - host-side, needs `sudo`, idempotent, `--check` reports only: installs `uidmap` and
   `slirp4netns`, creates the `dev:devbox` host user with pinned uid/gid 1001, moves `DEVBOX_DATA_DIR` to
   `/home/dev` (path identity), writes `/etc/tmpfiles.d/devbox-docker.conf`, installs the nftables table plus

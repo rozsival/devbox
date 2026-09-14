@@ -1,6 +1,6 @@
 ---
 name: devbox-basics
-description: Explains how the devbox works - the container-as-sandbox model, the Tailnet-only exposure boundary, the three ways in, which machine owns which files, and where the two Git identities apply. Use this whenever someone asks what the devbox is, how it is isolated, "where do I actually work", why a repo or tool is missing from the laptop, whether the devbox is reachable from the internet, or is reading this repo for the first time. Also use it before answering any devbox question from memory, so the answer matches what the repo actually does.
+description: Explains how the devbox works - the container-as-sandbox model, the Tailnet-only exposure boundary, the four ways in, which machine owns which files, and where the two Git identities apply. Use this whenever someone asks what the devbox is, how it is isolated, "where do I actually work", why a repo or tool is missing from the laptop, whether the devbox is reachable from the internet, or is reading this repo for the first time. Also use it before answering any devbox question from memory, so the answer matches what the repo actually does.
 ---
 
 # devbox basics
@@ -45,17 +45,23 @@ Four facts that answer most questions:
    held there by `devbox-docker-firewall`, an nftables table matching that daemon's own socket cgroup, so an
    explicit `0.0.0.0:` port spec cannot reach the Tailnet or the LAN either (`docs/docker.md`).
 
-## The three ways in
+## The four ways in
 
 | Route                | Run from    | Use it for                                                  |
 |----------------------|-------------|-------------------------------------------------------------|
 | `herdr`              | Laptop      | Normal work; panes survive client exit and network loss     |
 | `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git`          |
+| Moshi                | Phone       | Watching and steering an agent away from the desk           |
 | `./bin/devbox shell` | Workstation | Recovery when SSH, `authorized_keys` or Tailscale is broken |
 
-All three land as `dev` in the same `/home/dev`. `devbox` is an **SSH config alias**, not a shell alias: a
+All four land as `dev` in the same `/home/dev`. `devbox` is an **SSH config alias**, not a shell alias: a
 `Host devbox` block with `Port 2223`, `User dev` and `IdentityFile ~/.ssh/devbox`. Anything that reads
 `~/.ssh/config` honours it, which is why `rsync`, `git` and `ssh -L` work unchanged.
+
+Moshi is a plain SSH client plus `moshi-hook`, the daemon `bootstrap` installs and `entrypoint.sh` starts;
+without it the phone gets a terminal but no notifications or approvals. Its phone key belongs in
+`DEVBOX_EXTRA_AUTHORIZED_KEYS`, because the entrypoint rewrites `authorized_keys` on every start
+(`docs/toolchain.md`).
 
 Dev servers are never published. Forward them: `ssh -N -L 5173:localhost:5173 devbox`.
 

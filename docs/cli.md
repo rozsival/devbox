@@ -18,6 +18,7 @@ Usage: ./bin/devbox <command>
   shell             Open a login shell inside the container
   sessions          List the SSH sessions connected to the container
   logs [-f]         Show container logs (last 100 lines; -f follows)
+  hook              Restart the moshi-hook daemon in place and print its status
   keys              Print the devbox public keys and sshd host-key fingerprint
   doctor            Check host wiring, exposure, and the in-container toolchain
 ```
@@ -46,6 +47,10 @@ leaves the container running, so a no-op `up` never asks.
 - **`sessions`** - established connections to the container's sshd plus the last 10 `Accepted`/`Disconnected`
   lines, for tracing a disconnect after the fact.
 - **`logs`** - `--tail 100` by default; `-f` follows.
+- **`hook`** - stops `moshi-hook` and starts it again with a detached `docker compose exec`, then prints
+  `moshi-hook status`. The non-destructive restart path: the daemon is a child of the entrypoint, so the
+  alternative would be recreating the container and killing every SSH session with it. Needed after
+  `moshi-hook pair` and after a crash. See [Toolchain](toolchain.md#moshi-and-moshi-hook).
 - **`keys`** - `id_personal.pub`, `id_work.pub` and the sshd host-key fingerprint: the paste targets for
   GitHub.
 - **`doctor`** - the checks below. It runs all of them, reports each one, and exits non-zero if any failed.
@@ -59,8 +64,9 @@ leaves the container running, so a no-op `up` never asks.
 5. PID 1 runs as `dev` (no root process)
 6. Eleven toolchain probes, each with its real exit code: `herdr`, `omp`, `node`, `pnpm`, `gh`, `lazygit`,
    `wt`, `terraform`, `git`, `docker`, `docker compose`
-7. The project Docker daemon is reachable from inside the container and reports `rootless`
-8. `host.docker.internal` resolves inside the container
+7. The `moshi-hook` daemon is installed and running - unpaired is reported as a warning, not a failure
+8. The project Docker daemon is reachable from inside the container and reports `rootless`
+9. `host.docker.internal` resolves inside the container
 
 ## `bin/rootless-docker`
 

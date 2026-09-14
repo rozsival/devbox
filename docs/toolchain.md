@@ -44,8 +44,8 @@ blank line.
 - **`/opt/nvm` + `/opt/corepack`** (not `~/.nvm`) - `/home/dev` is a bind mount that would shadow anything the
   image installed under the home directory. `node`, `npm`, `npx`, `corepack` and `pnpm` are symlinked into
   `/usr/local/bin` so they resolve without a login shell.
-- **`~/.local/bin`** - OMP only, installed by `bootstrap` instead of baked into the image so `omp update`
-  works without a rebuild.
+- **`~/.local/bin`** - OMP and `moshi-hook`, installed by `bootstrap` instead of baked into the image so
+  `omp update` and `moshi-hook update` work without a rebuild.
 - **`/usr/local/lib/docker/cli-plugins`** - where `docker compose` and `docker buildx` live as CLI plugins.
   Only the client ships in the image; the daemon is the host's rootless `dev` daemon (see below).
 
@@ -90,6 +90,53 @@ flags:
 Only `config.yml` moves. `agent.db`, `history.db`, `sessions/`, `memories/` and `models.yml` are
 per-machine state and are never touched. The previous file is kept as `config.yml.bak` on the devbox, and a
 running OMP session has to be restarted to pick the new preset up.
+
+## Moshi and `moshi-hook`
+
+[Moshi](https://getmoshi.app) is a phone terminal that connects to the devbox like any other SSH client -
+`BIND_ADDR:2223`, user `dev`, an authorized key. That alone gives a terminal and herdr panes. It does *not*
+give push notifications, lock-screen approvals or Chat View: those come from `moshi-hook`, a companion
+daemon that `bootstrap` installs into `~/.local/bin` and the entrypoint starts.
+
+| Piece                       | Where it lives                            | What breaks without it                  |
+|-----------------------------|-------------------------------------------|-----------------------------------------|
+| `moshi-hook` binary         | `~/.local/bin` (bind mount, self-updating) | Everything below                        |
+| OMP extension               | `~/.omp/agent/extensions/moshi-hooks.ts`   | No lifecycle events are emitted at all  |
+| Daemon (`moshi-hook serve`) | Started by `container/entrypoint.sh`       | Events go nowhere; socket-only silence  |
+| Pairing                     | One manual `moshi-hook pair --token`       | Daemon runs but sends nothing to a phone |
+
+OMP is a Tier A agent for Moshi, so a paired devbox gets the inbox, approvals and the native transcript
+view, not just completion pings.
+
+Pairing is the one manual step - the token is per-account and belongs to the phone, not the repo:
+
+```bash
+ssh devbox 'moshi-hook pair --token <token from Settings → Hooks in the app>'
+ssh workstation 'cd ~/devbox && ./bin/devbox hook'   # restart so it picks the pairing up
+```
+
+`bootstrap` prints the pairing as a remaining manual step until it is done, and `./bin/devbox doctor`
+reports the daemon as running-but-unpaired. Pairing state is written under the bind-mounted home, so it
+survives container and image rebuilds like every other credential there.
+
+There is no systemd in the container, so `moshi-hook service install` cannot be used - `container/entrypoint.sh`
+starts the daemon instead. The consequence is that the daemon's lifetime is the container's, and a crashed
+or hand-killed daemon is restarted with `./bin/devbox hook`, which is a detached `docker compose exec`:
+no recreate, no dropped SSH sessions. `./bin/devbox up` will *not* revive it unless compose decides to
+recreate the container.
+
+Starting a second daemon is harmless - `serve` exits with `another moshi-hook serve is already running
+(pid N, lock …)`. A lock left behind by a killed daemon does not block the next start, including when the
+container's fresh PID numbering has handed that PID to an unrelated process.
+
+The app also needs the daemon's gateway on `127.0.0.1:24543`; Moshi forwards it over its own SSH connection,
+which `AllowTcpForwarding yes` in `container/sshd_config` already permits. Nothing new is published.
+
+```bash
+moshi-hook status                    # pairing, multiplexers, per-agent hook state
+moshi-hook logs -f                   # ~/.local/state/moshi/hook.log
+moshi-hook install --target omp      # rewrite the OMP extension after an update
+```
 
 ## Agent skills and browser automation
 
@@ -188,9 +235,14 @@ out.
 No. The image is rebuilt from scratch; `/home/dev` is a bind mount on the host and untouched. Only things
 installed *into the image* disappear.
 
-**Why is `omp` not pinned in the image?**
-So `omp update` works without a rebuild. `bootstrap` installs it into `~/.local/bin` if `command -v omp`
-fails, and never overwrites an existing install.
+**Why are `omp` and `moshi-hook` not pinned in the image?**
+So `omp update` and `moshi-hook update` work without a rebuild. `bootstrap` installs both into
+`~/.local/bin` if `command -v` fails, and never overwrites an existing install - a version pinned at build
+time would be shadowed on `PATH` by that copy anyway, and falsified by the first self-update. They are the
+only two exceptions to the `ARG <TOOL>_VERSION` rule at the top of this page. `moshi-hook` is still
+checksum-verified: `bootstrap` resolves upstream's `latest` pointer, then fetches the tarball *and*
+`checksums.txt` for that one version and runs `sha256sum -c`, because upstream's own installer skips
+verification when the checksum file cannot be fetched.
 
 **A different Node version for one project?**
 `nvm install <version>` works normally - it writes to `/opt/nvm`, which is writable by `dev` and persists

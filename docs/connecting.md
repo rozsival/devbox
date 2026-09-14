@@ -1,12 +1,13 @@
 # 🔗 Connecting
 
-Three ways into the container, all landing as user `dev` in the same bind-mounted `/home/dev`. Work happens **inside**
+Four ways into the container, all landing as user `dev` in the same bind-mounted `/home/dev`. Work happens **inside**
 the container - the laptop's `~/projects` and the workstation's `~/projects` are different trees.
 
 | Route                | From        | Use it for                                                   |
 |----------------------|-------------|--------------------------------------------------------------|
 | `herdr`              | Laptop      | Normal work: panes survive client exit and network loss      |
 | `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git`           |
+| Moshi                | Phone       | Watching and steering an agent away from the desk            |
 | `./bin/devbox shell` | Workstation | Recovery when SSH or the network is the thing that is broken |
 
 ## herdr panes
@@ -48,6 +49,18 @@ ssh workstation 'cd ~/devbox && ./bin/devbox shell'   # docker compose exec -it 
 
 This bypasses the container's sshd entirely, so it still works when `authorized_keys`, the host key, or
 Tailscale is broken.
+
+## Moshi on a phone
+
+Moshi is an ordinary SSH client as far as the devbox is concerned: host `workstation`, port `2223`, user
+`dev`, and a key the container authorizes. Add the phone's public key to `DEVBOX_EXTRA_AUTHORIZED_KEYS` in
+`.env` on the workstation, not with the app's Easy Pair flow - the entrypoint rebuilds `authorized_keys`
+from GitHub plus that variable on every start, so a key written straight into the file is erased by the next
+`./bin/devbox up`.
+
+Notifications, lock-screen approvals and the native transcript view need the `moshi-hook` daemon, which
+`bootstrap` installs and the entrypoint runs. One manual pairing step activates it - see
+[Toolchain](toolchain.md#moshi-and-moshi-hook).
 
 ## Cloning a repo
 

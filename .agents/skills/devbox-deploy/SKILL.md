@@ -51,8 +51,9 @@ A recreate kills every live SSH session instantly, and the client prints no reas
 `ssh devbox` closed itself. `up`, `down` and `rebuild` therefore count established sessions first: with any
 connected they prompt on a terminal and refuse in a script - `--force` overrides that, and needs the user's
 say-so first. Check with `./bin/devbox sessions`, which also prints sshd's recent `Accepted`/`Disconnected`
-lines. Only `bootstrap` and `skills` are safe with panes attached: both are `docker compose exec` into the
-running container.
+lines. Only `bootstrap`, `skills` and `hook` are safe with panes attached: all three are `docker compose
+exec` into the running container. `hook` exists for exactly that reason - restarting the `moshi-hook`
+daemon (after `moshi-hook pair`, or after it crashed) must not cost anyone their session.
 
 `container/` and `home/` are both bind-mounted `:ro` *and* `COPY`d into the image as a fallback (the
 `COPY container/` / `COPY home/` lines in the `Dockerfile`). The mount means the new bytes are visible

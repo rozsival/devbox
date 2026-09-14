@@ -32,6 +32,7 @@ Commands:
   shell             Open a login shell inside the container
   sessions          List the SSH sessions connected to the container
   logs [-f]         Show container logs (last 100 lines; -f follows)
+  hook              Restart the moshi-hook daemon in place and print its status
   keys              Print the devbox public keys and sshd host-key fingerprint
   doctor            Check host wiring, exposure, and the in-container toolchain
 
@@ -294,6 +295,39 @@ cmd_keys() {
   '
 }
 
+cmd_hook() {
+  require_env_file
+  if ! compose exec -T "${SERVICE}" bash -lc 'command -v moshi-hook >/dev/null 2>&1'; then
+    log_error "moshi-hook is not installed - run './bin/devbox bootstrap'."
+  fi
+  # A detached `exec`, never a container recreate: the daemon has to be
+  # restartable after `moshi-hook pair` without taking live SSH sessions down
+  # with it.
+  #
+  # The wait is load-bearing. `pkill` returns as soon as the signal is queued,
+  # while the gateway socket on 127.0.0.1:24543 is released only once the old
+  # process actually exits - and `serve` treats a busy gateway port as a fatal
+  # "address already in use", so starting too early produces a silent no-daemon.
+  # shellcheck disable=SC2016 # the script body must expand inside the container
+  compose exec -T "${SERVICE}" bash -c '
+    pkill -x moshi-hook >/dev/null 2>&1 || exit 0
+    for _ in $(seq 50); do
+      pgrep -x moshi-hook >/dev/null 2>&1 || exit 0
+      sleep 0.1
+    done
+    exit 1
+  ' || log_error 'The running moshi-hook did not exit; refusing to start a second one.'
+
+  compose exec -d "${SERVICE}" bash -lc 'exec moshi-hook serve'
+  sleep 1
+  if ! compose exec -T "${SERVICE}" pgrep -x moshi-hook >/dev/null 2>&1; then
+    compose exec -T "${SERVICE}" bash -lc 'tail -5 ~/.local/state/moshi/hook.log' 2>/dev/null || true
+    log_error 'moshi-hook did not stay up - see the log above.'
+  fi
+  compose exec -T "${SERVICE}" bash -lc 'moshi-hook status' || true
+  log_success 'moshi-hook daemon restarted.'
+}
+
 cmd_doctor() {
   require_env_file
   local failures=0
@@ -382,6 +416,23 @@ cmd_doctor() {
     fail 'one or more toolchain probes failed'
   fi
 
+  # Moshi's notifications, approvals and Chat View all arrive through this
+  # daemon, which the entrypoint starts because the container has no systemd.
+  # Unpaired is a warning, not a failure: the box works, the phone just gets
+  # nothing. A stopped daemon is a failure - something killed it.
+  local hook_state
+  hook_state="$(compose exec -T "${SERVICE}" bash -lc '
+    command -v moshi-hook >/dev/null 2>&1 || { echo absent; exit 0; }
+    pgrep -x moshi-hook >/dev/null 2>&1 || { echo stopped; exit 0; }
+    if moshi-hook status 2>/dev/null | grep -qi unpaired; then echo unpaired; else echo paired; fi
+  ' 2>/dev/null | tr -cd 'a-z')"
+  case "${hook_state}" in
+    paired) log_success 'moshi-hook daemon running and paired' ;;
+    unpaired) log_warn "moshi-hook daemon running but unpaired - pair in the container ('moshi-hook pair --token <token>'), then './bin/devbox hook'" ;;
+    stopped) fail "moshi-hook is installed but not running - './bin/devbox hook' restarts it without touching SSH sessions" ;;
+    *) fail "moshi-hook is not installed - run './bin/devbox bootstrap'" ;;
+  esac
+
   # The project daemon must be reachable from inside the container and must be
   # rootless: a rootful server here would mean the socket belongs to the host's
   # root daemon, which is exactly what this design refuses.
@@ -444,6 +495,7 @@ main() {
   shell) cmd_shell "$@" ;;
   sessions) cmd_sessions "$@" ;;
   logs) cmd_logs "$@" ;;
+  hook) cmd_hook "$@" ;;
   keys) cmd_keys "$@" ;;
   doctor) cmd_doctor "$@" ;;
   '' | -h | --help | help) usage ;;

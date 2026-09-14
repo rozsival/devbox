@@ -90,6 +90,22 @@ else
   log_info 'No project ports mirrored (the project daemon is not reachable yet).'
 fi
 
-# -- 6. sshd ------------------------------------------------------------------
+# -- 6. moshi-hook daemon -----------------------------------------------------
+# Agent events, push notifications, approvals and the phone-side gateway all
+# run through this daemon, and the container has no systemd to keep it alive,
+# so PID 1 starts it. Backgrounded before the exec below, which makes sshd its
+# parent and `init: true`'s tini its reaper. Best-effort for the same reason as
+# the port mirror: a missing or crashed hook daemon must not cost SSH access.
+# It writes its own log to ~/.local/state/moshi/hook.log and holds a lock file,
+# so starting a second one by hand is a no-op rather than a conflict.
+moshi_hook="${HOME_DIR}/.local/bin/moshi-hook"
+if [[ -x "${moshi_hook}" ]]; then
+  "${moshi_hook}" serve >/dev/null 2>&1 &
+  log_success 'Started the moshi-hook daemon.'
+else
+  log_info 'moshi-hook is not installed; skipping the hook daemon.'
+fi
+
+# -- 7. sshd ------------------------------------------------------------------
 log_info 'Starting sshd on port 2222...'
 exec /usr/sbin/sshd -D -e -f /opt/devbox/container/sshd_config

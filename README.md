@@ -38,9 +38,9 @@ background connections), the two **`~/.ssh/config` blocks**, and a non-empty **`
 | Doc                                | Read it when                                                        |
 |------------------------------------|---------------------------------------------------------------------|
 | [Setup](docs/setup.md)             | First deploy, `.env` reference, laptop key, `~/.ssh/config`         |
-| [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, `devbox shell`, tunnels |
+| [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, Moshi, `devbox shell`   |
 | [Git identities](docs/git.md)      | Cloning repos, personal vs work, commit signing                  |
-| [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, agent skills, adding a tool       |
+| [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Moshi hooks, agent skills         |
 | [Secrets](docs/secrets.md)         | Box-wide vs per-project secrets, `gh` token, GCP ADC, App creds     |
 | [CLI reference](docs/cli.md)       | Every `bin/devbox`, `bin/push` and `bin/sync-omp` flag              |
 | [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding                |
