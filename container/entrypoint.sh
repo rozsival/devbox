@@ -97,7 +97,7 @@ fi
 # parent and `init: true`'s tini its reaper. Best-effort for the same reason as
 # the port mirror: a missing or crashed hook daemon must not cost SSH access.
 # It writes its own log to ~/.local/state/moshi/hook.log and holds a lock file,
-# so starting a second one by hand is a no-op rather than a conflict.
+# so a second `serve` started by hand exits 1 instead of racing this one.
 moshi_hook="${HOME_DIR}/.local/bin/moshi-hook"
 if [[ -x "${moshi_hook}" ]]; then
   "${moshi_hook}" serve >/dev/null 2>&1 &

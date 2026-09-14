@@ -284,7 +284,11 @@ if command -v moshi-hook >/dev/null 2>&1; then
   # files for agents that are not installed here.
   moshi-hook install --target omp >/dev/null 2>&1 ||
     log_warn 'moshi-hook install --target omp failed; agent events may be stale.'
-  if moshi-hook status 2>/dev/null | grep -qi 'unpaired'; then
+  # Captured rather than piped into `grep -q`: status prints ~20 lines, grep
+  # exits at the first match, and the resulting SIGPIPE makes the pipeline fail
+  # under `set -o pipefail` - so the piped form silently never fires.
+  moshi_status="$(moshi-hook status 2>/dev/null || true)"
+  if [[ "${moshi_status}" == *unpaired* ]]; then
     register_action "Pair with Moshi: copy the token from Settings -> Hooks in the app, run 'moshi-hook pair --token <token>' in the container, then './bin/devbox hook' on the workstation to restart the daemon (while unpaired it is socket-only: no notifications, no approvals)"
   fi
 fi
