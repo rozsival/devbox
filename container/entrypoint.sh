@@ -96,12 +96,24 @@ fi
 # so PID 1 starts it. Backgrounded before the exec below, which makes sshd its
 # parent and `init: true`'s tini its reaper. Best-effort for the same reason as
 # the port mirror: a missing or crashed hook daemon must not cost SSH access.
-# It writes its own log to ~/.local/state/moshi/hook.log and holds a lock file,
-# so a second `serve` started by hand exits 1 instead of racing this one.
+# It writes its own log to ~/.local/state/moshi/hook.log, but its startup
+# refusals - "another moshi-hook serve is already running", a busy gateway port
+# - go to stderr *before* that log exists, so stderr is kept in serve.err
+# rather than thrown at /dev/null. The success line is gated on the process
+# still being alive a moment later, because a refusal exits immediately and
+# claiming "started" for it is how the last silent no-daemon went unnoticed.
 moshi_hook="${HOME_DIR}/.local/bin/moshi-hook"
 if [[ -x "${moshi_hook}" ]]; then
-  "${moshi_hook}" serve >/dev/null 2>&1 &
-  log_success 'Started the moshi-hook daemon.'
+  moshi_state="${HOME_DIR}/.local/state/moshi"
+  mkdir -p "${moshi_state}"
+  "${moshi_hook}" serve >>"${moshi_state}/serve.err" 2>&1 &
+  moshi_pid=$!
+  sleep 0.2
+  if kill -0 "${moshi_pid}" 2>/dev/null; then
+    log_success 'Started the moshi-hook daemon.'
+  else
+    log_warn "moshi-hook serve exited immediately; see ${moshi_state}/serve.err."
+  fi
 else
   log_info 'moshi-hook is not installed; skipping the hook daemon.'
 fi

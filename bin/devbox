@@ -304,10 +304,13 @@ cmd_hook() {
   # restartable after `moshi-hook pair` without taking live SSH sessions down
   # with it.
   #
-  # `moshi-hook|moshi` because the binary ships an alias symlink and the Moshi
-  # app starts the daemon through it - a process whose comm is plain `moshi`.
-  # Matching only `moshi-hook` misses that one, then the start fails on the
-  # lock file the invisible daemon still holds.
+  # The pattern matches the *serve invocation*, not the command name. Two
+  # reasons: the binary ships a `moshi` alias symlink, and the daemon found
+  # running here was `moshi serve`, which `pgrep -x moshi-hook` cannot see -
+  # so `hook` killed nothing and then failed on the lock that daemon held.
+  # Matching comm `moshi` instead would be worse: it would also kill a user's
+  # `moshi-hook pair`, `moshi <dir>` or `moshi diff` running in a pane, and
+  # make `doctor` count one as the daemon.
   #
   # The wait is load-bearing. `pkill` returns as soon as the signal is queued,
   # while the lock and the gateway socket on 127.0.0.1:24543 are released only
@@ -315,9 +318,10 @@ cmd_hook() {
   # either, so starting too early produces a silent no-daemon.
   # shellcheck disable=SC2016 # the script body must expand inside the container
   compose exec -T "${SERVICE}" bash -c '
-    pkill -x "moshi-hook|moshi" >/dev/null 2>&1 || exit 0
+    pattern="(^|/)(moshi|moshi-hook) serve( |$)"
+    pkill -f "${pattern}" >/dev/null 2>&1 || exit 0
     for _ in $(seq 50); do
-      pgrep -x "moshi-hook|moshi" >/dev/null 2>&1 || exit 0
+      pgrep -f "${pattern}" >/dev/null 2>&1 || exit 0
       sleep 0.1
     done
     exit 1
@@ -325,9 +329,10 @@ cmd_hook() {
 
   compose exec -d "${SERVICE}" bash -lc 'exec moshi-hook serve'
   sleep 1
-  if ! compose exec -T "${SERVICE}" pgrep -x 'moshi-hook|moshi' >/dev/null 2>&1; then
-    compose exec -T "${SERVICE}" bash -lc 'tail -5 ~/.local/state/moshi/hook.log' 2>/dev/null || true
-    log_error 'moshi-hook did not stay up - see the log above.'
+  if ! compose exec -T "${SERVICE}" pgrep -f '(^|/)(moshi|moshi-hook) serve( |$)' >/dev/null 2>&1; then
+    compose exec -T "${SERVICE}" bash -lc \
+      'tail -5 ~/.local/state/moshi/serve.err ~/.local/state/moshi/hook.log' 2>/dev/null || true
+    log_error 'moshi-hook did not stay up - see the output above.'
   fi
   compose exec -T "${SERVICE}" bash -lc 'moshi-hook status' || true
   log_success 'moshi-hook daemon restarted.'
@@ -428,7 +433,7 @@ cmd_doctor() {
   local hook_state
   hook_state="$(compose exec -T "${SERVICE}" bash -lc '
     command -v moshi-hook >/dev/null 2>&1 || { echo absent; exit 0; }
-    pgrep -x "moshi-hook|moshi" >/dev/null 2>&1 || { echo stopped; exit 0; }
+    pgrep -f "(^|/)(moshi|moshi-hook) serve( |$)" >/dev/null 2>&1 || { echo stopped; exit 0; }
     case "$(moshi-hook status 2>/dev/null || true)" in *unpaired*) echo unpaired ;; *) echo paired ;; esac
   ' 2>/dev/null | tr -cd 'a-z')"
   case "${hook_state}" in
