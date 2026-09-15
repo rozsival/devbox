@@ -19,9 +19,11 @@ UsePAM no
 StrictModes yes
 
 X11Forwarding no
-# Signing and GitHub auth use keys that live inside the devbox, so nothing needs
-# a forwarded agent.
-AllowAgentForwarding no
+# The devbox holds no private keys of its own. Manual git work in a pane - a
+# push as yourself, a signed commit - goes through the laptop's 1Password agent
+# forwarded for that one connection (`ssh -A devbox`); agent sessions never
+# touch it, their git is fenced to HTTPS by the `omp` launcher (docs/git.md).
+AllowAgentForwarding yes
 # Load-bearing: dev servers are reached with `ssh -N -L 5173:localhost:5173 devbox`
 # instead of publishing more container ports.
 AllowTcpForwarding yes

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
+# edit home/.local/libexec/devbox-agent/omp in the repo.
+#
+# PATH launcher in front of the real `omp`. Everything an agent session does to
+# git - clone, fetch, push, commit, and every tool that shells out to git - runs
+# under the four exports below, and nothing outside the session does. That is
+# what lets one clone serve both you (SSH remote, 1Password agent, signed
+# commits) and the agent (HTTPS, per-operation tokens, bot author, unsigned)
+# with no per-repository setup. See docs/git.md.
+#
+# This directory sits first on the PATH so the launcher wins over the real
+# binary, which on the devbox is ~/.local/bin/omp (upstream's installer) and on
+# the laptop wherever it was installed; the loop below finds it by skipping
+# itself, so `omp update` replacing the real binary never breaks the launcher.
+set -euo pipefail
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+self_dir="$(dirname "${self}")"
+
+real=''
+IFS=: read -ra path_dirs <<<"${PATH}"
+for dir in "${path_dirs[@]}"; do
+  candidate="${dir}/omp"
+  [[ -f ${candidate} && -x ${candidate} ]] || continue
+  [[ "$(readlink -f "${candidate}")" == "${self}" ]] && continue
+  real="${candidate}"
+  break
+done
+if [[ -z ${real} ]]; then
+  printf '%s\n' 'omp launcher: no other omp on the PATH - install OMP (curl -fsSL https://omp.sh/install.sh | sh)' >&2
+  exit 127
+fi
+
+# The agent's git configuration, read instead of ~/.gitconfig: HTTPS rewrites,
+# the credential helper, the bot author, signing off.
+export GIT_CONFIG_GLOBAL="${HOME}/.config/devbox/agent.gitconfig"
+# Fence, not transport: any remote the HTTPS rewrite does not cover fails with
+# a one-line explanation instead of reaching an SSH key or a forwarded agent.
+# Environment rather than config so a repository-local core.sshCommand cannot
+# override it.
+export GIT_SSH_COMMAND="${self_dir}/devbox-git-no-ssh"
+# A missing credential is an error, never a prompt an agent cannot answer.
+export GIT_TERMINAL_PROMPT=0
+# Puts the `gh` shim next to this file ahead of the real gh for this session;
+# on the devbox the directory is already there (home/.bashrc.d/devbox.sh).
+case ":${PATH}:" in
+*":${self_dir}:"*) ;;
+*) export PATH="${self_dir}:${PATH}" ;;
+esac
+
+exec "${real}" "$@"

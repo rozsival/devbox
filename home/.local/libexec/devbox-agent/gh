@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
+# edit home/.local/libexec/devbox-agent/gh in the repo.
+#
+# PATH shim in front of the real `gh`. Where this directory sits on the PATH
+# decides who goes through it: on the devbox home/.bashrc.d/devbox.sh puts it
+# first for every shell, so a pane, `ssh devbox <cmd>` and an agent all land
+# here; on the laptop only the `omp` launcher next to this file adds it, so your
+# own `gh` keeps its OAuth login and only agent sessions use the tokens.
+#
+# Why a shim and not an exported GH_TOKEN: the account has to be chosen from the
+# *current* directory, not from wherever the shell happened to start. Agents run
+# with a project as their cwd inside a session that was opened in $HOME, so a
+# value exported at shell startup would pin one account for the whole session.
+# Resolving per invocation is the only way the choice can follow the tree, the
+# same way git's `includeIf` does. See docs/secrets.md.
+set -euo pipefail
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+
+real=''
+IFS=: read -ra path_dirs <<<"${PATH}"
+for dir in "${path_dirs[@]}"; do
+  candidate="${dir}/gh"
+  [[ -f ${candidate} && -x ${candidate} ]] || continue
+  [[ "$(readlink -f "${candidate}")" == "${self}" ]] && continue
+  real="${candidate}"
+  break
+done
+if [[ -z ${real} ]]; then
+  printf '%s\n' 'gh shim: no other gh on the PATH - on the devbox, rebuild the image (./bin/devbox rebuild)' >&2
+  exit 127
+fi
+
+# The resolver explains itself on stderr when no token is configured for this
+# tree; let that through and still run gh, which then acts unauthenticated and
+# fails on its own terms rather than silently using the other account's token.
+resolver="$(command -v devbox-gh-token || printf '%s' "${HOME}/.local/bin/devbox-gh-token")"
+token="$("${resolver}")" || token=''
+if [[ -n ${token} ]]; then
+  export GH_TOKEN="${token}"
+fi
+
+exec "${real}" "$@"

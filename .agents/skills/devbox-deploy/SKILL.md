@@ -62,20 +62,23 @@ compose recreates the container - which re-runs the entrypoint and therefore boo
 the single answer for both. `up` with no changes at all is idempotent: compose reports
 `Container devbox Running` and nothing restarts.
 
-One caveat for `home/` specifically. Bootstrap rewrites two files unconditionally - `~/.bashrc.d/devbox.sh`
-and `~/.ssh/config` - because both are generated, not hand-edited, so template edits land on the next run.
-`~/.gitconfig`, `~/.config/devbox/secrets.env` and the OMP config are create-if-absent: editing those
-templates does not reach a home that already has them, so delete the file under `${DEVBOX_DATA_DIR}` first
-or apply it by hand. Derived Git identity values are re-applied with `git config --global` on every run
-regardless.
+One caveat for `home/` specifically. Bootstrap rewrites several files unconditionally - `~/.bashrc.d/devbox.sh`,
+`~/.ssh/config`, `~/.local/libexec/devbox-agent/{omp,gh,devbox-git-credential,devbox-git-no-ssh}` and
+`~/.config/devbox/agent*.gitconfig` - because all of them are generated, not hand-edited, so template edits
+land on the next run. `~/.gitconfig`, `~/.config/devbox/secrets.env` and the OMP config are create-if-absent:
+editing those templates does not reach a home that already has them, so delete the file under
+`${DEVBOX_DATA_DIR}` first or apply it by hand. Derived Git identity values are re-applied with
+`git config --global` on every run regardless.
 
 ## What a redeploy cannot destroy
 
 This matters because the answer to "will I lose my keys / repos / gh login" is a flat no, by construction:
 
 - `.env` is gitignored **and** rsync-excluded, so host-local config survives every push.
-- `${DEVBOX_DATA_DIR}` is a host bind mount, not part of the image: `~/.ssh/id_personal`, `~/.ssh/id_work`,
-  the sshd host key under `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/secrets.env`, `~/.gitconfig`,
+- `${DEVBOX_DATA_DIR}` is a host bind mount, not part of the image: `~/.ssh/id_personal.pub`,
+  `~/.ssh/id_work.pub` (public keys only - the devbox holds no private key), the sshd host key under
+  `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/secrets.env`, `~/.config/devbox/agent*.gitconfig`,
+  `~/.local/libexec/devbox-agent` (the `omp` launcher, `gh` shim, credential helper and fence), `~/.gitconfig`,
   every project checkout, and the project daemon's images, build cache and named volumes under
   `~/.local/share/docker` persist across `up`, `rebuild` and image changes.
 - `--delete` applies only to synced paths. It *will* remove files added by hand to the remote copy of a

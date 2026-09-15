@@ -101,31 +101,42 @@ Bootstrap runs on every container start, is fully idempotent, and prints the out
 so `./bin/devbox bootstrap` is the authoritative answer to "what is left to do", never a guess:
 
 ```bash
-ssh workstation 'cd ~/devbox && ./bin/devbox keys'       # the two public keys + host-key fingerprint
+ssh workstation 'cd ~/devbox && ./bin/devbox keys'       # installed public keys + host-key fingerprint
 ```
 
-1. Add `id_personal.pub` **and** `id_work.pub` to GitHub twice each - once as an Authentication key, once
-   as a Signing key. Without the Signing key registration commits push fine but show as unverified.
+The devbox generates no keys of its own - it only installs the laptop's public keys from `.env`
+(`GIT_PERSONAL_PUBKEY`, `GIT_WORK_PUBKEY`). There is nothing to register on GitHub for the devbox: they
+are already your normal laptop keys, already authorized there.
+
+1. Set `GIT_PERSONAL_PUBKEY` and `GIT_WORK_PUBKEY` in `.env` to `cat ~/.ssh/<key>.pub` for each identity,
+   then `./bin/devbox up` - until then manual git as that identity over a forwarded agent (`ssh -A devbox`)
+   cannot pick its key. If a previous bootstrap generated a private key, this run deletes it and prints its
+   fingerprint to revoke on GitHub.
 2. Put **two fine-grained** GitHub tokens in `~/.config/devbox/secrets.env`: `GH_TOKEN_PERSONAL` and
-   `GH_TOKEN_WORK` - contents, actions and checks read, plus issues or pull-requests write only if agents
-   should post. The working directory picks which one `gh` uses (`~/projects/work/**` is work, as with
-   git identities); `devbox-gh-token --account` reports the choice. Do **not** use `gh auth login`: its web
-   flow cannot request less than `repo` + `read:org` + `gist`, i.e. non-expiring account-wide write, stored
-   in plaintext (no keyring in the container). A plain box-wide `GH_TOKEN` still works but overrides both and
-   disables the per-directory choice. `git push` needs no token: it goes over SSH.
+   `GH_TOKEN_WORK` - `contents: write` on any repository agents push to without the GitHub App installed,
+   plus `actions`/`checks` read, plus `issues`/`pull-requests` write only if agents should post. The working
+   directory picks which one is used (`~/projects/work/**` is work, as with git identities);
+   `devbox-gh-token --account` reports the choice. Do **not** use `gh auth login`: its web flow cannot
+   request less than `repo` + `read:org` + `gist`, i.e. non-expiring account-wide write, stored in plaintext
+   (no keyring in the container). A plain box-wide `GH_TOKEN` still works but overrides both and disables the
+   per-directory choice.
 3. Fill the rest of `~/.config/devbox/secrets.env` (mode 600) with plain `KEY=value` pairs for credentials
    every project shares - model API keys for OMP. It is sourced by every shell, interactive or not. Never
    put a single project's secrets there; those go in that project's own `.env`.
 4. Place the work-app GitHub App credentials in `~/.config/work/work-app/` (`app-id` and
-   `app.pem`, mode 600) if agents need them. Bootstrap creates that directory and never fetches secrets.
+   `app.pem`, mode 600) if agents need them. Bootstrap creates that directory and never fetches secrets; the
+   credential helper mints a repository-scoped installation token from them on every agent git operation
+   once they exist, taking priority over the PAT.
 
 There is no `op` step: the container holds no 1Password account and the binary is not installed. Project
 secrets are rendered on the laptop (`op inject -i .env.tpl -o .env`) and copied in; a project needing Google
 APIs gets a per-project service-account key, never `gcloud auth application-default login`. Reasoning and
 commands: `docs/secrets.md`.
 
-Verification of the identity wiring lives in `docs/git.md`; the short version is
-`ssh -T git@github.com` → `Hi rozsival!` and `ssh -T git@work.github.com` → `Hi rozsival-work!`.
+Manual git and signing need the agent forwarded (`ssh -A devbox`, not plain `ssh devbox`, herdr, or
+`./bin/devbox shell`): `ssh -T git@github.com` → `Hi rozsival!`, `ssh -T git@work.github.com` →
+`Hi rozsival-work!`. Agent sessions (the `omp` launcher) never need any of this - they push over HTTPS
+with a token minted per operation. Full mechanism: `docs/git.md`.
 
 ## Optional but recommended, after the phases pass
 

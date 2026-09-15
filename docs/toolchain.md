@@ -45,10 +45,13 @@ blank line.
   image installed under the home directory. `node`, `npm`, `npx`, `corepack` and `pnpm` are symlinked into
   `/usr/local/bin` so they resolve without a login shell.
 - **`~/.local/bin`** - OMP and `moshi-hook`, installed by `bootstrap` instead of baked into the image so
-  `omp update` and `moshi-hook update` work without a rebuild. Also the `gh` shim and `devbox-gh-token`,
-  installed by `bootstrap` from `home/.local/bin/`: the shim is *meant* to shadow `/usr/bin/gh`, because it
-  picks the GitHub account from the working directory per invocation ([Secrets](secrets.md#gh)). `gh --version`
-  in `doctor` therefore exercises the shim too.
+  `omp update` and `moshi-hook update` work without a rebuild. Also `devbox-gh-token`, the per-directory
+  GitHub token resolver ([Secrets](secrets.md#gh)).
+- **`~/.local/libexec/devbox-agent`** - the `omp` launcher, the `gh` shim, and the two git-fencing scripts
+  (`devbox-git-credential`, `devbox-git-no-ssh`). `home/.bashrc.d/devbox.sh` puts this directory first on
+  every devbox shell's `PATH`, so the `gh` shim always shadows the real `gh` there; the launcher does the
+  same for one process tree everywhere else, including the laptop (`./bin/install-agent`). See
+  [Git identities](git.md#agent-sessions).
 - **`/usr/local/lib/docker/cli-plugins`** - where `docker compose` and `docker buildx` live as CLI plugins.
   Only the client ships in the image; the daemon is the host's rootless `dev` daemon (see below).
 

@@ -4,11 +4,17 @@
 # Sourced by every shell, interactive or not: `ssh devbox <cmd>` must see the
 # same toolchain a pane does.
 
-# OMP installs here so `omp update` works without an image rebuild.
-case ":$PATH:" in
-*":$HOME/.local/bin:"*) ;;
-*) export PATH="$HOME/.local/bin:$PATH" ;;
-esac
+# OMP installs in ~/.local/bin so `omp update` works without an image rebuild.
+# ~/.local/libexec/devbox-agent goes in front of it: that is where the `omp`
+# launcher lives (the agent git override, docs/git.md) and the `gh` shim that
+# picks a GitHub token per working directory (docs/secrets.md).
+for dir in "$HOME/.local/bin" "$HOME/.local/libexec/devbox-agent"; do
+  case ":$PATH:" in
+  *":$dir:"*) ;;
+  *) export PATH="$dir:$PATH" ;;
+  esac
+done
+unset dir
 
 # Node lives outside the bind-mounted home (the mount would shadow it), so nvm
 # and corepack keep their state in /opt. /usr/local/bin holds node/npm/pnpm
@@ -59,6 +65,7 @@ fi
 # working directory (~/projects/work/** is work, as in git's includeIf),
 # and an agent's cwd is a project while the shell that started it was opened in
 # $HOME - so a value fixed at shell startup would pin the wrong account for the
-# whole session. The `gh` shim in ~/.local/bin resolves GH_TOKEN_PERSONAL or
-# GH_TOKEN_WORK per invocation instead; anything else that needs the token
-# should ask the same resolver: GH_TOKEN=$(devbox-gh-token). See docs/secrets.md.
+# whole session. The `gh` shim in ~/.local/libexec/devbox-agent resolves
+# GH_TOKEN_PERSONAL or GH_TOKEN_WORK per invocation instead; anything else
+# that needs the token should ask the same resolver: GH_TOKEN=$(devbox-gh-token).
+# See docs/secrets.md.

@@ -13,7 +13,7 @@ devbox.
 | No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true` |
 | No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` - Tailnet address only                |
 | No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`         |
-| No agent forwarding        | `AllowAgentForwarding no` - signing keys live inside the devbox              |
+| No private keys at rest    | The devbox holds no SSH private key; `AllowAgentForwarding yes` only lets `ssh -A devbox` borrow the laptop's forwarded 1Password agent for one connection |
 
 ## No root process at runtime
 
@@ -36,31 +36,32 @@ ssh workstation 'cd ~/devbox && ./bin/devbox logs | grep "Server listening"'    
 Authority is enumerated, not ambient. Each credential is scoped, separately revocable, and separately
 attributable:
 
-| Purpose                 | Credential                                | Reach                               |
-|-------------------------|-------------------------------------------|-------------------------------------|
-| Clone, pull, push       | `~/.ssh/id_personal`, `~/.ssh/id_work` | what those GitHub accounts can push |
-| Commit author + signing | the same keys + the two-identity config   | verification only, grants nothing   |
-| Agent commits           | work-app GitHub App                 | the App's repos and permissions     |
-| Dashboards, CI, issues  | one fine-grained PAT per GitHub account   | named repos, read-mostly, expiring  |
-| LLM inference           | per-project GCP service-account key       | one dev project, predict-only       |
-| Project secrets         | that project's `.env`                     | one project                         |
+| Purpose                             | Credential                                                | Reach                                                      |
+|---------------------------------------|--------------------------------------------------------------|----------------------------------------------------------------|
+| Agent git (clone, pull, push, commit) | per-repository GitHub App installation token, else a fine-grained PAT | App: one repo, 1h. PAT: its named repos, `contents: write` |
+| Manual git, incl. signing (you)       | the laptop's 1Password agent, forwarded per connection (`ssh -A devbox`) | same as your laptop; the container stores no private key |
+| Dashboards, CI, issues                | one fine-grained PAT per GitHub account                     | named repos, scoped per token                                  |
+| LLM inference                         | per-project GCP service-account key                          | one dev project, predict-only                                  |
+| Project secrets                       | that project's `.env`                                        | one project                                                     |
 
-Notably absent: any 1Password account (`op` is not installed) and any Google user credential. See
-[Secrets](secrets.md).
+Notably absent: any 1Password account (`op` is not installed), any private key for GitHub, and any Google
+user credential. See [Secrets](secrets.md).
 
 ## What an agent inside the devbox can reach
 
-**Can**: the whole `/home/dev` tree - both SSH keys, both `gh` tokens, the App private key, every project's
-`.env` and every GCP key - plus the internet, the Tailnet from the container's network namespace, and the
-rootless project Docker daemon ([Docker](docker.md)).
+**Can**: the whole `/home/dev` tree - both public keys (useless without the laptop's forwarded agent), both
+`gh` tokens, the App private key, every project's `.env` and every GCP key - plus the internet, the Tailnet
+from the container's network namespace, and the rootless project Docker daemon ([Docker](docker.md)).
 
 **Cannot**: the host filesystem outside the data dir and world-readable paths, the host's **root** Docker
 daemon, the devbox container's own lifecycle, root inside the container, any port that is not published, and
 any 1Password vault.
 
-The consequence to plan for: an agent with shell access has the same GitHub push reach as you do through those
-keys. Treat a compromise as "revoke two SSH keys, one token, one App key and one service-account key", not
-"rebuild a laptop".
+The consequence to plan for: an agent with shell access can push through the same App token or PAT that
+`git` and `gh` already resolve, and read the App private key, both PATs and every project's `.env` and GCP
+key directly. Your own GitHub push authority is out of its reach - there is no private key to steal - unless
+it happens to be running inside a `ssh -A devbox` connection you forwarded yourself (accepted limit 2). Treat
+a compromise as "revoke two PATs, one App key and one service-account key", not "rebuild a laptop".
 
 ## Accepted limits
 
@@ -70,8 +71,11 @@ These are known and deliberate, not gaps to be closed later:
    agent that reads a poisoned issue or README can send whatever it holds anywhere. IAM and token scoping
    limit what it can *reach*; nothing limits what it can *send*. This is why the container is a containment
    boundary for authority and **not** a confidentiality boundary - assume anything inside can leave.
-2. **SSH keys can push wherever the accounts can.** Token scoping does not help: `git push` goes over SSH.
-   The backstop is server-side - branch protection with required reviews on the repos agents work in.
+2. **A forwarded agent is reachable by anything in that one connection.** `ssh -A devbox` exposes the
+   1Password agent socket for that connection's lifetime; a process started by hand inside it - not through
+   `git`, which the `omp` launcher fences to HTTPS - could call `ssh` directly and request a signature.
+   1Password's own per-use approval on the laptop is the backstop: nothing signs without it. Plain `herdr`
+   panes and `./bin/devbox shell` never forward the agent at all, and neither does a bare `ssh devbox`.
 3. **No isolation between projects.** One container, one `dev` user, one bind mount: an agent in project A can
    read project B's `.env` and GCP key. Cloning something less trusted is the point at which per-project
    containers or separate users stop being over-engineering.
@@ -117,8 +121,6 @@ each credential is permitted to do.
 3. **The `dev` host user owns the data, and root can read everything.** The bind mount belongs to the
    dedicated `dev` account, which also owns the project Docker daemon; your own host account reaches it only
    through `sudo`. The container protects the host from the agent, not the files from the host's owner.
-4. **Passphrase-less keys are intentional.** Unattended agents must push without a prompt; the mitigation is
-   scope and revocability, not a passphrase.
 
 ## ❓ FAQ
 
@@ -144,14 +146,14 @@ no lock-out risk to trade the boundary away for.
 **Can I give an agent a narrower key?**
 That is already the default: agents commit through the work-app GitHub App, which is scoped to specific
 repositories and permissions, and `gh` uses a fine-grained PAT rather than an account-wide OAuth token. The
-SSH keys remain broad because they are yours, for manual work - see accepted limit 2.
+forwarded 1Password agent remains broad for manual work because it is yours - see accepted limit 2.
 
-**Would per-repo deploy keys be tighter than the account SSH keys?**
-Yes. A deploy key can push to exactly one repository, whereas these keys reach everything the accounts can -
-and they are readable by any agent in the container, not just by you at a prompt (accepted limit 2). They
-were rejected on friction, not because the exposure is hypothetical: a public key can be a deploy key on only
-one repository, so it means one generated key plus one `~/.ssh/config` alias per repo, alias-based clone URLs,
-and manual enrollment needing repo admin every time. Branch protection is the backstop chosen instead.
+**Would per-repo deploy keys be tighter than the fine-grained PAT?**
+Yes - but the primary path is already that tight: the work-app GitHub App mints a token scoped to
+exactly one repository for one hour. Deploy keys only become relevant for the fallback case, repos without
+the App installed, where the fine-grained PAT is the same breadth trade as any multi-repo PAT: it can push
+everywhere it is granted `contents: write`, and it is readable by any agent in the container, not just by
+you at a prompt. Install the App on the repos that matter instead of adding a deploy key.
 
 **How do I revoke access from a lost laptop?**
 Remove the key from GitHub (or from `DEVBOX_EXTRA_AUTHORIZED_KEYS`) and restart the container -

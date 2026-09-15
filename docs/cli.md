@@ -19,7 +19,7 @@ Usage: ./bin/devbox <command>
   sessions          List the SSH sessions connected to the container
   logs [-f]         Show container logs (last 100 lines; -f follows)
   hook              Restart the moshi-hook daemon in place and print its status
-  keys              Print the devbox public keys and sshd host-key fingerprint
+  keys              Print the installed identity public keys and sshd host-key fingerprint
   doctor            Check host wiring, exposure, and the in-container toolchain
 ```
 
@@ -51,8 +51,9 @@ leaves the container running, so a no-op `up` never asks.
   `moshi-hook status`. The non-destructive restart path: the daemon is a child of the entrypoint, so the
   alternative would be recreating the container and killing every SSH session with it. Needed after
   `moshi-hook pair` and after a crash. See [Toolchain](toolchain.md#moshi-and-moshi-hook).
-- **`keys`** - `id_personal.pub`, `id_work.pub` and the sshd host-key fingerprint: the paste targets for
-  GitHub.
+- **`keys`** - prints `id_personal.pub`, `id_work.pub` (or `not set` if `GIT_*_PUBKEY` is empty in
+  `.env`) and the sshd host-key fingerprint. Not a paste target: they're already your laptop's own keys,
+  already on GitHub.
 - **`doctor`** - the checks below. It runs all of them, reports each one, and exits non-zero if any failed.
 
 ### What `doctor` checks
@@ -140,6 +141,19 @@ Environment:
 Copies this laptop's OMP preset into the devbox and keeps one `config.yml.bak` there. It talks to the
 container's sshd (`Host devbox`, port 2223), not the workstation's, so the file lands inside the bind-mounted
 `/home/dev`. Unlike `bin/push` it is not part of a deploy - the preset is personal state, not repo content.
+
+## `bin/install-agent`
+
+```
+Usage: ./bin/install-agent
+```
+
+Laptop-side, idempotent: installs the same agent git override the devbox bootstraps - the `omp` launcher,
+`gh` shim, credential helper and fence in `~/.local/libexec/devbox-agent`, `devbox-gh-token` in
+`~/.local/bin`, a `~/.local/bin/omp` symlink to the launcher, and `~/.config/devbox/agent*.gitconfig`. Every
+file is regenerated on every run; nothing of yours is read or edited. Reports whether `omp` currently
+resolves to the launcher and prints the remaining manual steps (PATs, App credentials). See
+[Git identities](git.md#laptop-install).
 
 ## ❓ FAQ
 

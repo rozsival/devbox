@@ -8,9 +8,9 @@ Day-to-day running: redeploy, restart, persistence, backup, and the failure mode
 ./bin/push workstation --up
 ```
 
-Repeatable by design and non-destructive: `.env`, `${DEVBOX_DATA_DIR}`, the generated SSH keys and the sshd
-host key all survive, and `bootstrap` re-runs as a no-op. Verify with `./bin/devbox keys` - the fingerprints
-must be identical before and after.
+Repeatable by design and non-destructive: `.env`, `${DEVBOX_DATA_DIR}`, the installed identity public keys
+and the sshd host key all survive, and `bootstrap` re-runs as a no-op. Verify with `./bin/devbox keys` - the
+printed public keys and host-key fingerprint must be identical before and after.
 
 Use `rebuild` instead of `up` when a pinned version changed and you want a cache-free image:
 
@@ -20,10 +20,10 @@ ssh workstation 'cd ~/devbox && ./bin/devbox rebuild && ./bin/devbox doctor'
 
 ## Persistence
 
-`${DEVBOX_DATA_DIR}` on the host is bind-mounted at `/home/dev`: dotfiles, both SSH identities, the sshd host
-key, `~/.config/gh`, and the whole `~/projects` tree. A bind mount rather than a named volume so `tar` can
-back it up and the host user (same UID) can inspect it. Container and image rebuilds keep everything,
-including the client's `known_hosts` entry.
+`${DEVBOX_DATA_DIR}` on the host is bind-mounted at `/home/dev`: dotfiles, both SSH identity public keys, the
+sshd host key, `~/.config/gh`, and the whole `~/projects` tree. A bind mount rather than a named volume so
+`tar` can back it up and the host user (same UID) can inspect it. Container and image rebuilds keep
+everything, including the client's `known_hosts` entry.
 
 | Event                            | Filesystem | Running panes |
 |----------------------------------|------------|---------------|

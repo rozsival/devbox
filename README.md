@@ -39,7 +39,7 @@ background connections), the two **`~/.ssh/config` blocks**, and a non-empty **`
 |------------------------------------|-------------------------------------------------------------------|
 | [Setup](docs/setup.md)             | First deploy, `.env` reference, laptop key, `~/.ssh/config`       |
 | [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, Moshi, `devbox shell` |
-| [Git identities](docs/git.md)      | Cloning repos, personal vs work, commit signing                |
+| [Git identities](docs/git.md)      | Cloning repos, personal vs work, manual vs agent git, signing  |
 | [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Moshi hooks, agent skills       |
 | [Secrets](docs/secrets.md)         | Box-wide vs per-project, the two `gh` tokens, GCP ADC, App creds  |
 | [CLI reference](docs/cli.md)       | Every `bin/devbox`, `bin/push` and `bin/sync-omp` flag            |
@@ -64,8 +64,9 @@ bin/devbox            host-side CLI: env, up, down, rebuild, bootstrap, skills, 
 bin/rootless-docker   host-side, one-time: provisions the rootless project Docker daemon
 bin/push              laptop-side rsync deploy
 bin/sync-omp          laptop-side OMP preset sync (~/.omp/agent/config.yml → devbox)
+bin/install-agent     laptop-side: installs the omp launcher, gh shim and agent git config
 container/            entrypoint.sh (PID 1), bootstrap.sh (user setup), skills.sh (optional), sshd_config
-home/                 templates installed into /home/dev by bootstrap
+home/                 templates installed into /home/dev by bootstrap (and onto the laptop by install-agent)
 docs/                 this documentation
 .agents/skills/       agent skills: devbox-basics, devbox-setup, devbox-deploy
 ```
@@ -75,10 +76,12 @@ docs/                 this documentation
 ```bash
 ./bin/push workstation --up        # deploy + start (keeps state; asks before killing SSH sessions)
 ssh devbox                           # shell in the container
+ssh -A devbox                        # + push, pull, sign as yourself (forwards the 1Password agent)
 herdr                                # attach panes; they survive client exit
 ssh -N -L 5173:localhost:5173 devbox # reach a dev server
 ssh devbox 'cd projects/app && docker compose up -d && devbox-ports'  # project containers on localhost
 ssh workstation 'cd ~/devbox && ./bin/devbox doctor'
 ssh workstation 'cd ~/devbox && ./bin/devbox sessions'   # who is connected (a recreate kills them)
 ./bin/sync-omp                       # push this laptop's OMP preset into the devbox
+./bin/install-agent                  # laptop-side: same agent git override as the devbox
 ```

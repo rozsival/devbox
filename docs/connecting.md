@@ -41,6 +41,18 @@ ssh devbox 'cd ~/projects/rozsival/devbox && git status -sb'
 
 Anything that reads `~/.ssh/config` honours the alias: `scp`, `rsync`, `git`, `ssh -L`.
 
+Add `-A` to forward the laptop's 1Password SSH agent for that one connection - needed for any manual git
+operation (clone, fetch, push, or a signed commit; agent sessions never need it, they authenticate over
+HTTPS instead, see [Git identities](git.md)):
+
+```bash
+ssh -A devbox
+```
+
+Plain `ssh devbox` (no `-A`), herdr panes and `./bin/devbox shell` never forward the agent - manual git in
+those fails to authenticate at all, on purpose. See
+[Git identities](git.md#manual-work-on-the-devbox-the-escape-hatch).
+
 ## `./bin/devbox shell`
 
 ```bash
@@ -64,15 +76,16 @@ Notifications, lock-screen approvals and the native transcript view need the `mo
 
 ## Cloning a repo
 
-Clone inside the container, and let the target directory pick the identity:
+Clone inside the container, with the agent forwarded, and let the target directory pick the identity:
 
 ```bash
-ssh devbox
+ssh -A devbox
 git clone git@github.com:rozsival/<repo> ~/projects/rozsival/<repo>       # personal
 git clone git@work.github.com:<org>/<repo> ~/projects/work/<repo>   # work, alias required
 ```
 
-Full rules, including why the work alias cannot be skipped, are in [Git identities](git.md).
+Full rules, including why the work alias cannot be skipped and how agent sessions authenticate without
+any of this, are in [Git identities](git.md).
 
 ## Reaching a dev server
 
@@ -99,6 +112,10 @@ In the container. The bind mount means a repo cloned in a herdr pane is immediat
 **Is `ssh devbox` reachable from outside the Tailnet?**
 No. The port is published only on the node's Tailscale address and `127.0.0.1`. See
 [Networking](networking.md).
+
+**Why does `git push` fail over plain `ssh devbox`?**
+The devbox holds no private key; `-A` is required to forward the laptop's 1Password agent. See
+[Git identities](git.md#manual-work-on-the-devbox-the-escape-hatch).
 
 **`Too many authentication failures` - why?**
 The agent offered more than six keys before the right one. `IdentitiesOnly yes` plus

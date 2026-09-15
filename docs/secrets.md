@@ -11,21 +11,21 @@ anything inside can leave, and put nothing inside that is not worth its own blas
 
 ## Three layers
 
-| Layer          | Holds                                     | Scope of a leak                  |
-|----------------|-------------------------------------------|----------------------------------|
-| Identity       | `~/.ssh/id_personal`, `~/.ssh/id_work` | your GitHub accounts' push reach |
-| Box-wide tools | `~/.config/devbox/secrets.env`            | the tools' own credentials       |
-| Per project    | that project's `.env`                     | one project                      |
+| Layer                    | Holds                                     | Scope of a leak                              |
+|---------------------------|--------------------------------------------|-----------------------------------------------|
+| Identity (public keys)    | `~/.ssh/id_personal.pub`, `~/.ssh/id_work.pub` | none by itself - selects which forwarded key GitHub sees |
+| Box-wide tools            | `~/.config/devbox/secrets.env`            | the tools' own credentials                     |
+| Per project                | that project's `.env`                     | one project                                    |
 
 Everything lives on the `/home/dev` bind mount, so all of it survives container and image rebuilds and is
 established once per host.
 
 | Secret                       | Lives in                                  | Established by                        |
 |------------------------------|-------------------------------------------|---------------------------------------|
-| SSH keys (both identities)   | `~/.ssh/id_personal`, `~/.ssh/id_work` | `bootstrap`, passphrase-less          |
+| SSH identity public keys (both accounts) | `~/.ssh/id_personal.pub`, `~/.ssh/id_work.pub` | `bootstrap` (devbox) / `install-agent` (laptop), from `GIT_PERSONAL_PUBKEY`/`GIT_WORK_PUBKEY` in `.env` - no private key ever present |
 | `gh` tokens, one per account | `~/.config/devbox/secrets.env`            | you, two fine-grained GitHub PATs     |
 | Model API keys for OMP       | `~/.config/devbox/secrets.env`            | you, plain values                     |
-| GitHub App (work-app)  | `~/.config/work/work-app/`       | you, `app-id` + `app.pem` at mode 600 |
+| GitHub App (work-app)  | `~/.config/work/work-app/`       | you, `app-id` + `app.pem` at mode 600 - consumed per git operation by `devbox-git-credential` ([Git identities](git.md)) |
 | Per-project secrets          | `<project>/.env`                          | you, rendered on the laptop           |
 | GCP service-account key      | `~/.config/gcloud/<gcp-project>-*.json`   | you, one per project, mode 600        |
 
@@ -34,13 +34,17 @@ established once per host.
 `bootstrap` prints exactly what is left; nothing below is ever automated, because all of it needs a browser
 or a secret.
 
-1. Add both keys from `./bin/devbox keys` to GitHub **twice each** - once as an Authentication key, once as a
-   Signing key. See [Git identities](git.md#github-registration).
+1. Set `GIT_PERSONAL_PUBKEY` / `GIT_WORK_PUBKEY` in `.env` to the laptop's public keys
+   (`cat ~/.ssh/<key>.pub`) - they are already registered on GitHub as your normal auth/signing keys; the
+   devbox does not register anything itself. See [Git identities](git.md).
 2. Fill `~/.config/devbox/secrets.env` with `GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK` and any model API keys.
-   `gh` picks the tokens up immediately - `devbox-gh-token` reads the file itself - but reconnect anyway so
-   the model keys reach already-open shells.
+   Fine-grained, with `contents: write` on repositories agents push to without the App installed, plus
+   `actions`/`checks` read; add `issues`/`pull-requests` write only if agents should post. `gh` picks the
+   tokens up immediately - `devbox-gh-token` reads the file itself - but reconnect anyway so the model keys
+   reach already-open shells.
 3. Place the work-app GitHub App credentials in `~/.config/work/work-app/`
-   (`app-id`, `app.pem` at mode 600) if you need them.
+   (`app-id`, `app.pem` at mode 600) if you need them - `devbox-git-credential` mints a repository-scoped
+   token from them on every agent git operation.
 
 ## Box-wide tool credentials
 
@@ -69,9 +73,10 @@ git identity, so one mental model covers both:
 | everywhere else         | `GH_TOKEN_PERSONAL` | personal |
 | `~/projects/work/**` | `GH_TOKEN_WORK`  | work  |
 
-Minimum useful permissions per token: contents, actions and checks **read** for dashboards and pipeline
-monitoring. Add issues or pull-requests **write** only if agents should post. `git push` needs neither - that
-goes over SSH with the container's own keys ([Git identities](git.md)).
+Minimum useful permissions per token: `contents: write` on repositories agents push to without the GitHub
+App installed (agent git falls back to this PAT - see [Git identities](git.md#agent-sessions)), plus
+`actions` and `checks` **read** for dashboards and pipeline monitoring. Add issues or pull-requests **write**
+only if agents should post.
 
 ```bash
 cd ~/projects/work/<repo>
@@ -81,8 +86,9 @@ gh repo view --json nameWithOwner
 
 #### Why a shim rather than an exported `GH_TOKEN`
 
-`~/.local/bin/gh` is a shim ahead of `/usr/bin/gh` on the PATH; it calls `devbox-gh-token` and exports the
-result for that one invocation. `~/.bashrc.d/devbox.sh` deliberately exports **no** `GH_TOKEN` at all.
+`~/.local/libexec/devbox-agent/gh` is a shim ahead of the real `gh` on the PATH; it calls `devbox-gh-token`
+and exports the result for that one invocation. `~/.bashrc.d/devbox.sh` deliberately exports **no**
+`GH_TOKEN` at all.
 
 The reason is where an agent's directory comes from: the session is opened in `$HOME` and the agent then works
 with a project as its cwd. A token resolved once at shell startup would therefore pin the personal account for
@@ -130,6 +136,14 @@ the same posture as `secrets.env` on the same bind mount. Plaintext is therefore
 breadth and the global active account are.
 
 `gh auth status` succeeds on a resolved token alone, so `bootstrap` stops asking once both are set.
+
+## Agent git credentials
+
+`git` itself (clone, pull, push, commit) inside an agent session uses a completely different, unrelated
+credential path from `gh` above: the `omp` launcher's `agent.gitconfig` and `devbox-git-credential`, which
+mint a per-repository GitHub App installation token or fall back to the same PATs `gh` uses. See
+[Git identities](git.md#agent-sessions) for the mechanism; this page covers only where the underlying
+secrets (PATs, App credentials) live.
 
 ## Per-project secrets
 
@@ -240,13 +254,15 @@ project's secrets end up in plaintext in a `.env` either way, because the app ha
 therefore shrinks the blast radius without weakening anything at rest.
 
 **Don't I need `op` for signing?**
-No. `bootstrap` generates dedicated passphrase-less keys in the container and git signs with `ssh-keygen`. The
-1Password SSH agent's per-use approval, the reason it is pleasant on the laptop, is exactly what a
-non-interactive herdr connection cannot answer.
+No - and this is unrelated to `op` either way. Manual signing (`ssh -A devbox`) borrows the laptop's
+forwarded 1Password *SSH agent* and signs with `ssh-keygen -Y sign`; that is a different piece of 1Password
+from the `op` CLI, which stays uninstalled. Agent sessions don't sign at all - `agent.gitconfig` sets
+`commit.gpgsign = false`, because there is no key or forwarded agent within an agent session's reach. See
+[Git identities](git.md#signing).
 
 **Why does `.env` on the host hold no secrets?**
-It holds addressing and identity configuration only (`BIND_ADDR`, UID/GID, emails). It is gitignored and
-excluded from `bin/push`, but it is not a secret store.
+It holds addressing and identity configuration only (`BIND_ADDR`, UID/GID, emails, public keys). It is
+gitignored and excluded from `bin/push`, but it is not a secret store.
 
 **Can I put a raw API key in `secrets.env`?**
 That is exactly what it is for now - plain values, mode 600. Keep it to credentials shared across projects.
@@ -287,9 +303,11 @@ account" is one global value that concurrent agents would race. See [Why not `gh
 can reach a provider.
 
 **How do I rotate a leaked key?**
-Revoke at the source - `gh ssh-key delete`, the GitHub token settings page, `gcloud iam service-accounts keys
-delete` - then replace the value in `secrets.env` or the project `.env`. `./bin/devbox bootstrap` regenerates
-only what is missing; delete an old SSH key file first if you want a fresh pair, and re-register it.
+Revoke at the source - the GitHub token settings page for a PAT, `gcloud iam service-accounts keys delete`
+for GCP, or regenerate `app.pem` from the App's settings and replace
+`~/.config/work/work-app/app.pem`. Then replace the value in `secrets.env` or the project `.env`.
+There is no SSH keypair to rotate on the devbox: identity is your laptop's own key, unaffected by anything
+that happens inside the container.
 
 **Are secrets visible to the workstation's host user?**
 Yes. The bind mount is owned by `HOST_UID` and the host user can read it. The container protects the host from

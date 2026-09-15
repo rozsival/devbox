@@ -120,6 +120,21 @@ ssh workstation 'cd ~/devbox && ./bin/devbox skills'   # 3 global agent skills +
 Both are idempotent and can be re-run at any time. Details in
 [Toolchain](toolchain.md#agent-skills-and-browser-automation).
 
+## 6. Agent git on the laptop (optional but recommended)
+
+Agents can also run directly on the laptop, not just inside the devbox - same launcher, same mechanism:
+
+```bash
+./bin/install-agent
+```
+
+Installs the `omp` launcher, `gh` shim, credential helper and fence into `~/.local/libexec/devbox-agent`,
+`devbox-gh-token` into `~/.local/bin`, symlinks `~/.local/bin/omp` to the launcher, and writes
+`~/.config/devbox/agent*.gitconfig`. Idempotent - regenerates every file, reads or edits nothing of yours. It
+reports whether `omp` resolves to the launcher and prints the same two manual steps as the devbox: PATs in
+`~/.config/devbox/secrets.env`, App credentials at `~/.config/work/work-app/`. See
+[Git identities](git.md#laptop-install).
+
 ## `.env` reference
 
 | Variable                       | Default           | Purpose                                                         |
@@ -134,6 +149,8 @@ Both are idempotent and can be re-run at any time. Details in
 | `DEVBOX_EXTRA_AUTHORIZED_KEYS` | *(empty)*         | Extra keys, newline-separated                                   |
 | `GIT_PERSONAL_NAME` / `_EMAIL` | personal identity | Applied to `~/.gitconfig`                                       |
 | `GIT_WORK_NAME` / `_EMAIL`  | work identity  | Applied to `~/.config/work/.gitconfig`                       |
+| `GIT_PERSONAL_PUBKEY`          | *(empty)*         | Laptop's personal public key; selects the forwarded key for manual git, names the signing key |
+| `GIT_WORK_PUBKEY`           | *(empty)*         | Laptop's work public key; same, for `~/projects/work/**` |
 
 `.env` holds no secrets: tool credentials go in `~/.config/devbox/secrets.env` inside the container and
 project secrets in each project's own `.env`. See [Secrets](secrets.md).

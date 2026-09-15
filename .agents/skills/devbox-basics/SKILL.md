@@ -64,18 +64,21 @@ without it the phone gets a terminal but no notifications or approvals. Its phon
 
 Dev servers are never published. Forward them: `ssh -N -L 5173:localhost:5173 devbox`.
 
-## Two Git identities, chosen by directory
+## Two Git identities, two modes
 
-- `~/projects/rozsival/` - personal identity, key `~/.ssh/id_personal`, clone with `git@github.com:…`
-- `~/projects/work/` - work identity via `includeIf gitdir:`, key `~/.ssh/id_work`, clone with
+- `~/projects/rozsival/` - personal identity, clone with `git@github.com:…`
+- `~/projects/work/` - work identity via `includeIf gitdir:`, clone with
   `git@work.github.com:<org>/<repo>`
 
 The alias matters for new clones: URL rewriting configured in an `includeIf` file cannot apply before the repo
 directory exists, so the first clone into `~/projects/work/` must use `git@work.github.com:` explicitly.
 Existing `git@github.com:` remotes inside that tree are rewritten by `insteadOf` afterwards.
 
-Both keys are generated inside the container and are registered on GitHub twice - once as an Authentication
-key, once as a Signing key - so commits from agents are verified.
+The devbox holds no private key for either identity. Manual git work (a pane's push, a signed commit) borrows
+the laptop's 1Password agent, forwarded for one connection with `ssh -A devbox`. Agent sessions never touch
+that forwarded agent at all - the `omp` launcher rewrites their git to HTTPS with a per-operation token
+(a GitHub App installation token, or a fine-grained PAT) and a bot author, unsigned. Full mechanism:
+`docs/git.md`.
 
 ## Two optional extras, not installed by default
 
@@ -86,15 +89,18 @@ its panes share the laptop's OMP preset. Neither runs during bootstrap; both are
 
 ## What credentials live in the box
 
-Authority is enumerated, never ambient. The container has **no 1Password account** (`op` is not installed)
-and **no Google user credential** (`gcloud` is not installed either). Three layers:
+Authority is enumerated, never ambient. The container has **no 1Password account** (`op` is not installed),
+**no private key for GitHub**, and **no Google user credential** (`gcloud` is not installed either). Three
+layers:
 
-- **Identity** - the two SSH keys, generated in the container, for clone/pull/push and signing
+- **Identity** - two public keys, installed from `.env` (`GIT_PERSONAL_PUBKEY`, `GIT_WORK_PUBKEY`); no
+  private key at rest. Manual clone/pull/push/sign borrows the laptop's 1Password agent, forwarded per
+  connection (`ssh -A devbox`). Agent sessions authenticate over HTTPS with a per-operation token instead
 - **Box-wide tool credentials** - `~/.config/devbox/secrets.env`, plain `KEY=value` at mode 600, sourced by
   every shell including non-interactive `ssh devbox <cmd>`; holds model API keys and one fine-grained GitHub
   token per account (`GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK`). Nothing exports `GH_TOKEN`: the `gh` shim in
-  `~/.local/bin` resolves the token per invocation from the working directory, the same rule that picks a git
-  identity (`devbox-gh-token --account` reports it)
+  `~/.local/libexec/devbox-agent` resolves the token per invocation from the working directory, the same
+  rule that picks a git identity (`devbox-gh-token --account` reports it)
 - **Per project** - that project's own `.env`, rendered on the laptop and copied in, so a leak stays scoped
   to one project. GCP keys are per-project too, via `GOOGLE_APPLICATION_CREDENTIALS`
 

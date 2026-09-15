@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Laptop-side: install the agent git override on this machine, from the same
+# home/ templates the devbox bootstraps from. Afterwards `omp` resolves to the
+# launcher, which gives every agent session HTTPS remotes, per-operation tokens,
+# a bot author and no signing - while your own shell and IDE keep the SSH
+# remotes, the 1Password agent and signed commits on the very same clones.
+# Idempotent: every file is regenerated, nothing of yours is read or edited.
+# See docs/git.md.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly REPO_ROOT
+readonly TEMPLATE_DIR="${REPO_ROOT}/home"
+readonly AGENT_DIR="${HOME}/.local/libexec/devbox-agent"
+readonly BIN_DIR="${HOME}/.local/bin"
+readonly CONFIG_DIR="${HOME}/.config/devbox"
+
+log_info() { echo -e "\033[0;34m[INFO]\033[0m  $*"; }
+log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
+log_warn() { echo -e "\033[1;33m[WARN]\033[0m  $*" >&2; }
+
+# -- Launcher, credential helper, fence, gh shim -------------------------------
+# Kept out of ~/.local/bin on purpose: only the launcher adds this directory to
+# the PATH, so the `gh` shim (tokens per directory) never intercepts your own
+# gh, which keeps its OAuth login.
+install -d -m 755 "${AGENT_DIR}"
+for tool in omp gh devbox-git-credential devbox-git-no-ssh; do
+  install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${AGENT_DIR}/${tool}"
+done
+
+# The resolver is a user-facing command (`devbox-gh-token --account`), same
+# place as on the devbox.
+install -d -m 755 "${BIN_DIR}"
+install -m 755 "${TEMPLATE_DIR}/.local/bin/devbox-gh-token" "${BIN_DIR}/devbox-gh-token"
+
+# `omp` itself must shadow the real binary, and ~/.local/bin is where a PATH
+# usually already starts. A symlink rather than a copy: the launcher finds the
+# real omp by skipping every PATH entry that resolves to its own file.
+ln -sfn "${AGENT_DIR}/omp" "${BIN_DIR}/omp"
+
+# -- Agent git configuration ---------------------------------------------------
+install -d -m 700 "${CONFIG_DIR}"
+for cfg in agent.gitconfig agent-work.gitconfig; do
+  install -m 644 "${TEMPLATE_DIR}/.config/devbox/${cfg}" "${CONFIG_DIR}/${cfg}"
+done
+
+# The two fine-grained PATs the helper falls back to where the App is not
+# installed, and what the gh shim uses. Same file as on the devbox; created from
+# the template once, never overwritten.
+secrets_file="${CONFIG_DIR}/secrets.env"
+if [[ ! -f "${secrets_file}" ]]; then
+  install -m 600 "${TEMPLATE_DIR}/.config/devbox/secrets.env.example" "${secrets_file}"
+fi
+chmod 600 "${secrets_file}"
+
+# -- Report ---------------------------------------------------------------------
+launcher_wins=0
+if resolved="$(command -v omp 2>/dev/null)" && [[ "$(readlink -f "${resolved}")" == "${AGENT_DIR}/omp" ]]; then
+  launcher_wins=1
+fi
+real_omp="$(PATH="${PATH//${BIN_DIR}/}" command -v omp 2>/dev/null || true)"
+
+log_success "Installed ${AGENT_DIR}/{omp,gh,devbox-git-credential,devbox-git-no-ssh}, ${BIN_DIR}/{omp,devbox-gh-token}, ${CONFIG_DIR}/agent*.gitconfig"
+[[ -n ${real_omp} ]] || log_warn "No real omp found on the PATH besides the launcher - install OMP first (curl -fsSL https://omp.sh/install.sh | sh)."
+if ((launcher_wins)); then
+  log_success "'omp' resolves to the launcher (real binary: ${real_omp:-none})."
+else
+  log_warn "'omp' resolves to $(command -v omp || echo nothing), not the launcher - put ${BIN_DIR} before it on your PATH."
+fi
+
+echo
+echo 'Remaining manual steps:'
+echo "  - GH_TOKEN_PERSONAL / GH_TOKEN_WORK in ${secrets_file} (fine-grained; contents write on the repositories agents push without the App)"
+echo "  - ~/.config/work/work-app/{app-id,app.pem} (mode 600) so work repositories get App tokens; without them the PAT is used"
+echo "  - check with: cd <repo> && omp --version && devbox-git-credential explain <owner>/<repo>"

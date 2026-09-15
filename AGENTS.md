@@ -38,6 +38,8 @@ the host's root Docker daemon.
 5. **`BIND_ADDR` is the security boundary** - never publish a port without it, never add `0.0.0.0` bindings
 6. **Bootstrap stays idempotent** - every step in `container/bootstrap.sh` is guarded so a re-run is a no-op
 7. **Commits** - Conventional Commits v1.0.0, lowercase, no final punctuation, 100 chars max
+8. **No private keys in the container** - identities are public keys only; agent git goes over HTTPS through
+   the launcher; manual work forwards the 1Password agent
 
 ## Key Files
 
@@ -46,7 +48,7 @@ the host's root Docker daemon.
   rather than growing `README.md`:
   - `docs/setup.md` - prerequisites, laptop key, `~/.ssh/config`, first deploy, `.env` reference
   - `docs/connecting.md` - herdr panes, `ssh devbox`, Moshi on a phone, `./bin/devbox shell`, cloning, port forwarding
-  - `docs/git.md` - the two identities, clone rules, signing, GitHub key registration
+  - `docs/git.md` - the two identities, manual vs agent git, the credential helper, signing, laptop install
   - `docs/toolchain.md` - pinned versions, install locations, OMP, Moshi/`moshi-hook`, agent skills, adding a tool
   - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, GCP ADC, App credentials
   - `docs/cli.md` - `bin/devbox`, `bin/push` and `bin/sync-omp` reference
@@ -69,27 +71,36 @@ the host's root Docker daemon.
   recreate, and both it and the hook daemon are best-effort because neither an unreachable project daemon
   nor a missing hook daemon may cost SSH access. `moshi-hook serve` is backgrounded rather than supervised
   because there is no systemd here: it becomes a child of `sshd` and is reaped by tini
-- `container/bootstrap.sh` - idempotent user setup: OMP, both SSH identities, `~/.ssh/config`, known_hosts,
-  the two-identity Git config, shell, `gh` (the `~/.local/bin` shim plus the per-account token checklist),
-  the box-wide `secrets.env`, `moshi-hook` plus its OMP extension, and the printed manual checklist
+- `container/bootstrap.sh` - idempotent user setup: OMP, both SSH identity **public keys** (no private key -
+  installs from `.env`, deletes any earlier devbox-generated private key and prints its fingerprint to
+  revoke), `~/.ssh/config`, known_hosts, the two-identity Git config, shell, `gh` (the
+  `~/.local/libexec/devbox-agent` shim plus the per-account token checklist), the box-wide `secrets.env`, the
+  agent git override (`omp` launcher, credential helper, fence, `agent*.gitconfig`), `moshi-hook` plus its
+  OMP extension, and the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
-  yes` (dev-server tunnels) and `MaxSessions 32` (herdr channels)
+  yes` (dev-server tunnels), `AllowAgentForwarding yes` (the `ssh -A devbox` escape hatch only - the
+  container holds no private key of its own) and `MaxSessions 32` (herdr channels)
 - `container/skills.sh` - optional, explicitly invoked (`./bin/devbox skills`): pinned `agent-browser` CLI +
   Chrome build, then `agent-browser`, `skill-creator` and `find-skills` via
   `npx skills add --global --agent universal --yes`. Chrome's shared libraries are in the `Dockerfile`
   because `--with-deps` needs root. Global npm installs pass `--prefix "$HOME/.local"` per call so the bins
   stay on the bind mount; never export `NPM_CONFIG_PREFIX` - nvm then refuses to activate its default Node
-- `home/` - templates installed into `/home/dev` by bootstrap; generated files, not user-edited.
-  `home/.local/bin/gh` deliberately shadows `/usr/bin/gh` on the PATH: with `devbox-gh-token` it resolves
+- `home/` - templates installed into `/home/dev` by bootstrap (and onto the laptop by `bin/install-agent`);
+  generated files, not user-edited. `home/.local/libexec/devbox-agent/` holds the `omp` launcher (exports
+  `GIT_CONFIG_GLOBAL`, the SSH fence, `GIT_TERMINAL_PROMPT=0` for its own process tree only) and the `gh`
+  shim that deliberately shadows the real `gh` on the PATH: with `devbox-gh-token` it resolves
   `GH_TOKEN_PERSONAL` or `GH_TOKEN_WORK` per invocation from the working directory, on the same
   `~/projects/work/**` rule as git's `includeIf`, because an agent's cwd is a project while its shell was
-  opened in `$HOME`. Nothing exports `GH_TOKEN`; `gh auth login` is rejected by design (`docs/secrets.md`)
+  opened in `$HOME`. Nothing exports `GH_TOKEN`; `gh auth login` is rejected by design (`docs/secrets.md`).
+  `home/.config/devbox/agent*.gitconfig` sets the bot author, unsigned commits, and the HTTPS
+  credential-helper rewrite for agent git (`docs/git.md`)
 - `container/devbox-ports` - symlinked to `/usr/local/bin` by the `Dockerfile`, so a host edit is live
   without a rebuild; mirrors published project ports onto the container's own `127.0.0.1`
 - `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`,
   `logs`, `hook`, `keys`, `doctor`); `up`/`down`/`rebuild` refuse to drop live SSH sessions without
-  `--force`, and `hook` restarts the `moshi-hook` daemon with a detached `exec` precisely so it does not
-  have to
+  `--force`, `hook` restarts the `moshi-hook` daemon with a detached `exec` precisely so it does not have
+  to, and `keys` prints the installed identity public keys (or "not set") plus the sshd host-key fingerprint
+  - nothing to paste anywhere, since they are already the laptop's own keys
 - `bin/rootless-docker` - host-side, needs `sudo`, idempotent, `--check` reports only: installs `uidmap` and
   `slirp4netns`, creates the `dev:devbox` host user with pinned uid/gid 1001, moves `DEVBOX_DATA_DIR` to
   `/home/dev` (path identity), writes `/etc/tmpfiles.d/devbox-docker.conf`, installs the nftables table plus
@@ -100,6 +111,11 @@ the host's root Docker daemon.
   so nothing in the bind mount can rewrite the daemon's command line
 - `bin/sync-omp` - laptop-side: copies `~/.omp/agent/config.yml` into the devbox over `Host devbox`; only
   the preset, never the per-machine OMP state
+- `bin/install-agent` - laptop-side, idempotent: installs the same agent git override the devbox bootstraps
+  (`omp` launcher, `gh` shim, credential helper, fence, `devbox-gh-token`, `agent*.gitconfig`, an
+  `~/.local/bin/omp` symlink to the launcher); regenerates every file, reads/edits nothing of the user's;
+  reports whether `omp` resolves to the launcher and prints the remaining manual steps (PATs, App
+  credentials)
 - `bin/push` - laptop-side rsync deploy; excludes `.git`, `.env`, and `data/`. `--up` runs the remote `up`
   over `ssh -t` so the live-session prompt is answerable; `--force` forwards past it
 - `.agents/skills/` - three skills mirroring the docs for agents: `devbox-basics` (architecture, boundaries,

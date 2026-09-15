@@ -61,9 +61,10 @@ ssh -N -L 5173:localhost:5173 devbox &          # dev server
 ssh -N -L 8080:localhost:8080 -L 5432:localhost:5432 devbox &   # several at once
 ```
 
-`AllowTcpForwarding yes` in `container/sshd_config` enables this; `PermitTunnel no` and
-`AllowAgentForwarding no` keep the rest closed. Remote (`-R`) forwards work the same way if the devbox needs
-to reach something on the laptop.
+`AllowTcpForwarding yes` in `container/sshd_config` enables this; `PermitTunnel no` keeps it to port
+forwards. `AllowAgentForwarding yes` is a separate, narrower grant: it only forwards the laptop's 1Password
+SSH agent for an explicit `ssh -A devbox` connection, never automatically - see
+[Git identities](git.md#manual-work-on-the-devbox-the-escape-hatch).
 
 Project containers (see [Docker](docker.md)) publish onto the `docker0` gateway by default - the devbox
 container's own bridge gateway - so a published port is reachable inside the devbox at

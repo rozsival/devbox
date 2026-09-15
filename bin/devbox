@@ -33,7 +33,7 @@ Commands:
   sessions          List the SSH sessions connected to the container
   logs [-f]         Show container logs (last 100 lines; -f follows)
   hook              Restart the moshi-hook daemon in place and print its status
-  keys              Print the devbox public keys and sshd host-key fingerprint
+  keys              Print the installed identity public keys and sshd host-key fingerprint
   doctor            Check host wiring, exposure, and the in-container toolchain
 
 --force skips the "live SSH sessions will be killed" prompt on up, down and rebuild.
@@ -287,7 +287,11 @@ cmd_keys() {
   compose exec -T "${SERVICE}" bash -c '
     set -e
     for identity in personal work; do
-      printf "%-10s %s\n" "$identity" "$(cat "$HOME/.ssh/id_${identity}.pub")"
+      if [[ -f "$HOME/.ssh/id_${identity}.pub" ]]; then
+        printf "%-10s %s\n" "$identity" "$(cat "$HOME/.ssh/id_${identity}.pub")"
+      else
+        printf "%-10s %s\n" "$identity" "(not set - GIT_${identity^^}_PUBKEY in .env)"
+      fi
     done
     echo
     echo "sshd host key:"
