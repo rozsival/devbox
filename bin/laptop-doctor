@@ -71,8 +71,15 @@ done
 
 # -- 2. ssh config: every host selects one public key through the agent ------
 log_info 'ssh config'
+# A config that does not parse kills every ssh client before it reaches the agent - herdr then reports
+# "connection was lost" and 1Password never prompts. Name that once instead of failing every host below.
+if ! config_err="$(ssh -G localhost 2>&1 >/dev/null)"; then
+  # shellcheck disable=SC2088  # literal ~ in a message
+  fail "~/.ssh/config does not parse: ${config_err//$'\n'/; }"
+fi
 check_host() {
-  local host="$1" expect_pub="$2" resolved agent_cfg only files
+  local host="$1" resolved agent_cfg only files pub
+  shift
   resolved="$(ssh -G "${host}" 2>/dev/null)" || {
     fail "ssh -G ${host} failed"
     return
@@ -80,19 +87,26 @@ check_host() {
   agent_cfg="$(sed -n 's/^identityagent //p' <<<"${resolved}")"
   only="$(sed -n 's/^identitiesonly //p' <<<"${resolved}")"
   files="$(sed -n 's/^identityfile //p' <<<"${resolved}")"
+  files="${files//\~/${HOME}}"
   if [[ ${agent_cfg} != *1password* ]]; then
     fail "Host ${host}: IdentityAgent is not the 1Password socket (${agent_cfg:-unset})"
+    return
   elif [[ ${only} != yes ]]; then
     fail "Host ${host}: IdentitiesOnly is not yes"
-  elif [[ ${files//\~/${HOME}} != "${SSH_DIR}/${expect_pub}.pub" ]]; then
-    fail "Host ${host}: IdentityFile is '${files//$'\n'/, }', expected ~/.ssh/${expect_pub}.pub"
-  else
-    log_success "Host ${host} → ${expect_pub}.pub via 1Password"
+    return
   fi
+  for pub in "$@"; do
+    if [[ ${files} == "${SSH_DIR}/${pub}.pub" ]]; then
+      log_success "Host ${host} → ${pub}.pub via 1Password"
+      return
+    fi
+  done
+  # shellcheck disable=SC2088  # literal ~ in a message
+  fail "Host ${host}: IdentityFile is '${files//$'\n'/, }', expected one of: $(printf '~/.ssh/%s.pub ' "$@")"
 }
 check_host github.com id_personal
 check_host work.github.com id_work
-check_host workstation devbox
+check_host workstation devbox id_personal
 check_host devbox devbox
 if [[ "$(ssh -G devbox 2>/dev/null | sed -n 's/^forwardagent //p')" == yes ]]; then
   fail 'Host devbox: ForwardAgent yes - herdr would carry your agent into every session; forward explicitly with ssh -A instead'

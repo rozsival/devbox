@@ -164,7 +164,7 @@ details in `docs/toolchain.md#agent-skills-and-browser-automation`.
 | `up` aborts on empty `BIND_ADDR`        | Preflight working as designed. Tailscale up, then `env`            |
 | `Too many authentication failures`      | Missing `IdentitiesOnly yes` in the `Host devbox` block            |
 | `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS` or on GitHub; restart    |
-| herdr machine stuck `offline`           | 1Password locked or key not approved for herdr; unlock/approve     |
+| herdr machine stuck `offline`           | `~/.ssh/config` no longer parses (`ssh -G devbox` names the line; herdr runs the system `ssh -o BatchMode=yes` and only logs `connection was lost`), or 1Password locked / key not approved |
 | `Host key verification failed`          | Data dir was wiped; `ssh-keygen -R '[workstation]:2223'`         |
 | `Permission denied` writing `/home/dev` | `${DEVBOX_DATA_DIR}` not owned by `HOST_UID:HOST_GID`              |
 | SSH itself is the broken thing          | `./bin/devbox shell` on the host bypasses the container's sshd     |

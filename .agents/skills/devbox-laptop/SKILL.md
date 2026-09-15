@@ -105,6 +105,7 @@ install or bypassed the launcher.
 
 Check: `./bin/laptop-doctor` validates both tokens against GitHub and the pem as a key;
 `devbox-git-credential explain <owner>/<repo>` prints `app:<installation>` or `pat:<account>` for a repo.
+| `~/.ssh/config does not parse: … line N`        | A typo in an option name; every ssh client (herdr's included) dies before reaching the agent, so no 1Password prompt appears |
 
 ## When `laptop-doctor` warns
 
