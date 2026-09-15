@@ -120,9 +120,11 @@ the host's root Docker daemon.
 - `bin/laptop-doctor` - laptop-side, read-only counterpart of `devbox doctor`: no private key on disk, the
   five named `.pub` files held by the 1Password agent, every `Host` block selecting one `.pub` through it,
   both gitconfigs signing via `op-ssh-sign` with the `signing_*.pub` keys, the agent override installed and
-  byte-identical to `home/`, both PATs accepted by `gh`, the App pem valid, and the four connections
-  authenticating (the two GitHub aliases to different accounts). `file_mode` uses perl because BSD and GNU
-  `stat` disagree and both can be on a macOS PATH
+  byte-identical to `home/`, no agent token in the macOS keychain (a system `credential.helper` running
+  ahead of ours), both PATs accepted by `gh`, the App pem valid, and the four connections authenticating
+  (the two GitHub aliases to different accounts). Unsets the launcher's exports and strips its PATH entry
+  first, so it is meaningful from inside an agent session. `file_mode` uses perl because BSD and GNU `stat`
+  disagree and both can be on a macOS PATH
 - `bin/push` - laptop-side rsync deploy; excludes `.git`, `.env`, and `data/`. `--up` runs the remote `up`
   over `ssh -t` so the live-session prompt is answerable; `--force` forwards past it
 - `.agents/skills/` - four skills mirroring the docs for agents: `devbox-basics` (architecture, boundaries,
