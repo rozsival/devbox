@@ -11,6 +11,8 @@ before moving on, because a failure two phases later is almost always an unverif
 
 The literal command and config blocks live in `docs/setup.md` - read the section this skill points you at
 rather than retyping them from memory, so a changed default is picked up instead of being reintroduced.
+Phases 1 and 2 are the laptop's share of a larger laptop layout (GitHub keys, gitconfigs, the agent git
+override, tokens); the `devbox-laptop` skill owns that and `./bin/laptop-doctor` checks all of it.
 
 ## Phase 1 - the laptop key (on the laptop)
 

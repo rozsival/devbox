@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+# Laptop-side: check that this machine matches the layout the devbox expects
+# from it - private keys only in 1Password, the named public halves in ~/.ssh,
+# ssh and git configured to select through them, the agent git override
+# installed and current, the tokens and App credentials it needs, and the
+# connections it makes. Read-only; each check reports, and the exit status is
+# non-zero if any failed. See .agents/skills/devbox-laptop and docs/git.md.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly REPO_ROOT
+readonly TEMPLATE_DIR="${REPO_ROOT}/home"
+readonly AGENT_DIR="${HOME}/.local/libexec/devbox-agent"
+readonly CONFIG_DIR="${HOME}/.config/devbox"
+readonly SSH_DIR="${HOME}/.ssh"
+readonly OP_AGENT_SOCK="${HOME}/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+
+log_info() { echo -e "\033[0;34m[INFO]\033[0m  $*"; }
+log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
+log_warn() { echo -e "\033[1;33m[WARN]\033[0m  $*" >&2; }
+
+failures=0
+fail() {
+  log_warn "$*"
+  failures=$((failures + 1))
+}
+
+# perl rather than stat: BSD and GNU stat disagree on flags, and both may be on
+# a macOS PATH (coreutils' gnubin ahead of /usr/bin).
+file_mode() {
+  perl -e 'printf "%o\n", (stat $ARGV[0])[2] & 07777' "$1"
+}
+
+# -- 1. Private keys: none on disk, all in 1Password --------------------------
+log_info 'Keys'
+private_on_disk=()
+for f in "${SSH_DIR}"/*; do
+  [[ -f ${f} ]] || continue
+  if head -c 40 "${f}" 2>/dev/null | grep -q 'PRIVATE KEY'; then
+    private_on_disk+=("${f##*/}")
+  fi
+done
+if ((${#private_on_disk[@]})); then
+  fail "private key(s) on disk: ${private_on_disk[*]} - 1Password is the only key store; delete them once the item exists there"
+else
+  log_success 'no private key on disk'
+fi
+
+if [[ -S ${OP_AGENT_SOCK} ]] && agent_keys="$(SSH_AUTH_SOCK="${OP_AGENT_SOCK}" ssh-add -l 2>/dev/null)"; then
+  log_success "1Password SSH agent up, $(wc -l <<<"${agent_keys}" | tr -d ' ') keys"
+else
+  agent_keys=''
+  fail '1Password SSH agent not reachable (1Password → Developer → SSH agent, and unlock)'
+fi
+
+for pub in id_personal signing_personal id_work signing_work devbox; do
+  file="${SSH_DIR}/${pub}.pub"
+  if [[ ! -f ${file} ]]; then
+    fail "${file} missing"
+    continue
+  fi
+  fingerprint="$(ssh-keygen -lf "${file}" 2>/dev/null | cut -d' ' -f2 || true)"
+  if [[ -z ${fingerprint} ]]; then
+    fail "${file} is not a public key"
+  elif [[ -n ${agent_keys} ]] && ! grep -q "${fingerprint}" <<<"${agent_keys}"; then
+    fail "${pub}.pub (${fingerprint}) is not held by the 1Password agent"
+  else
+    log_success "${pub}.pub ${fingerprint}"
+  fi
+done
+
+# -- 2. ssh config: every host selects one public key through the agent ------
+log_info 'ssh config'
+check_host() {
+  local host="$1" expect_pub="$2" resolved agent_cfg only files
+  resolved="$(ssh -G "${host}" 2>/dev/null)" || {
+    fail "ssh -G ${host} failed"
+    return
+  }
+  agent_cfg="$(sed -n 's/^identityagent //p' <<<"${resolved}")"
+  only="$(sed -n 's/^identitiesonly //p' <<<"${resolved}")"
+  files="$(sed -n 's/^identityfile //p' <<<"${resolved}")"
+  if [[ ${agent_cfg} != *1password* ]]; then
+    fail "Host ${host}: IdentityAgent is not the 1Password socket (${agent_cfg:-unset})"
+  elif [[ ${only} != yes ]]; then
+    fail "Host ${host}: IdentitiesOnly is not yes"
+  elif [[ ${files//\~/${HOME}} != "${SSH_DIR}/${expect_pub}.pub" ]]; then
+    fail "Host ${host}: IdentityFile is '${files//$'\n'/, }', expected ~/.ssh/${expect_pub}.pub"
+  else
+    log_success "Host ${host} → ${expect_pub}.pub via 1Password"
+  fi
+}
+check_host github.com id_personal
+check_host work.github.com id_work
+check_host workstation devbox
+check_host devbox devbox
+if [[ "$(ssh -G devbox 2>/dev/null | sed -n 's/^forwardagent //p')" == yes ]]; then
+  fail 'Host devbox: ForwardAgent yes - herdr would carry your agent into every session; forward explicitly with ssh -A instead'
+fi
+
+# -- 3. git: sign with the account signing key, through op-ssh-sign ----------
+log_info 'git config'
+check_git() {
+  local label="$1" expect="$2" actual="$3"
+  if [[ ${actual} == "${expect}" ]]; then
+    log_success "${label} = ${actual}"
+  else
+    fail "${label} is '${actual:-unset}', expected '${expect}'"
+  fi
+}
+check_git 'gpg.format' ssh "$(git config --global gpg.format || true)"
+check_git 'gpg.ssh.program' /Applications/1Password.app/Contents/MacOS/op-ssh-sign "$(git config --global gpg.ssh.program || true)"
+check_git 'commit.gpgsign' true "$(git config --global commit.gpgsign || true)"
+check_git 'user.signingkey' "${SSH_DIR}/signing_personal.pub" "$(git config --global user.signingkey || true)"
+check_git 'gpg.ssh.allowedSignersFile' "${SSH_DIR}/allowed_signers" "$(git config --global gpg.ssh.allowedSignersFile || true)"
+work_cfg="$(git config --global 'includeIf.gitdir:~/projects/work/.path' || true)"
+if [[ -z ${work_cfg} ]]; then
+  fail 'includeIf gitdir:~/projects/work/ is not configured in ~/.gitconfig'
+else
+  check_git 'work user.signingkey' "${SSH_DIR}/signing_work.pub" "$(git config --file "${work_cfg/#\~/${HOME}}" user.signingkey || true)"
+fi
+if [[ -f ${SSH_DIR}/allowed_signers ]] && (($(grep -c . "${SSH_DIR}/allowed_signers") >= 2)); then
+  log_success 'allowed_signers lists both identities'
+else
+  fail "${SSH_DIR}/allowed_signers missing or incomplete (one line per identity: <email> <key type> <key>)"
+fi
+
+# -- 4. Agent git override: installed and identical to the templates ---------
+log_info 'agent git override'
+if resolved="$(command -v omp 2>/dev/null)" && [[ "$(readlink -f "${resolved}")" == "${AGENT_DIR}/omp" ]]; then
+  log_success "omp → ${resolved} → launcher"
+else
+  fail "omp resolves to ${resolved:-nothing}, not the launcher - run ./bin/install-agent and put ~/.local/bin first on the PATH"
+fi
+stale=()
+for rel in .local/libexec/devbox-agent/omp .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
+  .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .config/devbox/agent.gitconfig \
+  .config/devbox/agent-work.gitconfig; do
+  cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
+done
+if ((${#stale[@]})); then
+  fail "differ from the repo templates: ${stale[*]} - run ./bin/install-agent"
+else
+  log_success 'launcher, shim, helper, fence and agent gitconfigs match the repo templates'
+fi
+
+# -- 5. What the helper needs: tokens and App credentials --------------------
+log_info 'credentials'
+secrets_file="${CONFIG_DIR}/secrets.env"
+if [[ ! -f ${secrets_file} ]]; then
+  fail "${secrets_file} missing - run ./bin/install-agent"
+elif [[ "$(file_mode "${secrets_file}")" != 600 ]]; then
+  fail "${secrets_file} is not mode 600"
+else
+  log_success "${secrets_file} present, mode 600"
+fi
+for account in "personal:${HOME}" "work:${HOME}/projects/work"; do
+  name="${account%%:*}"
+  if ! token="$("${HOME}/.local/bin/devbox-gh-token" "${account#*:}" 2>/dev/null)" || [[ -z ${token} ]]; then
+    fail "no ${name} token: set GH_TOKEN_$(tr '[:lower:]' '[:upper:]' <<<"${name}") in ${secrets_file} (fine-grained; contents write on repos agents push without the App)"
+  elif ! GH_TOKEN="${token}" GH_CONFIG_DIR="${CONFIG_DIR}/gh" timeout 15 gh auth status >/dev/null 2>&1; then
+    fail "the ${name} token is rejected by gh - expired, revoked, or GitHub unreachable"
+  else
+    log_success "${name} token accepted by gh"
+  fi
+done
+app_dir="${HOME}/.config/work/work-app"
+if [[ -r ${app_dir}/app-id && -r ${app_dir}/app.pem ]]; then
+  if [[ "$(file_mode "${app_dir}/app.pem")" != 600 ]]; then
+    fail "${app_dir}/app.pem is not mode 600"
+  elif openssl pkey -in "${app_dir}/app.pem" -noout >/dev/null 2>&1; then
+    log_success "work-app App credentials present (app-id $(tr -d '[:space:]' <"${app_dir}/app-id"))"
+  else
+    fail "${app_dir}/app.pem is not a readable private key"
+  fi
+else
+  log_warn "no App credentials in ${app_dir} - work repositories are pushed with the PAT until app-id + app.pem (mode 600) are there"
+fi
+
+# -- 6. Connections ------------------------------------------------------------
+log_info 'connections'
+# Which login answers is only informative; the check is that both aliases
+# authenticate and reach two *different* accounts, which is what the two
+# IdentityFile selections exist for.
+github_login() {
+  ssh -o BatchMode=yes -o ConnectTimeout=10 -T "git@$1" 2>&1 | sed -n 's/^Hi \([^!]*\)!.*/\1/p' || true
+}
+personal_login="$(github_login github.com)"
+work_login="$(github_login work.github.com)"
+for pair in "github.com:${personal_login}" "work.github.com:${work_login}"; do
+  if [[ -n ${pair#*:} ]]; then
+    log_success "git@${pair%%:*} → ${pair#*:}"
+  else
+    fail "git@${pair%%:*} did not authenticate"
+  fi
+done
+if [[ -n ${personal_login} && ${personal_login} == "${work_login}" ]]; then
+  fail "both aliases reach ${personal_login} - id_work.pub selects the wrong key"
+fi
+for host in workstation devbox; do
+  if ssh -o BatchMode=yes -o ConnectTimeout=10 "${host}" true 2>/dev/null; then
+    log_success "ssh ${host}"
+  else
+    fail "ssh ${host} failed - is 1Password unlocked and the Devbox Laptop key approved?"
+  fi
+done
+
+echo
+if ((failures)); then
+  log_warn "${failures} check(s) failed."
+  exit 1
+fi
+log_success 'All checks passed.'

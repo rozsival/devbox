@@ -117,9 +117,16 @@ the host's root Docker daemon.
   `~/.local/bin/omp` symlink to the launcher); regenerates every file, reads/edits nothing of the user's;
   reports whether `omp` resolves to the launcher and prints the remaining manual steps (PATs, App
   credentials)
+- `bin/laptop-doctor` - laptop-side, read-only counterpart of `devbox doctor`: no private key on disk, the
+  five named `.pub` files held by the 1Password agent, every `Host` block selecting one `.pub` through it,
+  both gitconfigs signing via `op-ssh-sign` with the `signing_*.pub` keys, the agent override installed and
+  byte-identical to `home/`, both PATs accepted by `gh`, the App pem valid, and the four connections
+  authenticating (the two GitHub aliases to different accounts). `file_mode` uses perl because BSD and GNU
+  `stat` disagree and both can be on a macOS PATH
 - `bin/push` - laptop-side rsync deploy; excludes `.git`, `.env`, and `data/`. `--up` runs the remote `up`
   over `ssh -t` so the live-session prompt is answerable; `--force` forwards past it
-- `.agents/skills/` - three skills mirroring the docs for agents: `devbox-basics` (architecture, boundaries,
-  entry routes), `devbox-setup` (five ordered setup phases plus connection failures), `devbox-deploy`
-  (sync vs apply, what a redeploy cannot destroy). They must stay consistent with `docs/`; when a command or
-  default changes, update both
+- `.agents/skills/` - four skills mirroring the docs for agents: `devbox-basics` (architecture, boundaries,
+  entry routes), `devbox-setup` (five ordered setup phases plus connection failures), `devbox-laptop`
+  (keys in 1Password, ssh/git config, the agent override, tokens - `laptop-doctor` as the acceptance test),
+  `devbox-deploy` (sync vs apply, what a redeploy cannot destroy). They must stay consistent with `docs/`;
+  when a command or default changes, update both

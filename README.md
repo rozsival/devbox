@@ -29,9 +29,9 @@ ssh workstation 'cd ~/devbox && ./bin/devbox skills' # optional: agent skills + 
 ./bin/sync-omp # optional: push this laptop's OMP preset into the devbox
 ```
 
-The three things that are not optional: a **dedicated laptop key** (the 1Password agent cannot serve herdr's
-background connections), the two **`~/.ssh/config` blocks**, and a non-empty **`BIND_ADDR`**. All three are in
-[Setup](docs/setup.md).
+The three things that are not optional: the **Devbox Laptop key in 1Password** with only `~/.ssh/devbox.pub`
+on disk, the two **`~/.ssh/config` blocks**, and a non-empty **`BIND_ADDR`**. All three are in
+[Setup](docs/setup.md); `./bin/laptop-doctor` checks the laptop side.
 
 ## 📚 Documentation
 
@@ -42,16 +42,17 @@ background connections), the two **`~/.ssh/config` blocks**, and a non-empty **`
 | [Git identities](docs/git.md)      | Cloning repos, personal vs work, manual vs agent git, signing  |
 | [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Moshi hooks, agent skills       |
 | [Secrets](docs/secrets.md)         | Box-wide vs per-project, the two `gh` tokens, GCP ADC, App creds  |
-| [CLI reference](docs/cli.md)       | Every `bin/devbox`, `bin/push` and `bin/sync-omp` flag            |
+| [CLI reference](docs/cli.md)       | Every `bin/devbox`, `bin/push`, `bin/sync-omp`, `bin/install-agent` and `bin/laptop-doctor` flag |
 | [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding              |
 | [Docker](docs/docker.md)           | Project containers, the rootless daemon, `devbox-ports`           |
 | [Operations](docs/operations.md)   | Redeploy, restart, backup, `doctor`, troubleshooting              |
 | [Security model](docs/security.md) | Boundaries, trust assumptions, what an escaped agent reaches      |
 
 Working on this repo rather than in it? [AGENTS.md](AGENTS.md) holds the conventions, and
-`.agents/skills/` holds three skills that route an agent through the same material:
+`.agents/skills/` holds four skills that route an agent through the same material:
 [devbox-basics](.agents/skills/devbox-basics/SKILL.md) (what it is and how it is isolated),
-[devbox-setup](.agents/skills/devbox-setup/SKILL.md) (first install and connection failures), and
+[devbox-setup](.agents/skills/devbox-setup/SKILL.md) (first install and connection failures),
+[devbox-laptop](.agents/skills/devbox-laptop/SKILL.md) (keys, configs and the agent override on the laptop), and
 [devbox-deploy](.agents/skills/devbox-deploy/SKILL.md) (shipping a change and applying it).
 
 ## 🗺 Layout
@@ -65,10 +66,11 @@ bin/rootless-docker   host-side, one-time: provisions the rootless project Docke
 bin/push              laptop-side rsync deploy
 bin/sync-omp          laptop-side OMP preset sync (~/.omp/agent/config.yml → devbox)
 bin/install-agent     laptop-side: installs the omp launcher, gh shim and agent git config
+bin/laptop-doctor     laptop-side: checks keys, ssh/git config, the override, tokens and connections
 container/            entrypoint.sh (PID 1), bootstrap.sh (user setup), skills.sh (optional), sshd_config
 home/                 templates installed into /home/dev by bootstrap (and onto the laptop by install-agent)
 docs/                 this documentation
-.agents/skills/       agent skills: devbox-basics, devbox-setup, devbox-deploy
+.agents/skills/       agent skills: devbox-basics, devbox-setup, devbox-laptop, devbox-deploy
 ```
 
 ## ⚡ Cheat sheet
@@ -84,4 +86,5 @@ ssh workstation 'cd ~/devbox && ./bin/devbox doctor'
 ssh workstation 'cd ~/devbox && ./bin/devbox sessions'   # who is connected (a recreate kills them)
 ./bin/sync-omp                       # push this laptop's OMP preset into the devbox
 ./bin/install-agent                  # laptop-side: same agent git override as the devbox
+./bin/laptop-doctor                  # laptop-side acceptance test: keys, configs, override, tokens
 ```

@@ -155,6 +155,21 @@ file is regenerated on every run; nothing of yours is read or edited. Reports wh
 resolves to the launcher and prints the remaining manual steps (PATs, App credentials). See
 [Git identities](git.md#laptop-install).
 
+## `bin/laptop-doctor`
+
+```
+Usage: ./bin/laptop-doctor
+```
+
+Laptop-side, read-only counterpart of `devbox doctor`: no private key on disk and the five named `.pub`
+files all held by the 1Password agent; every `Host` block selecting one `.pub` through that agent with
+`IdentitiesOnly`; both gitconfigs signing through `op-ssh-sign` with the `signing_*.pub` keys and an
+`allowed_signers` file; `omp` resolving to the launcher and every installed agent file identical to the repo
+template; `secrets.env` at mode 600 with both PATs accepted by `gh`, the App pem readable as a key; and the
+four connections (`git@github.com`, `git@work.github.com`, `workstation`, `devbox`) authenticating -
+the two GitHub aliases to two different accounts. Reports every check, exits non-zero if any failed. The
+`devbox-laptop` skill walks the fixes.
+
 ## ❓ FAQ
 
 **Why plain bash instead of bashly, like `workstation`?**
