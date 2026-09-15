@@ -149,8 +149,10 @@ reports whether `omp` resolves to the launcher and prints the same two manual st
 | `DEVBOX_EXTRA_AUTHORIZED_KEYS` | *(empty)*         | Extra keys, newline-separated                                   |
 | `GIT_PERSONAL_NAME` / `_EMAIL` | personal identity | Applied to `~/.gitconfig`                                       |
 | `GIT_WORK_NAME` / `_EMAIL`  | work identity  | Applied to `~/.config/work/.gitconfig`                       |
-| `GIT_PERSONAL_PUBKEY`          | *(empty)*         | Laptop's personal public key; selects the forwarded key for manual git, names the signing key |
-| `GIT_WORK_PUBKEY`           | *(empty)*         | Laptop's work public key; same, for `~/projects/work/**` |
+| `GIT_PERSONAL_PUBKEY`          | *(empty)*         | Laptop's personal authentication public key; selects the forwarded key for manual git |
+| `GIT_PERSONAL_SIGNINGKEY`      | *(empty)*         | Laptop's personal signing public key (`git config user.signingkey` on the laptop) |
+| `GIT_WORK_PUBKEY`           | *(empty)*         | Same, for `~/projects/work/**`                               |
+| `GIT_WORK_SIGNINGKEY`       | *(empty)*         | Same, for `~/projects/work/**`                               |
 
 `.env` holds no secrets: tool credentials go in `~/.config/devbox/secrets.env` inside the container and
 project secrets in each project's own `.env`. See [Secrets](secrets.md).

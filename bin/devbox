@@ -287,11 +287,15 @@ cmd_keys() {
   compose exec -T "${SERVICE}" bash -c '
     set -e
     for identity in personal work; do
-      if [[ -f "$HOME/.ssh/id_${identity}.pub" ]]; then
-        printf "%-10s %s\n" "$identity" "$(cat "$HOME/.ssh/id_${identity}.pub")"
-      else
-        printf "%-10s %s\n" "$identity" "(not set - GIT_${identity^^}_PUBKEY in .env)"
-      fi
+      for kind in id signing; do
+        file="$HOME/.ssh/${kind}_${identity}.pub"
+        var="GIT_${identity^^}_$([[ $kind == id ]] && echo PUBKEY || echo SIGNINGKEY)"
+        if [[ -f "$file" ]]; then
+          printf "%-18s %s\n" "$identity/$kind" "$(cat "$file")"
+        else
+          printf "%-18s %s\n" "$identity/$kind" "(not set - $var in .env)"
+        fi
+      done
     done
     echo
     echo "sshd host key:"

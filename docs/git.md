@@ -40,7 +40,7 @@ agent session uses - see [Agent sessions](#agent-sessions) below):
 ```bash
 cd ~/projects/work/<repo>
 git config user.email        # you@work.example
-git config user.signingkey   # /home/dev/.ssh/id_work.pub
+git config user.signingkey   # /home/dev/.ssh/signing_work.pub
 git remote -v
 ```
 
@@ -156,11 +156,16 @@ Your own commits, made manually (`ssh -A devbox`, or on the laptop directly), ar
 `gpg.format = ssh` against the forwarded 1Password agent:
 
 ```
-user.signingkey = ~/.ssh/id_personal.pub   # or id_work.pub under ~/projects/work/
+user.signingkey = ~/.ssh/signing_personal.pub   # or signing_work.pub under ~/projects/work/
 commit.gpgsign = true
 tag.gpgsign = true
 gpg.ssh.allowedSignersFile = ~/.ssh/allowed_signers
 ```
+
+The signing key is a separate file from the authentication key (`id_*.pub`) because GitHub registers the two
+kinds separately and each account uses a different key for each: signing with the authentication key
+verifies locally and shows *Unverified* on GitHub. `GIT_*_SIGNINGKEY` in `.env` is the public key GitHub
+lists under *SSH signing keys* for that account - on the laptop, `git config user.signingkey` prints it.
 
 `ssh-keygen -Y sign` takes a *public* key file and signs through `SSH_AUTH_SOCK` - no private key needs to be
 on disk for this to work. 1Password prompts for approval on the laptop, per signature. Without a forwarded

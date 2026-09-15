@@ -105,13 +105,14 @@ ssh workstation 'cd ~/devbox && ./bin/devbox keys'       # installed public keys
 ```
 
 The devbox generates no keys of its own - it only installs the laptop's public keys from `.env`
-(`GIT_PERSONAL_PUBKEY`, `GIT_WORK_PUBKEY`). There is nothing to register on GitHub for the devbox: they
-are already your normal laptop keys, already authorized there.
+(`GIT_*_PUBKEY` for authentication, `GIT_*_SIGNINGKEY` for signing). There is nothing to register on GitHub
+for the devbox: they are already your normal laptop keys, already registered there.
 
-1. Set `GIT_PERSONAL_PUBKEY` and `GIT_WORK_PUBKEY` in `.env` to `cat ~/.ssh/<key>.pub` for each identity,
-   then `./bin/devbox up` - until then manual git as that identity over a forwarded agent (`ssh -A devbox`)
-   cannot pick its key. If a previous bootstrap generated a private key, this run deletes it and prints its
-   fingerprint to revoke on GitHub.
+1. Set `GIT_PERSONAL_PUBKEY` / `GIT_WORK_PUBKEY` to the authentication public keys and
+   `GIT_PERSONAL_SIGNINGKEY` / `GIT_WORK_SIGNINGKEY` to the signing public keys (`git config
+   user.signingkey` on the laptop prints each one), then `./bin/devbox up` - until then manual git as that
+   identity over a forwarded agent (`ssh -A devbox`) cannot pick its key, and commits sign with nothing. If a
+   previous bootstrap generated a private key, this run deletes it and prints its fingerprint to revoke.
 2. Put **two fine-grained** GitHub tokens in `~/.config/devbox/secrets.env`: `GH_TOKEN_PERSONAL` and
    `GH_TOKEN_WORK` - `contents: write` on any repository agents push to without the GitHub App installed,
    plus `actions`/`checks` read, plus `issues`/`pull-requests` write only if agents should post. The working

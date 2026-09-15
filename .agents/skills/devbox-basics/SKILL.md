@@ -93,9 +93,10 @@ Authority is enumerated, never ambient. The container has **no 1Password account
 **no private key for GitHub**, and **no Google user credential** (`gcloud` is not installed either). Three
 layers:
 
-- **Identity** - two public keys, installed from `.env` (`GIT_PERSONAL_PUBKEY`, `GIT_WORK_PUBKEY`); no
-  private key at rest. Manual clone/pull/push/sign borrows the laptop's 1Password agent, forwarded per
-  connection (`ssh -A devbox`). Agent sessions authenticate over HTTPS with a per-operation token instead
+- **Identity** - public keys only, installed from `.env` (`GIT_*_PUBKEY` for authentication,
+  `GIT_*_SIGNINGKEY` for signing - GitHub registers the two separately); no private key at rest. Manual
+  clone/pull/push/sign borrows the laptop's 1Password agent, forwarded per connection (`ssh -A devbox`).
+  Agent sessions authenticate over HTTPS with a per-operation token instead
 - **Box-wide tool credentials** - `~/.config/devbox/secrets.env`, plain `KEY=value` at mode 600, sourced by
   every shell including non-interactive `ssh devbox <cmd>`; holds model API keys and one fine-grained GitHub
   token per account (`GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK`). Nothing exports `GH_TOKEN`: the `gh` shim in

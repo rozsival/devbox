@@ -75,8 +75,8 @@ editing those templates does not reach a home that already has them, so delete t
 This matters because the answer to "will I lose my keys / repos / gh login" is a flat no, by construction:
 
 - `.env` is gitignored **and** rsync-excluded, so host-local config survives every push.
-- `${DEVBOX_DATA_DIR}` is a host bind mount, not part of the image: `~/.ssh/id_personal.pub`,
-  `~/.ssh/id_work.pub` (public keys only - the devbox holds no private key), the sshd host key under
+- `${DEVBOX_DATA_DIR}` is a host bind mount, not part of the image: `~/.ssh/id_*.pub` and
+  `~/.ssh/signing_*.pub` (public keys only - the devbox holds no private key), the sshd host key under
   `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/secrets.env`, `~/.config/devbox/agent*.gitconfig`,
   `~/.local/libexec/devbox-agent` (the `omp` launcher, `gh` shim, credential helper and fence), `~/.gitconfig`,
   every project checkout, and the project daemon's images, build cache and named volumes under

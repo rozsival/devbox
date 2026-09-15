@@ -51,9 +51,9 @@ leaves the container running, so a no-op `up` never asks.
   `moshi-hook status`. The non-destructive restart path: the daemon is a child of the entrypoint, so the
   alternative would be recreating the container and killing every SSH session with it. Needed after
   `moshi-hook pair` and after a crash. See [Toolchain](toolchain.md#moshi-and-moshi-hook).
-- **`keys`** - prints `id_personal.pub`, `id_work.pub` (or `not set` if `GIT_*_PUBKEY` is empty in
-  `.env`) and the sshd host-key fingerprint. Not a paste target: they're already your laptop's own keys,
-  already on GitHub.
+- **`keys`** - prints the authentication (`id_*.pub`) and signing (`signing_*.pub`) public keys per identity
+  (or `not set` if the `GIT_*_PUBKEY` / `GIT_*_SIGNINGKEY` value is empty in `.env`) and the sshd host-key
+  fingerprint. Not a paste target: they're already your laptop's own keys, already on GitHub.
 - **`doctor`** - the checks below. It runs all of them, reports each one, and exits non-zero if any failed.
 
 ### What `doctor` checks

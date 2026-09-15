@@ -22,7 +22,7 @@ established once per host.
 
 | Secret                       | Lives in                                  | Established by                        |
 |------------------------------|-------------------------------------------|---------------------------------------|
-| SSH identity public keys (both accounts) | `~/.ssh/id_personal.pub`, `~/.ssh/id_work.pub` | `bootstrap` (devbox) / `install-agent` (laptop), from `GIT_PERSONAL_PUBKEY`/`GIT_WORK_PUBKEY` in `.env` - no private key ever present |
+| SSH identity public keys (both accounts) | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `GIT_*_PUBKEY` / `GIT_*_SIGNINGKEY` in `.env` - no private key ever present |
 | `gh` tokens, one per account | `~/.config/devbox/secrets.env`            | you, two fine-grained GitHub PATs     |
 | Model API keys for OMP       | `~/.config/devbox/secrets.env`            | you, plain values                     |
 | GitHub App (work-app)  | `~/.config/work/work-app/`       | you, `app-id` + `app.pem` at mode 600 - consumed per git operation by `devbox-git-credential` ([Git identities](git.md)) |
@@ -34,9 +34,9 @@ established once per host.
 `bootstrap` prints exactly what is left; nothing below is ever automated, because all of it needs a browser
 or a secret.
 
-1. Set `GIT_PERSONAL_PUBKEY` / `GIT_WORK_PUBKEY` in `.env` to the laptop's public keys
-   (`cat ~/.ssh/<key>.pub`) - they are already registered on GitHub as your normal auth/signing keys; the
-   devbox does not register anything itself. See [Git identities](git.md).
+1. Set `GIT_PERSONAL_PUBKEY` / `GIT_WORK_PUBKEY` (authentication) and `GIT_PERSONAL_SIGNINGKEY` /
+   `GIT_WORK_SIGNINGKEY` (signing) in `.env` to the laptop's public keys - they are already registered on
+   GitHub; the devbox does not register anything itself. See [Git identities](git.md#signing).
 2. Fill `~/.config/devbox/secrets.env` with `GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK` and any model API keys.
    Fine-grained, with `contents: write` on repositories agents push to without the App installed, plus
    `actions`/`checks` read; add `issues`/`pull-requests` write only if agents should post. `gh` picks the
