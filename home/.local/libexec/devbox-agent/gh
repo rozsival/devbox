@@ -32,13 +32,20 @@ if [[ -z ${real} ]]; then
   exit 127
 fi
 
-# The resolver explains itself on stderr when no token is configured for this
-# tree; let that through and still run gh, which then acts unauthenticated and
-# fails on its own terms rather than silently using the other account's token.
-resolver="$(command -v devbox-gh-token || printf '%s' "${HOME}/.local/bin/devbox-gh-token")"
-token="$("${resolver}")" || token=''
-if [[ -n ${token} ]]; then
-  export GH_TOKEN="${token}"
+# An explicit GH_TOKEN in the environment wins, even an empty one: gh gives the
+# variable top precedence itself, and a caller that set it chose its principal
+# deliberately - the work-agents team launcher exports `GH_TOKEN=` so that a
+# shell without its role token has no token at all rather than the personal
+# one this tree would resolve to. Otherwise resolve per directory; the resolver
+# explains itself on stderr when no token is configured for this tree - let
+# that through and still run gh, which then acts unauthenticated and fails on
+# its own terms rather than silently using the other account's token.
+if [[ -z ${GH_TOKEN+set} ]]; then
+  resolver="$(command -v devbox-gh-token || printf '%s' "${HOME}/.local/bin/devbox-gh-token")"
+  token="$("${resolver}")" || token=''
+  if [[ -n ${token} ]]; then
+    export GH_TOKEN="${token}"
+  fi
 fi
 
 exec "${real}" "$@"

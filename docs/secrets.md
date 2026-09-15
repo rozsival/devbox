@@ -88,7 +88,9 @@ gh repo view --json nameWithOwner
 
 `~/.local/libexec/devbox-agent/gh` is a shim ahead of the real `gh` on the PATH; it calls `devbox-gh-token`
 and exports the result for that one invocation. `~/.bashrc.d/devbox.sh` deliberately exports **no**
-`GH_TOKEN` at all.
+`GH_TOKEN` at all. A `GH_TOKEN` that *is* set in the environment - even to the empty string - passes through
+untouched: the caller chose its principal, and an empty one means "no token", which is how a launcher such as
+work-agents' `wt team-omp` keeps an unsourced shell from ever acting with your PAT.
 
 The reason is where an agent's directory comes from: the session is opened in `$HOME` and the agent then works
 with a project as its cwd. A token resolved once at shell startup would therefore pin the personal account for
