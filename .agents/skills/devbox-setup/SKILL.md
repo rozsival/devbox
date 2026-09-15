@@ -125,7 +125,7 @@ APIs gets a per-project service-account key, never `gcloud auth application-defa
 commands: `docs/secrets.md`.
 
 Verification of the identity wiring lives in `docs/git.md`; the short version is
-`ssh -T git@github.com` → `Hi rozsival!` and `ssh -T github-work` → `Hi rozsival-work!`.
+`ssh -T git@github.com` → `Hi rozsival!` and `ssh -T git@work.github.com` → `Hi rozsival-work!`.
 
 ## Optional but recommended, after the phases pass
 

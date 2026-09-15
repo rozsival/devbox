@@ -105,9 +105,16 @@ git config --file "${work_gitconfig}" user.email "${GIT_WORK_EMAIL:-}"
 git config --file "${work_gitconfig}" user.signingkey "${SSH_DIR}/id_work.pub"
 # Rewrites existing `git@github.com:` remotes inside ~/projects/work/ onto the
 # work key. New clones must use the alias directly
-# (`git clone github-work:<org>/<repo> ~/projects/work/<repo>`), because URL
-# rewriting from an includeIf file cannot apply before the repo directory exists.
-git config --file "${work_gitconfig}" url.'github-work:'.insteadOf 'git@github.com:'
+# (`git clone git@work.github.com:<org>/<repo> ~/projects/work/<repo>`), because
+# URL rewriting from an includeIf file cannot apply before the repo directory exists.
+git config --file "${work_gitconfig}" url.'git@work.github.com:'.insteadOf 'git@github.com:'
+# Boxes bootstrapped before the alias was renamed carry a second rewrite for the
+# same URL; leaving both in place makes the chosen remote ambiguous.
+git config --file "${work_gitconfig}" --unset-all url.'github-work:'.insteadOf 2>/dev/null || true
+git config --file "${work_gitconfig}" --remove-section url.'github-work:' 2>/dev/null || true
+while IFS= read -r stale_remote; do
+  register_action "Repoint the stale github-work: remote in ${stale_remote%/.git/config}: git -C ${stale_remote%/.git/config} remote set-url origin git@work.github.com:<org>/<repo>"
+done < <(grep -ls 'github-work:' "${HOME_DIR}/projects/work"/*/.git/config 2>/dev/null || true)
 
 # -- 7. allowed_signers -------------------------------------------------------
 # So `git log --show-signature` verifies locally.

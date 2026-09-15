@@ -69,7 +69,7 @@ Clone inside the container, and let the target directory pick the identity:
 ```bash
 ssh devbox
 git clone git@github.com:rozsival/<repo> ~/projects/rozsival/<repo>       # personal
-git clone github-work:<org>/<repo> ~/projects/work/<repo>          # work, alias required
+git clone git@work.github.com:<org>/<repo> ~/projects/work/<repo>   # work, alias required
 ```
 
 Full rules, including why the work alias cannot be skipped, are in [Git identities](git.md).

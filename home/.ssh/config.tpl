@@ -6,7 +6,7 @@ Host github.com
   IdentityFile /home/dev/.ssh/id_personal
   IdentitiesOnly yes
 
-Host github-work
+Host work.github.com
   HostName github.com
   User git
   IdentityFile /home/dev/.ssh/id_work

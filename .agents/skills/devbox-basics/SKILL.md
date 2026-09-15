@@ -68,10 +68,10 @@ Dev servers are never published. Forward them: `ssh -N -L 5173:localhost:5173 de
 
 - `~/projects/rozsival/` - personal identity, key `~/.ssh/id_personal`, clone with `git@github.com:…`
 - `~/projects/work/` - work identity via `includeIf gitdir:`, key `~/.ssh/id_work`, clone with
-  `github-work:<org>/<repo>`
+  `git@work.github.com:<org>/<repo>`
 
 The alias matters for new clones: URL rewriting configured in an `includeIf` file cannot apply before the repo
-directory exists, so the first clone into `~/projects/work/` must use `github-work:` explicitly.
+directory exists, so the first clone into `~/projects/work/` must use `git@work.github.com:` explicitly.
 Existing `git@github.com:` remotes inside that tree are rewritten by `insteadOf` afterwards.
 
 Both keys are generated inside the container and are registered on GitHub twice - once as an Authentication
