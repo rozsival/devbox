@@ -18,13 +18,13 @@ up instead of reintroduced.
 
 Five 1Password SSH Key items, each exported as one `.pub` file in `~/.ssh`:
 
-| file                    | 1Password item        | used by                                          |
-|-------------------------|-----------------------|--------------------------------------------------|
-| `id_personal.pub`       | personal auth key     | `Host github.com`; GitHub *Authentication* key   |
-| `signing_personal.pub`  | personal signing key  | `~/.gitconfig` `user.signingkey`; GitHub *Signing* key |
-| `id_work.pub`        | work auth key      | `Host work.github.com`; work *Authentication* key |
-| `signing_work.pub`   | work signing key   | `~/.config/work/.gitconfig`; work *Signing* key |
-| `devbox.pub`            | Devbox Laptop         | `Host workstation`, `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS` |
+| file                   | 1Password item       | used by                                                             |
+|------------------------|----------------------|---------------------------------------------------------------------|
+| `id_personal.pub`      | personal auth key    | `Host github.com`; GitHub *Authentication* key                      |
+| `signing_personal.pub` | personal signing key | `~/.gitconfig` `user.signingkey`; GitHub *Signing* key              |
+| `id_work.pub`       | work auth key     | `Host work.github.com`; work *Authentication* key             |
+| `signing_work.pub`  | work signing key  | `~/.config/work/.gitconfig`; work *Signing* key               |
+| `devbox.pub`           | Devbox Laptop        | `Host workstation`, `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS` |
 
 Auth and signing are separate files because GitHub registers the two kinds separately and each account uses
 a different key for each - signing with the auth key verifies locally and shows *Unverified* on GitHub.
@@ -108,20 +108,20 @@ Check: `./bin/laptop-doctor` validates both tokens against GitHub and the pem as
 
 ## When `laptop-doctor` warns
 
-| Warning                                         | Meaning and fix                                                          |
-|-------------------------------------------------|--------------------------------------------------------------------------|
-| `private key(s) on disk`                        | Import into 1Password if not there yet, then delete the file (phase 1)   |
-| `<name>.pub … is not held by the 1Password agent` | Wrong export, or the item is disabled for the agent; re-export via `ssh-add -L` |
-| `1Password SSH agent not reachable`             | Agent off (1Password → Developer → SSH agent) or 1Password locked        |
-| `~/.ssh/config does not parse: … line N`        | Option-name typo; every ssh client (herdr's included) dies before the agent, so 1Password never prompts |
-| `Host …: IdentityFile is …`                     | Block names a private key path or the wrong `.pub` (phase 2)             |
-| `Host devbox: ForwardAgent yes`                 | Remove it; forward explicitly with `ssh -A devbox` when needed           |
-| `user.signingkey is …`                          | Points at the literal key or the auth key; use the `signing_*.pub` path  |
-| `omp resolves to …, not the launcher`           | `./bin/install-agent`, then put `~/.local/bin` first on the PATH         |
-| `differ from the repo templates`                | `./bin/install-agent` (templates changed since the last install)         |
-| `no <account> token` / `token is rejected`      | Fill or re-issue the PAT in `secrets.env` (phase 5)                      |
-| `ssh devbox failed`                             | 1Password locked, or the Devbox Laptop key not yet approved for this app |
-| `both aliases reach <login>`                    | `id_work.pub` is the personal key; re-export it (phase 1)             |
+| Warning                                           | Meaning and fix                                                                                         |
+|---------------------------------------------------|---------------------------------------------------------------------------------------------------------|
+| `private key(s) on disk`                          | Import into 1Password if not there yet, then delete the file (phase 1)                                  |
+| `<name>.pub … is not held by the 1Password agent` | Wrong export, or the item is disabled for the agent; re-export via `ssh-add -L`                         |
+| `1Password SSH agent not reachable`               | Agent off (1Password → Developer → SSH agent) or 1Password locked                                       |
+| `~/.ssh/config does not parse: … line N`          | Option-name typo; every ssh client (herdr's included) dies before the agent, so 1Password never prompts |
+| `Host …: IdentityFile is …`                       | Block names a private key path or the wrong `.pub` (phase 2)                                            |
+| `Host devbox: ForwardAgent yes`                   | Remove it; forward explicitly with `ssh -A devbox` when needed                                          |
+| `user.signingkey is …`                            | Points at the literal key or the auth key; use the `signing_*.pub` path                                 |
+| `omp resolves to …, not the launcher`             | `./bin/install-agent`, then put `~/.local/bin` first on the PATH                                        |
+| `differ from the repo templates`                  | `./bin/install-agent` (templates changed since the last install)                                        |
+| `no <account> token` / `token is rejected`        | Fill or re-issue the PAT in `secrets.env` (phase 5)                                                     |
+| `ssh devbox failed`                               | 1Password locked, or the Devbox Laptop key not yet approved for this app                                |
+| `both aliases reach <login>`                      | `id_work.pub` is the personal key; re-export it (phase 1)                                            |
 
 herdr's saved-machine connections are background ssh through the same agent: a machine flapping between
 `connecting` and `offline` while 1Password is locked is that dependency, not a devbox fault.
@@ -137,10 +137,10 @@ herdr's saved-machine connections are background ssh through the same agent: a m
 
 ## Where the details live
 
-| Topic                                              | File                      |
-|----------------------------------------------------|---------------------------|
-| Key item, ssh config blocks, herdr and 1Password   | `docs/setup.md`           |
-| Both modes of git, launcher, helper, signing       | `docs/git.md`             |
-| Tokens, App credentials, `secrets.env`             | `docs/secrets.md`         |
-| `bin/install-agent`, `bin/laptop-doctor`           | `docs/cli.md`             |
-| Workstation and container side of the same setup   | `devbox-setup` skill      |
+| Topic                                            | File                 |
+|--------------------------------------------------|----------------------|
+| Key item, ssh config blocks, herdr and 1Password | `docs/setup.md`      |
+| Both modes of git, launcher, helper, signing     | `docs/git.md`        |
+| Tokens, App credentials, `secrets.env`           | `docs/secrets.md`    |
+| `bin/install-agent`, `bin/laptop-doctor`         | `docs/cli.md`        |
+| Workstation and container side of the same setup | `devbox-setup` skill |

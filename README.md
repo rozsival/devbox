@@ -35,18 +35,18 @@ on disk, the two **`~/.ssh/config` blocks**, and a non-empty **`BIND_ADDR`**. Al
 
 ## 📚 Documentation
 
-| Doc                                | Read it when                                                      |
-|------------------------------------|-------------------------------------------------------------------|
-| [Setup](docs/setup.md)             | First deploy, `.env` reference, laptop key, `~/.ssh/config`       |
-| [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, Moshi, `devbox shell` |
-| [Git identities](docs/git.md)      | Cloning repos, personal vs work, manual vs agent git, signing  |
-| [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Moshi hooks, agent skills       |
-| [Secrets](docs/secrets.md)         | Box-wide vs per-project, the two `gh` tokens, GCP ADC, App creds  |
+| Doc                                | Read it when                                                                                     |
+|------------------------------------|--------------------------------------------------------------------------------------------------|
+| [Setup](docs/setup.md)             | First deploy, `.env` reference, laptop key, `~/.ssh/config`                                      |
+| [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, Moshi, `devbox shell`                                |
+| [Git identities](docs/git.md)      | Cloning repos, personal vs work, manual vs agent git, signing                                 |
+| [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Moshi hooks, agent skills                                      |
+| [Secrets](docs/secrets.md)         | Box-wide vs per-project, the two `gh` tokens, GCP ADC, App creds                                 |
 | [CLI reference](docs/cli.md)       | Every `bin/devbox`, `bin/push`, `bin/sync-omp`, `bin/install-agent` and `bin/laptop-doctor` flag |
-| [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding              |
-| [Docker](docs/docker.md)           | Project containers, the rootless daemon, `devbox-ports`           |
-| [Operations](docs/operations.md)   | Redeploy, restart, backup, `doctor`, troubleshooting              |
-| [Security model](docs/security.md) | Boundaries, trust assumptions, what an escaped agent reaches      |
+| [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding                                             |
+| [Docker](docs/docker.md)           | Project containers, the rootless daemon, `devbox-ports`                                          |
+| [Operations](docs/operations.md)   | Redeploy, restart, backup, `doctor`, troubleshooting                                             |
+| [Security model](docs/security.md) | Boundaries, trust assumptions, what an escaped agent reaches                                     |
 
 Working on this repo rather than in it? [AGENTS.md](AGENTS.md) holds the conventions, and
 `.agents/skills/` holds four skills that route an agent through the same material:
