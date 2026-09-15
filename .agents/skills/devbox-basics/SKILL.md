@@ -55,7 +55,7 @@ Four facts that answer most questions:
 | `./bin/devbox shell` | Workstation | Recovery when SSH, `authorized_keys` or Tailscale is broken |
 
 All four land as `dev` in the same `/home/dev`. `devbox` is an **SSH config alias**, not a shell alias: a
-`Host devbox` block with `Port 2223`, `User dev` and `IdentityFile ~/.ssh/devbox`. Anything that reads
+`Host devbox` block with `Port 2223`, `User dev` and `IdentityFile ~/.ssh/devbox.pub`. Anything that reads
 `~/.ssh/config` honours it, which is why `rsync`, `git` and `ssh -L` work unchanged.
 
 Moshi is a plain SSH client plus `moshi-hook`, the daemon `bootstrap` installs and `entrypoint.sh` starts;

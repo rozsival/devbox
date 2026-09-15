@@ -21,14 +21,13 @@ bind-mounted home is created owned by them.
 
 ## 1. Create the laptop key
 
-Access uses a dedicated, passphrase-less key rather than the 1Password SSH agent. That is not a preference:
-1Password asks for per-use authorization, and herdr's background saved-machine connections are
-non-interactive - they cannot answer that prompt, so the machine would flap between `connecting` and
-`offline`.
+No private key on the laptop's disk: the key is a 1Password SSH item, and the 1Password agent serves it.
+Only the public half is written next to `~/.ssh/config`, where `IdentityFile` uses it to pick that one key
+out of the agent.
 
-```bash
-ssh-keygen -t ed25519 -N '' -C laptop-devbox -f ~/.ssh/devbox
-```
+1. 1Password → new SSH Key item (ed25519), e.g. *Devbox Laptop*; make sure the 1Password SSH agent is on.
+2. Save its public key as `~/.ssh/devbox.pub` (the item's *public key* field, or
+   `ssh-add -l` to find it and `ssh-add -L | grep <fingerprint>` to print it).
 
 Authorize it in both places:
 
@@ -40,17 +39,27 @@ ssh-copy-id -i ~/.ssh/devbox.pub -p 2222 vit@workstation
 cat ~/.ssh/devbox.pub
 ```
 
+herdr's saved-machine connections run in the background, so they depend on 1Password being unlocked and on
+the key's approval being remembered for herdr. A machine that flaps between `connecting` and `offline` while
+1Password is locked is that dependency, not a devbox fault - unlock, or approve the key for herdr in the
+1Password prompt. If that ever proves unworkable, a dedicated passphrase-less *file* key
+(`ssh-keygen -t ed25519 -N '' -f ~/.ssh/devbox`) is the documented exception: it serves only these two host
+blocks, nothing GitHub-facing.
+
 ## 2. Add the `~/.ssh/config` blocks
 
 Two hosts, same machine, different ports: `2222` is the workstation's own sshd, `2223` is the container's.
 
 ```
+Host *
+  IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+
 Host workstation
   HostName workstation
   Port 2222
   User vit
   IdentitiesOnly yes
-  IdentityFile ~/.ssh/devbox
+  IdentityFile ~/.ssh/devbox.pub
   ServerAliveInterval 30
 
 Host devbox
@@ -58,9 +67,15 @@ Host devbox
   Port 2223
   User dev
   IdentitiesOnly yes
-  IdentityFile ~/.ssh/devbox
+  IdentityFile ~/.ssh/devbox.pub
+  ForwardAgent no
   ServerAliveInterval 30
 ```
+
+`ForwardAgent no` is the default, spelled out: manual git as yourself inside the devbox is an explicit
+`ssh -A devbox` ([Git identities](git.md)), never something herdr's connection carries. The GitHub `Host`
+blocks follow the same pattern - `IdentityFile ~/.ssh/id_personal.pub` for `github.com`,
+`~/.ssh/id_work.pub` for the `work.github.com` alias - so the laptop and the devbox share one layout.
 
 `IdentitiesOnly yes` is load-bearing: without it the agent offers every key it holds and the server rejects
 the connection with `Too many authentication failures` before reaching the right one.
@@ -178,9 +193,11 @@ ssh-ed25519 AAAA…a0iNF iphone"
 environment. Confirm with `docker compose exec devbox ssh-keygen -lf /home/dev/.ssh/authorized_keys`. The
 client still needs to be on the tailnet: the port is published only on `BIND_ADDR`.
 
-**Can I use the 1Password agent anyway?**
-For interactive `ssh devbox`, yes - any key the agent holds works if it is authorized. Only herdr's
-background connections need the file key, so both can coexist.
+**Do I need a key file on disk at all?**
+No. Every key - the devbox key and both GitHub identities - is a 1Password item, and `~/.ssh` holds only the
+`.pub` halves `IdentityFile` selects by. The only reason to ever create a file key is herdr's background
+connection failing while 1Password is locked (see step 1); it would serve those two host blocks and nothing
+else.
 
 **`up` failed with an empty `BIND_ADDR`. Is that a bug?**
 No, it is the preflight doing its job. Run `./bin/devbox env` (Tailscale must be up first), or set the address

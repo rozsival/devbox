@@ -14,16 +14,19 @@ rather than retyping them from memory, so a changed default is picked up instead
 
 ## Phase 1 - the laptop key (on the laptop)
 
+The key is a 1Password SSH item served by the 1Password agent; only its public half is written to
+`~/.ssh/devbox.pub`, which `IdentityFile` uses to select it. Steps and the authorize commands are in
+`docs/setup.md#1-create-the-laptop-key`:
+
 ```bash
-ssh-keygen -t ed25519 -N '' -C laptop-devbox -f ~/.ssh/devbox
 ssh-copy-id -i ~/.ssh/devbox.pub -p 2222 vit@workstation   # host sshd, needed by ./bin/push
 cat ~/.ssh/devbox.pub                                        # goes into .env in phase 3
 ```
 
-Use a dedicated, passphrase-less **file** key, not the 1Password SSH agent. 1Password asks for per-use
-authorization and herdr's saved-machine connections run in the background, non-interactively - they cannot
-answer that prompt, so the machine flaps between `connecting` and `offline`. The 1Password agent can still
-serve interactive `ssh devbox`; the two coexist.
+herdr's saved-machine connections run in the background, so they need 1Password unlocked and the key
+approved for herdr; a machine flapping between `connecting` and `offline` while 1Password is locked is that,
+not a devbox fault. A dedicated passphrase-less file key is the documented fallback if that ever proves
+unworkable.
 
 ## Phase 2 - `~/.ssh/config` (on the laptop)
 
@@ -159,7 +162,7 @@ details in `docs/toolchain.md#agent-skills-and-browser-automation`.
 | `up` aborts on empty `BIND_ADDR`        | Preflight working as designed. Tailscale up, then `env`            |
 | `Too many authentication failures`      | Missing `IdentitiesOnly yes` in the `Host devbox` block            |
 | `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS` or on GitHub; restart    |
-| herdr machine stuck `offline`           | Passphrase-protected or agent-only key; use the file key           |
+| herdr machine stuck `offline`           | 1Password locked or key not approved for herdr; unlock/approve    |
 | `Host key verification failed`          | Data dir was wiped; `ssh-keygen -R '[workstation]:2223'`         |
 | `Permission denied` writing `/home/dev` | `${DEVBOX_DATA_DIR}` not owned by `HOST_UID:HOST_GID`              |
 | SSH itself is the broken thing          | `./bin/devbox shell` on the host bypasses the container's sshd     |

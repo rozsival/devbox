@@ -29,7 +29,7 @@ only `PATH` its background connections get, which is why it is not installed in 
 expands to:
 
 ```bash
-ssh -p 2223 -l dev -o IdentitiesOnly=yes -i ~/.ssh/devbox workstation
+ssh -p 2223 -l dev -o IdentitiesOnly=yes -i ~/.ssh/devbox.pub workstation
 ```
 
 Interactive, then one-shot. Quote the command so `~` expands remotely, not on the laptop:
@@ -119,7 +119,7 @@ The devbox holds no private key; `-A` is required to forward the laptop's 1Passw
 
 **`Too many authentication failures` - why?**
 The agent offered more than six keys before the right one. `IdentitiesOnly yes` plus
-`IdentityFile ~/.ssh/devbox` in the `Host devbox` block fixes it.
+`IdentityFile ~/.ssh/devbox.pub` in the `Host devbox` block fixes it.
 
 **`Host key verification failed` after a rebuild?**
 It should not happen: the host key lives in the bind mount at `/home/dev/.ssh/host/` and survives image and

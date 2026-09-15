@@ -73,12 +73,13 @@ Docker daemon is reachable from the container and rootless, and that `host.docke
 ## Troubleshooting
 
 **`Too many authentication failures`**
-The agent offered more than six keys. Add `IdentitiesOnly yes` + `IdentityFile ~/.ssh/devbox` to the `Host`
-block.
+The agent offered more than six keys. Add `IdentitiesOnly yes` + `IdentityFile ~/.ssh/devbox.pub` to the
+`Host` block.
 
 **herdr machine flaps between `connecting` and `offline`**
-The key needs interactive approval (1Password agent) and background connections cannot answer. Use the
-dedicated file key - see [Setup](setup.md#1-create-the-laptop-key).
+The devbox key is served by the 1Password agent, which is locked or has not approved the key for herdr -
+background connections cannot answer that prompt. Unlock and approve; if it keeps flapping, the dedicated
+file key is the documented exception - see [Setup](setup.md#1-create-the-laptop-key).
 
 **`up` fails with `BIND_ADDR is empty`**
 The preflight working as intended. Run `./bin/devbox env` (Tailscale must be up first).
