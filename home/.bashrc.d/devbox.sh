@@ -42,9 +42,9 @@ fi
 
 # Box-wide tool credentials: plain KEY=value pairs, mode 600, on the bind mount.
 # Sourced outside the interactive guard on purpose - agents and tooling arrive
-# as `ssh devbox <cmd>`, which is non-interactive, and they need GH_TOKEN and
-# model keys just as much as a pane does. `set -a` exports every assignment
-# without repeating `export` in the file.
+# as `ssh devbox <cmd>`, which is non-interactive, and they need the GitHub
+# tokens and model keys just as much as a pane does. `set -a` exports every
+# assignment without repeating `export` in the file.
 #
 # Per-project secrets do NOT belong here: each project keeps its own .env, so a
 # leak stays scoped to one project. That includes GOOGLE_APPLICATION_CREDENTIALS
@@ -54,3 +54,11 @@ if [ -r "$HOME/.config/devbox/secrets.env" ]; then
   . "$HOME/.config/devbox/secrets.env"
   set +a
 fi
+
+# GH_TOKEN is deliberately *not* derived here. The GitHub account belongs to the
+# working directory (~/projects/work/** is work, as in git's includeIf),
+# and an agent's cwd is a project while the shell that started it was opened in
+# $HOME - so a value fixed at shell startup would pin the wrong account for the
+# whole session. The `gh` shim in ~/.local/bin resolves GH_TOKEN_PERSONAL or
+# GH_TOKEN_WORK per invocation instead; anything else that needs the token
+# should ask the same resolver: GH_TOKEN=$(devbox-gh-token). See docs/secrets.md.

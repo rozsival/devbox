@@ -1,6 +1,6 @@
 ---
 name: devbox-setup
-description: Sets up the devbox end to end - the dedicated laptop SSH key, the two ~/.ssh/config host blocks, the first deploy and .env on the workstation, herdr machine registration, and the in-container manual steps (GitHub keys, GH_TOKEN in secrets.env, GitHub App credentials). Use this whenever someone is installing or re-installing the devbox, onboarding a new laptop, says they cannot connect, gets "Too many authentication failures", "Permission denied (publickey)", an empty BIND_ADDR preflight failure, or a herdr machine stuck offline, or asks which manual steps are still outstanding.
+description: Sets up the devbox end to end - the dedicated laptop SSH key, the two ~/.ssh/config host blocks, the first deploy and .env on the workstation, herdr machine registration, and the in-container manual steps (GitHub keys, the per-account GH_TOKEN_PERSONAL/GH_TOKEN_WORK tokens in secrets.env, GitHub App credentials). Use this whenever someone is installing or re-installing the devbox, onboarding a new laptop, says they cannot connect, gets "Too many authentication failures", "Permission denied (publickey)", an empty BIND_ADDR preflight failure, or a herdr machine stuck offline, or asks which manual steps are still outstanding.
 ---
 
 # devbox setup
@@ -106,11 +106,13 @@ ssh workstation 'cd ~/devbox && ./bin/devbox keys'       # the two public keys +
 
 1. Add `id_personal.pub` **and** `id_work.pub` to GitHub twice each - once as an Authentication key, once
    as a Signing key. Without the Signing key registration commits push fine but show as unverified.
-2. Put a **fine-grained** GitHub token in `~/.config/devbox/secrets.env` as `GH_TOKEN` - contents, actions
-   and checks read, plus issues or pull-requests write only if agents should post. Prefer this over
-   `gh auth login --web`, whose OAuth token carries account-wide write scopes in plaintext (no keyring in
-   the container). `gh auth status` succeeds on `GH_TOKEN` alone. `git push` needs no token: it goes over
-   SSH.
+2. Put **two fine-grained** GitHub tokens in `~/.config/devbox/secrets.env`: `GH_TOKEN_PERSONAL` and
+   `GH_TOKEN_WORK` - contents, actions and checks read, plus issues or pull-requests write only if agents
+   should post. The working directory picks which one `gh` uses (`~/projects/work/**` is work, as with
+   git identities); `devbox-gh-token --account` reports the choice. Do **not** use `gh auth login`: its web
+   flow cannot request less than `repo` + `read:org` + `gist`, i.e. non-expiring account-wide write, stored
+   in plaintext (no keyring in the container). A plain box-wide `GH_TOKEN` still works but overrides both and
+   disables the per-directory choice. `git push` needs no token: it goes over SSH.
 3. Fill the rest of `~/.config/devbox/secrets.env` (mode 600) with plain `KEY=value` pairs for credentials
    every project shares - model API keys for OMP. It is sourced by every shell, interactive or not. Never
    put a single project's secrets there; those go in that project's own `.env`.

@@ -60,8 +60,7 @@ All four land as `dev` in the same `/home/dev`. `devbox` is an **SSH config alia
 
 Moshi is a plain SSH client plus `moshi-hook`, the daemon `bootstrap` installs and `entrypoint.sh` starts;
 without it the phone gets a terminal but no notifications or approvals. Its phone key belongs in
-`DEVBOX_EXTRA_AUTHORIZED_KEYS`, because the entrypoint rewrites `authorized_keys` on every start
-(`docs/toolchain.md`).
+`DEVBOX_EXTRA_AUTHORIZED_KEYS`, because the entrypoint rewrites `authorized_keys` on every start (`docs/toolchain.md`).
 
 Dev servers are never published. Forward them: `ssh -N -L 5173:localhost:5173 devbox`.
 
@@ -92,8 +91,10 @@ and **no Google user credential** (`gcloud` is not installed either). Three laye
 
 - **Identity** - the two SSH keys, generated in the container, for clone/pull/push and signing
 - **Box-wide tool credentials** - `~/.config/devbox/secrets.env`, plain `KEY=value` at mode 600, sourced by
-  every shell including non-interactive `ssh devbox <cmd>`; holds `GH_TOKEN` (fine-grained, read-mostly) and
-  model API keys
+  every shell including non-interactive `ssh devbox <cmd>`; holds model API keys and one fine-grained GitHub
+  token per account (`GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK`). Nothing exports `GH_TOKEN`: the `gh` shim in
+  `~/.local/bin` resolves the token per invocation from the working directory, the same rule that picks a git
+  identity (`devbox-gh-token --account` reports it)
 - **Per project** - that project's own `.env`, rendered on the laptop and copied in, so a leak stays scoped
   to one project. GCP keys are per-project too, via `GOOGLE_APPLICATION_CREDENTIALS`
 
@@ -111,7 +112,7 @@ hit in practice.
 | Getting a shell, cloning, port forwarding            | `docs/connecting.md` |
 | Identity split, signing, verification                | `docs/git.md`        |
 | Installed tools, pinned versions, agent skills       | `docs/toolchain.md`  |
-| Secret layers, `secrets.env`, `GH_TOKEN`, GCP ADC    | `docs/secrets.md`    |
+| Secret layers, `secrets.env`, `gh` tokens, GCP ADC   | `docs/secrets.md`    |
 | Every `bin/devbox` / `bin/push` / `bin/sync-omp` cmd | `docs/cli.md`        |
 | Exposure model, why UFW cannot help                  | `docs/networking.md` |
 | Redeploy, restart, backup, `doctor`, troubleshooting | `docs/operations.md` |

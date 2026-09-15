@@ -20,14 +20,14 @@ anything inside can leave, and put nothing inside that is not worth its own blas
 Everything lives on the `/home/dev` bind mount, so all of it survives container and image rebuilds and is
 established once per host.
 
-| Secret                      | Lives in                                  | Established by                        |
-|-----------------------------|-------------------------------------------|---------------------------------------|
-| SSH keys (both identities)  | `~/.ssh/id_personal`, `~/.ssh/id_work` | `bootstrap`, passphrase-less          |
-| `GH_TOKEN` for `gh`         | `~/.config/devbox/secrets.env`            | you, a fine-grained GitHub PAT        |
-| Model API keys for OMP      | `~/.config/devbox/secrets.env`            | you, plain values                     |
-| GitHub App (work-app) | `~/.config/work/work-app/`       | you, `app-id` + `app.pem` at mode 600 |
-| Per-project secrets         | `<project>/.env`                          | you, rendered on the laptop           |
-| GCP service-account key     | `~/.config/gcloud/<gcp-project>-*.json`   | you, one per project, mode 600        |
+| Secret                       | Lives in                                  | Established by                        |
+|------------------------------|-------------------------------------------|---------------------------------------|
+| SSH keys (both identities)   | `~/.ssh/id_personal`, `~/.ssh/id_work` | `bootstrap`, passphrase-less          |
+| `gh` tokens, one per account | `~/.config/devbox/secrets.env`            | you, two fine-grained GitHub PATs     |
+| Model API keys for OMP       | `~/.config/devbox/secrets.env`            | you, plain values                     |
+| GitHub App (work-app)  | `~/.config/work/work-app/`       | you, `app-id` + `app.pem` at mode 600 |
+| Per-project secrets          | `<project>/.env`                          | you, rendered on the laptop           |
+| GCP service-account key      | `~/.config/gcloud/<gcp-project>-*.json`   | you, one per project, mode 600        |
 
 ## Manual checklist
 
@@ -36,8 +36,9 @@ or a secret.
 
 1. Add both keys from `./bin/devbox keys` to GitHub **twice each** - once as an Authentication key, once as a
    Signing key. See [Git identities](git.md#github-registration).
-2. Fill `~/.config/devbox/secrets.env` with `GH_TOKEN` and any model API keys, then reconnect so the new
-   shell sources it.
+2. Fill `~/.config/devbox/secrets.env` with `GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK` and any model API keys.
+   `gh` picks the tokens up immediately - `devbox-gh-token` reads the file itself - but reconnect anyway so
+   the model keys reach already-open shells.
 3. Place the work-app GitHub App credentials in `~/.config/work/work-app/`
    (`app-id`, `app.pem` at mode 600) if you need them.
 
@@ -50,7 +51,8 @@ inside `set -a` / `set +a`, **outside** the interactive guard - agents and tooli
 ahead of Ubuntu's skeleton `~/.bashrc` precisely so that path still reads it.
 
 ```dotenv
-GH_TOKEN=github_pat_...
+GH_TOKEN_PERSONAL=github_pat_...
+GH_TOKEN_WORK=github_pat_...
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
@@ -59,16 +61,75 @@ agent working on every other project, which defeats the layering.
 
 ### `gh`
 
-Use a **fine-grained personal access token** in `GH_TOKEN`, not `gh auth login --web`. The web flow stores an
-OAuth token carrying `repo`, `workflow`, `gist` and `read:org` - write access to every repository both
-accounts can reach - in plaintext in `~/.config/gh/hosts.yml`, because the container has no keyring. A
-fine-grained token expires, names its repositories, and is revocable without touching the laptop.
+**One fine-grained token per GitHub account, chosen by the working directory** - the same rule that selects a
+git identity, so one mental model covers both:
 
-Minimum useful scopes: contents, actions and checks **read** for dashboards and pipeline monitoring. Add
-issues or pull-requests **write** only if agents should post. `git push` needs none of them - that goes over
-SSH with the container's own keys.
+| Working directory       | Variable            | Account  |
+|-------------------------|---------------------|----------|
+| everywhere else         | `GH_TOKEN_PERSONAL` | personal |
+| `~/projects/work/**` | `GH_TOKEN_WORK`  | work  |
 
-`gh auth status` succeeds on `GH_TOKEN` alone, so `bootstrap` stops asking once it is set.
+Minimum useful permissions per token: contents, actions and checks **read** for dashboards and pipeline
+monitoring. Add issues or pull-requests **write** only if agents should post. `git push` needs neither - that
+goes over SSH with the container's own keys ([Git identities](git.md)).
+
+```bash
+cd ~/projects/work/<repo>
+devbox-gh-token --account     # work
+gh repo view --json nameWithOwner
+```
+
+#### Why a shim rather than an exported `GH_TOKEN`
+
+`~/.local/bin/gh` is a shim ahead of `/usr/bin/gh` on the PATH; it calls `devbox-gh-token` and exports the
+result for that one invocation. `~/.bashrc.d/devbox.sh` deliberately exports **no** `GH_TOKEN` at all.
+
+The reason is where an agent's directory comes from: the session is opened in `$HOME` and the agent then works
+with a project as its cwd. A token resolved once at shell startup would therefore pin the personal account for
+the whole session, including inside `~/projects/work/`. Resolving per invocation is what makes the account
+follow the tree.
+
+Resolution order inside `devbox-gh-token`, first hit wins:
+
+1. an explicit `GH_TOKEN` in the environment - a deliberate one-off, and what a pre-split `secrets.env` holds
+2. the account's variable in the environment, from a shell that sourced `secrets.env`
+3. the same variable read **directly out of `secrets.env`**
+
+Step 3 is why `gh` needs no reconnect after you add a token, and why the resolver's error message is honest:
+the file is the only place it looks.
+
+Three consequences worth knowing:
+
+- `echo $GH_TOKEN` prints nothing. That is correct. Anything that reads the token itself - a `curl` against
+  the API, a project script - should ask the resolver: `GH_TOKEN=$(devbox-gh-token)`.
+- An explicit `GH_TOKEN` wins over both variables, for `gh` and for the resolver. Use it for a deliberate
+  one-off (`GH_TOKEN=$OTHER gh ...`); a permanent `GH_TOKEN=` line in `secrets.env` disables the
+  per-directory choice entirely, and `bootstrap` warns about exactly that line.
+- A missing token for the tree you are in is an error, not a fallback: `devbox-gh-token` exits non-zero and
+  explains which variable is unset, while `gh` still runs (unauthenticated) so `gh --version` and
+  `gh config set` keep working on a box with no tokens yet. Falling back to the other account would act as
+  the wrong identity.
+
+#### Why not `gh auth login`
+
+Its web/device flow cannot ask for less than `repo`, `read:org` and `gist` - the floor is hard-coded in `gh`
+(`minimumScopes` in `internal/authflow`), and `--scopes` only *adds* to it. `repo` on a classic token is
+read **and write** on every repository either account can reach, including org repos, with no expiry and no
+repository allowlist; a fine-grained PAT names its repositories, expires, and is revocable on its own. So the
+web flow is strictly *broader* than what is configured here, not narrower.
+
+`gh`'s own multi-account primitive - `gh auth login --with-token` per account plus `gh auth switch` - is a
+genuine alternative, and with fine-grained PATs it keeps the scoping. It is not used here for two reasons:
+`auth switch` mutates one global "active account" in `~/.config/gh`, which two agents working in two orgs at
+once would race, and any `GH_TOKEN` in the environment makes every stored account inert (`gh auth switch`
+then refuses outright: *"the value of the GH_TOKEN environment variable is being used for authentication"*).
+Per-directory resolution keeps `gh` stateless instead.
+
+Note the container has **no keyring**, so `gh` would store a login in plaintext in `~/.config/gh/hosts.yml` -
+the same posture as `secrets.env` on the same bind mount. Plaintext is therefore not what decides this; scope
+breadth and the global active account are.
+
+`gh auth status` succeeds on a resolved token alone, so `bootstrap` stops asking once both are set.
 
 ## Per-project secrets
 
@@ -195,6 +256,31 @@ That is exactly what it is for now - plain values, mode 600. Keep it to credenti
 now sourced directly, which exports the literal `op://…` string into every shell. Replace those lines with
 plain values (render them on the laptop). A leftover `secrets.work.env` is reported the same way and can
 simply be deleted; one `secrets.env` now serves every project.
+
+**I already had a single box-wide `GH_TOKEN`. What now?**
+It keeps working - the resolver returns it for every directory - but it overrides both per-account variables,
+so nothing is ever chosen per tree. `bootstrap` prints exactly that. Rename it to `GH_TOKEN_PERSONAL`, issue a
+second fine-grained token for the other account as `GH_TOKEN_WORK`, and reconnect.
+
+**`echo $GH_TOKEN` is empty - is `gh` broken?**
+No. Nothing exports `GH_TOKEN`; the `gh` shim resolves it per invocation from the working directory. Check
+with `devbox-gh-token --account` and `gh auth status`. For your own API calls use
+`GH_TOKEN=$(devbox-gh-token)`.
+
+**`devbox-gh-token: GH_TOKEN_WORK is unset`**
+You are inside `~/projects/work/**` and only the personal token is configured. This is deliberate: there is
+no fallback, because the personal token acting on an work repo is the wrong identity, not a degraded one.
+Add the variable, or work outside that tree.
+
+**Can I add a third account?**
+Three places in this repo, all named on purpose: a branch in `home/.local/bin/devbox-gh-token` for the new
+directory prefix and its variable, a `<name>:<directory>` entry in `container/bootstrap.sh` §11's account loop (so the
+checklist covers it), and - if it also needs its own git identity - an `includeIf` for the same prefix
+alongside the work one. Keep the directory rule identical in all three.
+
+**Why not just `gh auth switch` between accounts?**
+Because `GH_TOKEN` - however it is set - makes every account stored in `~/.config/gh` inert, and the "active
+account" is one global value that concurrent agents would race. See [Why not `gh auth login`](#why-not-gh-auth-login).
 
 **Does OMP see my keys in plaintext?**
 `~/.omp/agent/config.yml` sets `secrets: { enabled: true }`, which obfuscates environment secrets before they

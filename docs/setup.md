@@ -177,7 +177,8 @@ they diverge.
 **I already have a devbox at the old data path. What does `sudo ./bin/rootless-docker` do to it?**
 Nothing while the container is running - it refuses and tells you to `./bin/devbox down` first. Stopped, it
 `mv`s the old `DEVBOX_DATA_DIR` to `/home/dev` and chowns the tree to the new `dev` user. Keys, cloned repos
-and `gh auth login` all survive: it is a move, not a recreate. Finish with `./bin/devbox rebuild`.
+and `~/.config/devbox/secrets.env` all survive: it is a move, not a recreate. Finish with
+`./bin/devbox rebuild`.
 
 **Where does the data live on the host?**
 `${DEVBOX_DATA_DIR}` (default `/home/dev`), owned by `HOST_UID:HOST_GID`. See [Operations](operations.md) for

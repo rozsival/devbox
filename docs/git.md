@@ -56,14 +56,29 @@ gh api repos/<owner>/<repo>/commits/<sha> --jq .commit.verification    # verifie
 Each key must be added to GitHub **twice** - once as an Authentication key, once as a Signing key. They are
 separate key types; one registration does not imply the other.
 
+All of this runs **on the laptop**, where `gh` has a real OAuth login. The keys themselves live in the
+container, so pipe them across rather than naming a local path:
+
 ```bash
 ssh workstation 'cd ~/devbox && ./bin/devbox keys'    # prints both public keys + host-key fingerprint
-gh ssh-key add ~/.ssh/id_personal.pub --type authentication --title devbox-personal
-gh ssh-key add ~/.ssh/id_personal.pub --type signing     --title devbox-personal
+
+gh auth refresh -h github.com -s admin:ssh_signing_key  # once, if the login lacks it
+ssh devbox 'cat ~/.ssh/id_personal.pub' | gh ssh-key add - --type authentication --title devbox-personal
+ssh devbox 'cat ~/.ssh/id_personal.pub' | gh ssh-key add - --type signing        --title devbox-personal
 ```
 
-`gh ssh-key add --type signing` needs the `admin:ssh_signing_key` scope:
-`gh auth refresh -h github.com -s admin:ssh_signing_key`. Pasting into the GitHub web UI works equally well.
+`--type signing` needs `admin:ssh_signing_key`, which the login only carries if it was ever requested - hence
+the `auth refresh`, which is legitimate here because this is an OAuth login on your laptop.
+
+**`id_work.pub` goes to the work account, not this one.** The laptop's active `gh` login is the personal
+account, so either switch first (`gh auth switch --user <work-login>`, then repeat both `ssh-key add` calls
+with `id_work.pub` and a `devbox-work` title) or paste that key into the GitHub web UI while signed in
+as work.
+
+Do **not** try any of this inside the devbox. `gh ssh-key add` writes account-level settings that the
+read-mostly tokens in `secrets.env` deliberately do not cover, and `gh auth refresh` cannot rescue it there:
+it only re-runs an OAuth login, and it refuses outright while a `GH_TOKEN` is in the environment. Pasting the
+printed keys into the web UI works equally well - that is why `./bin/devbox keys` prints them.
 
 Verify auth per identity:
 
@@ -101,5 +116,8 @@ The key is missing as a *Signing* key, or the commit email is not attached to th
 `git log --show-signature` passing while GitHub says unverified always means the former.
 
 **How do I run two `gh` accounts?**
-`gh auth login` once per account, then `gh auth switch --user <login>`. Both tokens persist in
-`~/.config/gh` on the bind mount. See [Secrets](secrets.md).
+The same way git picks an identity: by directory. `GH_TOKEN_PERSONAL` and `GH_TOKEN_WORK` live in
+`~/.config/devbox/secrets.env`, and the `gh` shim resolves one per invocation from the working directory
+(`devbox-gh-token --account` reports which). `gh auth login` + `gh auth switch` is **not** the path here: any
+`GH_TOKEN` in the environment makes stored accounts inert, and its web flow cannot request less than
+account-wide `repo` write. See [Secrets](secrets.md#gh).

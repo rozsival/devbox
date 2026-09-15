@@ -176,7 +176,7 @@ chmod 700 "${secrets_dir}"
 secrets_file="${secrets_dir}/secrets.env"
 if [[ ! -f "${secrets_file}" ]]; then
   install -m 600 "${TEMPLATE_DIR}/.config/devbox/secrets.env.example" "${secrets_file}"
-  register_action "Fill ${secrets_file} with GH_TOKEN and any model API keys, then reconnect."
+  register_action "Fill ${secrets_file} with GH_TOKEN_PERSONAL, GH_TOKEN_WORK and any model API keys, then reconnect."
 fi
 # A credential file that became group- or world-readable is worth fixing
 # silently; it is on the bind mount and survives every rebuild.
@@ -197,24 +197,53 @@ if [[ -f "${secrets_dir}/secrets.work.env" ]]; then
   register_action "Delete the orphaned ${secrets_dir}/secrets.work.env (the per-account op files are gone; one secrets.env now serves every project)"
 fi
 
-# Read here so the gh check below sees the same GH_TOKEN an interactive shell
-# would: bootstrap runs from the entrypoint and under `docker compose exec`,
-# neither of which sources ~/.bashrc.
-if [[ -r "${secrets_file}" ]]; then
-  set -a
-  # shellcheck source=/dev/null # a runtime credential file, not repo content
-  . "${secrets_file}"
-  set +a
+# -- 11. gh -------------------------------------------------------------------
+# One fine-grained token per GitHub account, chosen from the working directory
+# by the same rule git uses for identities (~/projects/work/** is work).
+# The `gh` shim in ~/.local/bin resolves it per invocation, because an agent's
+# cwd is a project while the shell that started it was opened in $HOME - a
+# GH_TOKEN exported at startup would pin one account for the whole session.
+#
+# `gh auth login` is deliberately not part of this: its web flow can only ask
+# for `repo` + `read:org` + `gist` (the floor is hard-coded upstream; `--scopes`
+# only adds), i.e. non-expiring read/write on every repo either account can
+# reach, stored in plaintext because the container has no keyring.
+install -d -m 755 "${HOME_DIR}/.local/bin"
+install -m 755 "${TEMPLATE_DIR}/.local/bin/devbox-gh-token" "${HOME_DIR}/.local/bin/devbox-gh-token"
+install -m 755 "${TEMPLATE_DIR}/.local/bin/gh" "${HOME_DIR}/.local/bin/gh"
+
+# Every `gh` here goes through that shim: ~/.local/bin is first on the PATH
+# exported at the top of this script. stderr is dropped because the shim
+# reports an unconfigured account on every call, and the checklist below says
+# the same thing once, in the place people actually read.
+gh config set git_protocol ssh 2>/dev/null
+
+# A plain GH_TOKEN= line still works - the resolver returns it for every
+# directory - but it overrides both per-account variables, so nothing is ever
+# chosen per tree. Grep the file rather than the environment: this is advice
+# about secrets.env, not about whatever the caller happens to export.
+if grep -qE '^[[:space:]]*GH_TOKEN=' "${secrets_file}" 2>/dev/null; then
+  log_warn "${secrets_file} sets a box-wide GH_TOKEN; it overrides the per-account tokens."
+  register_action "Split the box-wide GH_TOKEN in ${secrets_file} into GH_TOKEN_PERSONAL and GH_TOKEN_WORK (as written, the per-directory choice never applies)"
 fi
 
-# -- 11. gh -------------------------------------------------------------------
-# `gh auth status` also succeeds on a GH_TOKEN from secrets.env, which is the
-# intended path: a fine-grained, expiring, read-mostly token beats the full
-# read/write OAuth scopes `gh auth login --web` stores in plaintext here.
-gh config set git_protocol ssh
-if ! gh auth status >/dev/null 2>&1; then
-  register_action "Add a fine-grained GitHub token to ${secrets_file} as GH_TOKEN (scopes: contents/actions/checks read, plus issues or pull-requests write only if agents should post)"
-fi
+# One entry per account: the directory that selects it, which is the only input
+# the resolver takes. Adding an account means adding a line here and a branch in
+# home/.local/bin/devbox-gh-token - the same two places docs/secrets.md names.
+for account in "personal:${HOME_DIR}" "work:${HOME_DIR}/projects/work"; do
+  name="${account%%:*}"
+  # Ask the resolver instead of reading the variables here, so this check
+  # exercises the exact path `gh` takes - including secrets.env being read
+  # directly - and needs no assumption about bootstrap's own cwd.
+  if ! token="$(devbox-gh-token "${account#*:}" 2>/dev/null)" || [[ -z "${token}" ]]; then
+    register_action "Add a fine-grained GitHub token for the ${name} account to ${secrets_file} as GH_TOKEN_$(printf '%s' "${name}" | tr '[:lower:]' '[:upper:]') (scopes: contents/actions/checks read, plus issues or pull-requests write only if agents should post)"
+  elif ! GH_TOKEN="${token}" timeout 15 gh auth status >/dev/null 2>&1; then
+    # Present but rejected - expired, revoked, or GitHub unreachable; a
+    # variable-is-set check cannot see any of those. `timeout` because this runs
+    # from the entrypoint before `exec sshd`: no check may delay SSH access.
+    register_action "The GitHub token for the ${name} account is rejected by gh - check expiry and revocation (or network, if this box just came up) and re-issue it in ${secrets_file}"
+  fi
+done
 
 # -- 12. OMP config -----------------------------------------------------------
 omp_config_dir="${HOME_DIR}/.omp/agent"

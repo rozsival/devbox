@@ -41,7 +41,7 @@ attributable:
 | Clone, pull, push       | `~/.ssh/id_personal`, `~/.ssh/id_work` | what those GitHub accounts can push |
 | Commit author + signing | the same keys + the two-identity config   | verification only, grants nothing   |
 | Agent commits           | work-app GitHub App                 | the App's repos and permissions     |
-| Dashboards, CI, issues  | fine-grained PAT in `GH_TOKEN`            | named repos, read-mostly, expiring  |
+| Dashboards, CI, issues  | one fine-grained PAT per GitHub account   | named repos, read-mostly, expiring  |
 | LLM inference           | per-project GCP service-account key       | one dev project, predict-only       |
 | Project secrets         | that project's `.env`                     | one project                         |
 
@@ -50,9 +50,9 @@ Notably absent: any 1Password account (`op` is not installed) and any Google use
 
 ## What an agent inside the devbox can reach
 
-**Can**: the whole `/home/dev` tree - both SSH keys, `GH_TOKEN`, the App private key, every project's `.env`
-and every GCP key - plus the internet, the Tailnet from the container's network namespace, and the rootless
-project Docker daemon ([Docker](docker.md)).
+**Can**: the whole `/home/dev` tree - both SSH keys, both `gh` tokens, the App private key, every project's
+`.env` and every GCP key - plus the internet, the Tailnet from the container's network namespace, and the
+rootless project Docker daemon ([Docker](docker.md)).
 
 **Cannot**: the host filesystem outside the data dir and world-readable paths, the host's **root** Docker
 daemon, the devbox container's own lifecycle, root inside the container, any port that is not published, and
@@ -75,7 +75,7 @@ These are known and deliberate, not gaps to be closed later:
 3. **No isolation between projects.** One container, one `dev` user, one bind mount: an agent in project A can
    read project B's `.env` and GCP key. Cloning something less trusted is the point at which per-project
    containers or separate users stop being over-engineering.
-4. **Secrets are plaintext at rest.** `.env` files, `GH_TOKEN` and key files are unencrypted on the
+4. **Secrets are plaintext at rest.** `.env` files, the `gh` tokens and key files are unencrypted on the
    workstation's disk, readable by the host user. Workstation disk encryption and host account hygiene are
    part of this security model, not separate from it.
 5. **The project Docker daemon widens reach to the `dev` account.** Anything in the container can start a

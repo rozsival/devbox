@@ -45,7 +45,10 @@ blank line.
   image installed under the home directory. `node`, `npm`, `npx`, `corepack` and `pnpm` are symlinked into
   `/usr/local/bin` so they resolve without a login shell.
 - **`~/.local/bin`** - OMP and `moshi-hook`, installed by `bootstrap` instead of baked into the image so
-  `omp update` and `moshi-hook update` work without a rebuild.
+  `omp update` and `moshi-hook update` work without a rebuild. Also the `gh` shim and `devbox-gh-token`,
+  installed by `bootstrap` from `home/.local/bin/`: the shim is *meant* to shadow `/usr/bin/gh`, because it
+  picks the GitHub account from the working directory per invocation ([Secrets](secrets.md#gh)). `gh --version`
+  in `doctor` therefore exercises the shim too.
 - **`/usr/local/lib/docker/cli-plugins`** - where `docker compose` and `docker buildx` live as CLI plugins.
   Only the client ships in the image; the daemon is the host's rootless `dev` daemon (see below).
 
@@ -98,11 +101,11 @@ running OMP session has to be restarted to pick the new preset up.
 give push notifications, lock-screen approvals or Chat View: those come from `moshi-hook`, a companion
 daemon that `bootstrap` installs into `~/.local/bin` and the entrypoint starts.
 
-| Piece                       | Where it lives                            | What breaks without it                  |
-|-----------------------------|-------------------------------------------|-----------------------------------------|
-| `moshi-hook` binary         | `~/.local/bin` (bind mount, self-updating) | Everything below                        |
-| OMP extension               | `~/.omp/agent/extensions/moshi-hooks.ts`   | No lifecycle events are emitted at all  |
-| Daemon (`moshi-hook serve`) | Started by `container/entrypoint.sh`       | Events go nowhere; socket-only silence  |
+| Piece                       | Where it lives                             | What breaks without it                   |
+|-----------------------------|--------------------------------------------|------------------------------------------|
+| `moshi-hook` binary         | `~/.local/bin` (bind mount, self-updating) | Everything below                         |
+| OMP extension               | `~/.omp/agent/extensions/moshi-hooks.ts`   | No lifecycle events are emitted at all   |
+| Daemon (`moshi-hook serve`) | Started by `container/entrypoint.sh`       | Events go nowhere; socket-only silence   |
 | Pairing                     | One manual `moshi-hook pair --token`       | Daemon runs but sends nothing to a phone |
 
 OMP is a Tier A agent for Moshi, so a paired devbox gets the inbox, approvals and the native transcript

@@ -70,8 +70,8 @@ the host's root Docker daemon.
   nor a missing hook daemon may cost SSH access. `moshi-hook serve` is backgrounded rather than supervised
   because there is no systemd here: it becomes a child of `sshd` and is reaped by tini
 - `container/bootstrap.sh` - idempotent user setup: OMP, both SSH identities, `~/.ssh/config`, known_hosts,
-  the two-identity Git config, shell, `gh`, the box-wide `secrets.env`, `moshi-hook` plus its OMP
-  extension, and the printed manual checklist
+  the two-identity Git config, shell, `gh` (the `~/.local/bin` shim plus the per-account token checklist),
+  the box-wide `secrets.env`, `moshi-hook` plus its OMP extension, and the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels) and `MaxSessions 32` (herdr channels)
 - `container/skills.sh` - optional, explicitly invoked (`./bin/devbox skills`): pinned `agent-browser` CLI +
@@ -79,7 +79,11 @@ the host's root Docker daemon.
   `npx skills add --global --agent universal --yes`. Chrome's shared libraries are in the `Dockerfile`
   because `--with-deps` needs root. Global npm installs pass `--prefix "$HOME/.local"` per call so the bins
   stay on the bind mount; never export `NPM_CONFIG_PREFIX` - nvm then refuses to activate its default Node
-- `home/` - templates installed into `/home/dev` by bootstrap; generated files, not user-edited
+- `home/` - templates installed into `/home/dev` by bootstrap; generated files, not user-edited.
+  `home/.local/bin/gh` deliberately shadows `/usr/bin/gh` on the PATH: with `devbox-gh-token` it resolves
+  `GH_TOKEN_PERSONAL` or `GH_TOKEN_WORK` per invocation from the working directory, on the same
+  `~/projects/work/**` rule as git's `includeIf`, because an agent's cwd is a project while its shell was
+  opened in `$HOME`. Nothing exports `GH_TOKEN`; `gh auth login` is rejected by design (`docs/secrets.md`)
 - `container/devbox-ports` - symlinked to `/usr/local/bin` by the `Dockerfile`, so a host edit is live
   without a rebuild; mirrors published project ports onto the container's own `127.0.0.1`
 - `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`,

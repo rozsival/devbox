@@ -437,10 +437,10 @@ cmd_doctor() {
     case "$(moshi-hook status 2>/dev/null || true)" in *unpaired*) echo unpaired ;; *) echo paired ;; esac
   ' 2>/dev/null | tr -cd 'a-z')"
   case "${hook_state}" in
-    paired) log_success 'moshi-hook daemon running and paired' ;;
-    unpaired) log_warn "moshi-hook daemon running but unpaired - pair in the container ('moshi-hook pair --token <token>'), then './bin/devbox hook'" ;;
-    stopped) fail "moshi-hook is installed but not running - './bin/devbox hook' restarts it without touching SSH sessions" ;;
-    *) fail "moshi-hook is not installed - run './bin/devbox bootstrap'" ;;
+  paired) log_success 'moshi-hook daemon running and paired' ;;
+  unpaired) log_warn "moshi-hook daemon running but unpaired - pair in the container ('moshi-hook pair --token <token>'), then './bin/devbox hook'" ;;
+  stopped) fail "moshi-hook is installed but not running - './bin/devbox hook' restarts it without touching SSH sessions" ;;
+  *) fail "moshi-hook is not installed - run './bin/devbox bootstrap'" ;;
   esac
 
   # The project daemon must be reachable from inside the container and must be
