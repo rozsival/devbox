@@ -126,6 +126,13 @@ It should not happen: the host key lives in the bind mount at `/home/dev/.ssh/ho
 container rebuilds. If the data directory was wiped, remove the stale line with
 `ssh-keygen -R '[workstation]:2223'` and reconnect.
 
+**Moshi connected to my *laptop* and 1Password asked to use the Devbox Laptop key - why?**
+Because Moshi's laptop host runs `herdr`, and every herdr client connects every saved machine itself: the
+new client opens its own `ssh devbox` for the Devbox machine, and that is what 1Password is approving.
+Approve, and that client shows the devbox through the laptop; deny, and only its Devbox entry sits at
+*Attention* - Local panes, the desktop client and a direct phone → devbox connection are unaffected. The
+direct route above involves neither the laptop nor 1Password, which is why it is the recommended one.
+
 **Which tools resolve in a non-interactive `ssh devbox '<cmd>'`?**
 All of them. Two mechanisms cover it: the pinned binaries live in `/usr/local/bin` (which includes
 `node`/`npm`/`npx`/`corepack`/`pnpm`, symlinked out of `/opt/nvm`), and `~/.bashrc.d/devbox.sh` is loaded *above*
