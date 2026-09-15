@@ -105,7 +105,6 @@ install or bypassed the launcher.
 
 Check: `./bin/laptop-doctor` validates both tokens against GitHub and the pem as a key;
 `devbox-git-credential explain <owner>/<repo>` prints `app:<installation>` or `pat:<account>` for a repo.
-| `~/.ssh/config does not parse: … line N`        | A typo in an option name; every ssh client (herdr's included) dies before reaching the agent, so no 1Password prompt appears |
 
 ## When `laptop-doctor` warns
 
@@ -114,6 +113,7 @@ Check: `./bin/laptop-doctor` validates both tokens against GitHub and the pem as
 | `private key(s) on disk`                        | Import into 1Password if not there yet, then delete the file (phase 1)   |
 | `<name>.pub … is not held by the 1Password agent` | Wrong export, or the item is disabled for the agent; re-export via `ssh-add -L` |
 | `1Password SSH agent not reachable`             | Agent off (1Password → Developer → SSH agent) or 1Password locked        |
+| `~/.ssh/config does not parse: … line N`        | Option-name typo; every ssh client (herdr's included) dies before the agent, so 1Password never prompts |
 | `Host …: IdentityFile is …`                     | Block names a private key path or the wrong `.pub` (phase 2)             |
 | `Host devbox: ForwardAgent yes`                 | Remove it; forward explicitly with `ssh -A devbox` when needed           |
 | `user.signingkey is …`                          | Points at the literal key or the auth key; use the `signing_*.pub` path  |
