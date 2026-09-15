@@ -119,6 +119,7 @@ Check: `./bin/laptop-doctor` validates both tokens against GitHub and the pem as
 | `user.signingkey is …`                            | Points at the literal key or the auth key; use the `signing_*.pub` path                                 |
 | `omp resolves to …, not the launcher`             | `./bin/install-agent`, then put `~/.local/bin` first on the PATH                                        |
 | `differ from the repo templates`                  | `./bin/install-agent` (templates changed since the last install)                                        |
+| `the keychain holds an agent token`               | Homebrew's `osxkeychain` ran ahead of the helper; erase with `git credential-osxkeychain erase`, re-install |
 | `no <account> token` / `token is rejected`        | Fill or re-issue the PAT in `secrets.env` (phase 5)                                                     |
 | `ssh devbox failed`                               | 1Password locked, or the Devbox Laptop key not yet approved for this app                                |
 | `both aliases reach <login>`                      | `id_work.pub` is the personal key; re-export it (phase 1)                                            |

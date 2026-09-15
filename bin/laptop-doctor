@@ -15,6 +15,15 @@ readonly CONFIG_DIR="${HOME}/.config/devbox"
 readonly SSH_DIR="${HOME}/.ssh"
 readonly OP_AGENT_SOCK="${HOME}/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 
+# Inside an agent session the launcher points git at agent.gitconfig and the
+# SSH fence, and puts the gh shim first on the PATH; this audits your own
+# configuration and calls gh with explicit tokens, so undo all of that.
+unset GIT_CONFIG_GLOBAL GIT_SSH_COMMAND GIT_TERMINAL_PROMPT GH_CONFIG_DIR
+PATH=":${PATH}:"
+PATH="${PATH//:${AGENT_DIR}:/:}"
+PATH="${PATH#:}"
+PATH="${PATH%:}"
+
 log_info() { echo -e "\033[0;34m[INFO]\033[0m  $*"; }
 log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
 log_warn() { echo -e "\033[1;33m[WARN]\033[0m  $*" >&2; }
@@ -156,6 +165,14 @@ if ((${#stale[@]})); then
   fail "differ from the repo templates: ${stale[*]} - run ./bin/install-agent"
 else
   log_success 'launcher, shim, helper, fence and agent gitconfigs match the repo templates'
+fi
+# The tokens the helper mints are used with username x-access-token; if one is
+# in the macOS keychain, a system credential helper ran ahead of ours in an
+# agent session and stored it. Your own gh login uses your handle, never this.
+if printf 'protocol=https\nhost=github.com\nusername=x-access-token\n\n' | git credential-osxkeychain get 2>/dev/null | grep -q '^password='; then
+  fail 'the keychain holds an agent token for github.com (username x-access-token): a system credential helper ran ahead of devbox-git-credential - erase it with git credential-osxkeychain erase and check git config --show-origin --get-all credential.helper'
+else
+  log_success 'no agent token in the macOS keychain'
 fi
 
 # -- 5. What the helper needs: tokens and App credentials --------------------

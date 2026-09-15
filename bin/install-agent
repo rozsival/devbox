@@ -58,7 +58,16 @@ launcher_wins=0
 if resolved="$(command -v omp 2>/dev/null)" && [[ "$(readlink -f "${resolved}")" == "${AGENT_DIR}/omp" ]]; then
   launcher_wins=1
 fi
-real_omp="$(PATH="${PATH//${BIN_DIR}/}" command -v omp 2>/dev/null || true)"
+# Same rule as the launcher: the real omp is the first PATH entry that is not
+# the launcher, so this also holds when run from inside an agent session, where
+# the launcher has put ${AGENT_DIR} itself on the PATH.
+real_omp=''
+IFS=: read -ra path_dirs <<<"${PATH}"
+for dir in "${path_dirs[@]}"; do
+  [[ -x ${dir}/omp && "$(readlink -f "${dir}/omp")" != "${AGENT_DIR}/omp" ]] || continue
+  real_omp="${dir}/omp"
+  break
+done
 
 log_success "Installed ${AGENT_DIR}/{omp,gh,devbox-git-credential,devbox-git-no-ssh}, ${BIN_DIR}/{omp,devbox-gh-token}, ${CONFIG_DIR}/agent*.gitconfig"
 [[ -n ${real_omp} ]] || log_warn "No real omp found on the PATH besides the launcher - install OMP first (curl -fsSL https://omp.sh/install.sh | sh)."

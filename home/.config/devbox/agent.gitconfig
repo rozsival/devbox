@@ -46,6 +46,8 @@
 # `!` runs the value as a shell command found on the PATH the launcher set; a
 # bare name would be looked up as `git credential-<name>`, and an absolute
 # path would tie this file to one machine's home directory.
+[credential]
+	helper =
 [credential "https://github.com"]
 	helper = !devbox-git-credential
 	useHttpPath = true
