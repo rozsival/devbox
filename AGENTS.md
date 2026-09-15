@@ -87,7 +87,8 @@ the host's root Docker daemon.
   stay on the bind mount; never export `NPM_CONFIG_PREFIX` - nvm then refuses to activate its default Node
 - `home/` - templates installed into `/home/dev` by bootstrap (and onto the laptop by `bin/install-agent`);
   generated files, not user-edited. `home/.local/libexec/devbox-agent/` holds the `omp` launcher (exports
-  `GIT_CONFIG_GLOBAL`, the SSH fence, `GIT_TERMINAL_PROMPT=0` for its own process tree only) and the `gh`
+  `GIT_CONFIG_GLOBAL`, the SSH fence, `GIT_TERMINAL_PROMPT=0` and a login-less `GH_CONFIG_DIR` for its own
+  process tree only - on the laptop, bare `gh` would otherwise fall back to your OAuth login) and the `gh`
   shim that deliberately shadows the real `gh` on the PATH: with `devbox-gh-token` it resolves
   `GH_TOKEN_PERSONAL` or `GH_TOKEN_WORK` per invocation from the working directory, on the same
   `~/projects/work/**` rule as git's `includeIf`, because an agent's cwd is a project while its shell was

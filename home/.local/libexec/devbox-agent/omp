@@ -42,6 +42,13 @@ export GIT_CONFIG_GLOBAL="${HOME}/.config/devbox/agent.gitconfig"
 export GIT_SSH_COMMAND="${self_dir}/devbox-git-no-ssh"
 # A missing credential is an error, never a prompt an agent cannot answer.
 export GIT_TERMINAL_PROMPT=0
+# gh in this session is a token from the shim or nothing. Without this, a
+# laptop `gh` with no resolvable token falls back to the OAuth login stored in
+# ~/.config/gh's keyring entry - and acts as you. The directory is created on
+# demand and never holds a login; gh's own defaults apply inside it (git
+# protocol https, which the credential helper serves).
+export GH_CONFIG_DIR="${HOME}/.config/devbox/gh"
+mkdir -p "${GH_CONFIG_DIR}"
 # Puts the `gh` shim next to this file ahead of the real gh for this session;
 # on the devbox the directory is already there (home/.bashrc.d/devbox.sh).
 case ":${PATH}:" in

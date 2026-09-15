@@ -74,7 +74,7 @@ signs without it. See [Security](security.md#accepted-limits).
 ## Agent sessions
 
 Every agent session - an `omp`-launched OMP process, and everything it shells out to (`gh`, `wt`, `lazygit`,
-git itself) - runs under four exports the `omp` launcher (`~/.local/libexec/devbox-agent/omp`) sets for its
+git itself) - runs under five exports the `omp` launcher (`~/.local/libexec/devbox-agent/omp`) sets for its
 own process tree only, before `exec`-ing the real `omp`:
 
 | Export                | Value                        | What it does                                        |
@@ -82,6 +82,7 @@ own process tree only, before `exec`-ing the real `omp`:
 | `GIT_CONFIG_GLOBAL`   | `~/.config/devbox/agent.gitconfig` | replaces `~/.gitconfig`, not merged with it   |
 | `GIT_SSH_COMMAND`     | `…/devbox-git-no-ssh`        | refuses every SSH remote, exit 255                   |
 | `GIT_TERMINAL_PROMPT` | `0`                           | a missing credential is an error, never a hang       |
+| `GH_CONFIG_DIR`       | `~/.config/devbox/gh`         | `gh` sees no stored login: a token from the shim, or nothing |
 | `PATH`                | launcher's directory prepended | puts the `gh` shim ahead of the real `gh`           |
 
 Nothing outside that process tree sees any of it - the same clone opened in a pane or an IDE keeps its SSH
