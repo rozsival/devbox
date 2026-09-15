@@ -3,10 +3,10 @@
 Two identities, personal and work, chosen by directory. The devbox holds no private key for either, and
 there are two distinct modes of using them: you, and an agent session.
 
-|                                              | Personal (everywhere)                                                             | work (`~/projects/work/**`)                                                    |
-|----------------------------------------------|-------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
+|                                             | Personal (everywhere)                                                                                                            | work (`~/projects/work/**`)                                                                                      |
+|---------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------|
 | **You** (manual, `ssh -A devbox` or laptop) | SSH `git@github.com:`, laptop's forwarded key (`id_personal.pub`), author `${GIT_PERSONAL_NAME} <${GIT_PERSONAL_EMAIL}>`, signed | SSH `git@work.github.com:`, forwarded `id_work.pub`, author `${GIT_WORK_NAME} <${GIT_WORK_EMAIL}>`, signed |
-| **Agent session** (`omp` launcher)          | HTTPS, token from `devbox-git-credential`, author `rozsival-agent <rozsival-agent@users.noreply.github.com>`, unsigned | HTTPS, same helper, author `work-app[bot] <00000000+work-app[bot]@users.noreply.github.com>`, unsigned |
+| **Agent session** (`omp` launcher)          | HTTPS, token from `devbox-git-credential`, author `rozsival-agent <rozsival-agent@users.noreply.github.com>`, unsigned           | HTTPS, same helper, author `work-app[bot] <00000000+work-app[bot]@users.noreply.github.com>`, unsigned    |
 
 The `~/projects/work/**` directory rule picks the identity in both modes: git's own `includeIf gitdir:` for
 you, the same prefix inside `agent.gitconfig`'s `includeIf` for an agent.
@@ -54,8 +54,8 @@ connection:
 ssh -A devbox
 ```
 
-`container/sshd_config` sets `AllowAgentForwarding yes` for exactly this. `~/.ssh/config` inside the devbox
-(rendered by `bootstrap` from `home/.ssh/config.tpl`) does the picking: each `Host` block names a *public* key
+`container/sshd_config` sets `AllowAgentForwarding yes` for exactly this. `~/.ssh/config` inside the devbox (rendered by
+`bootstrap` from `home/.ssh/config.tpl`) does the picking: each `Host` block names a *public* key
 with `IdentityFile` and `IdentitiesOnly yes`, so `ssh` offers exactly that one key out of whatever the
 forwarded agent holds - without it the agent would offer every key it has and GitHub would accept whichever
 comes first.
@@ -77,13 +77,13 @@ Every agent session - an `omp`-launched OMP process, and everything it shells ou
 git itself) - runs under five exports the `omp` launcher (`~/.local/libexec/devbox-agent/omp`) sets for its
 own process tree only, before `exec`-ing the real `omp`:
 
-| Export                | Value                        | What it does                                        |
-|------------------------|-------------------------------|------------------------------------------------------|
-| `GIT_CONFIG_GLOBAL`   | `~/.config/devbox/agent.gitconfig` | replaces `~/.gitconfig`, not merged with it   |
-| `GIT_SSH_COMMAND`     | `…/devbox-git-no-ssh`        | refuses every SSH remote, exit 255                   |
-| `GIT_TERMINAL_PROMPT` | `0`                           | a missing credential is an error, never a hang       |
-| `GH_CONFIG_DIR`       | `~/.config/devbox/gh`         | `gh` sees no stored login: a token from the shim, or nothing |
-| `PATH`                | launcher's directory prepended | puts the `gh` shim ahead of the real `gh`           |
+| Export                | Value                              | What it does                                                 |
+|-----------------------|------------------------------------|--------------------------------------------------------------|
+| `GIT_CONFIG_GLOBAL`   | `~/.config/devbox/agent.gitconfig` | replaces `~/.gitconfig`, not merged with it                  |
+| `GIT_SSH_COMMAND`     | `…/devbox-git-no-ssh`              | refuses every SSH remote, exit 255                           |
+| `GIT_TERMINAL_PROMPT` | `0`                                | a missing credential is an error, never a hang               |
+| `GH_CONFIG_DIR`       | `~/.config/devbox/gh`              | `gh` sees no stored login: a token from the shim, or nothing |
+| `PATH`                | launcher's directory prepended     | puts the `gh` shim ahead of the real `gh`                    |
 
 Nothing outside that process tree sees any of it - the same clone opened in a pane or an IDE keeps its SSH
 remote, the forwarded 1Password agent and signed commits.
@@ -132,8 +132,8 @@ never cached, nothing stored**:
    same `~/projects/work/**` rule `gh` and git's `includeIf` use.
 
 `store` and `erase` are accepted and ignored - there is nothing to keep.
-`devbox-git-credential explain owner/repo [dir]` prints which path a request would take
-(`app:<installation-id>` or `pat:<account>`) without minting anything.
+`devbox-git-credential explain owner/repo [dir]` prints which path a request would take (`app:<installation-id>` or
+`pat:<account>`) without minting anything.
 
 Because the App is scoped per repository by its own installation, there is no allowlist to maintain here -
 installing the App on a repo (or not) is the only configuration. One consequence: a repo without the App
@@ -237,8 +237,8 @@ Nothing is broken - the `insteadOf` rewrite applies now that the directory exist
 `git remote set-url origin git@work.github.com:<org>/<repo>`.
 
 **Why are agent commits unsigned?**
-The signing keys are yours; an agent session has no private key and no forwarded agent to sign with
-(`GIT_SSH_COMMAND` fences it off SSH entirely, and there is no HTTPS equivalent of `ssh-keygen -Y sign`).
+The signing keys are yours; an agent session has no private key and no forwarded agent to sign with (`GIT_SSH_COMMAND`
+fences it off SSH entirely, and there is no HTTPS equivalent of `ssh-keygen -Y sign`).
 `agent.gitconfig` sets `commit.gpgsign = false` rather than leave it to fail. Provenance for an agent commit
 comes from its author identity and, for App-backed pushes, that only the App's own installation token could
 have pushed it - not a signature.

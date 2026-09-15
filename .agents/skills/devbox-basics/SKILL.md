@@ -76,8 +76,8 @@ Existing `git@github.com:` remotes inside that tree are rewritten by `insteadOf`
 
 The devbox holds no private key for either identity. Manual git work (a pane's push, a signed commit) borrows
 the laptop's 1Password agent, forwarded for one connection with `ssh -A devbox`. Agent sessions never touch
-that forwarded agent at all - the `omp` launcher rewrites their git to HTTPS with a per-operation token
-(a GitHub App installation token, or a fine-grained PAT) and a bot author, unsigned. Full mechanism:
+that forwarded agent at all - the `omp` launcher rewrites their git to HTTPS with a per-operation token (a GitHub App
+installation token, or a fine-grained PAT) and a bot author, unsigned. Full mechanism:
 `docs/git.md`.
 
 ## Two optional extras, not installed by default
@@ -89,8 +89,8 @@ its panes share the laptop's OMP preset. Neither runs during bootstrap; both are
 
 ## What credentials live in the box
 
-Authority is enumerated, never ambient. The container has **no 1Password account** (`op` is not installed),
-**no private key for GitHub**, and **no Google user credential** (`gcloud` is not installed either). Three
+Authority is enumerated, never ambient. The container has **no 1Password account** (`op` is not installed), **no private
+key for GitHub**, and **no Google user credential** (`gcloud` is not installed either). Three
 layers:
 
 - **Identity** - public keys only, installed from `.env` (`GIT_*_PUBKEY` for authentication,

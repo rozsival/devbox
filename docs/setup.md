@@ -152,22 +152,22 @@ reports whether `omp` resolves to the launcher and prints the same two manual st
 
 ## `.env` reference
 
-| Variable                       | Default           | Purpose                                                         |
-|--------------------------------|-------------------|-----------------------------------------------------------------|
-| `BIND_ADDR`                    | *(empty)*         | Publish address; empty = `up` refuses                           |
-| `DEVBOX_SSH_PORT`              | `2223`            | Host port (container always uses `2222`)                        |
-| `DEVBOX_DATA_DIR`              | `/home/dev`       | Host path; must equal container home (path identity)            |
-| `HOST_UID` / `HOST_GID`        | `1001`            | Dedicated `dev` host user; owns the data dir and project daemon |
-| `DEVBOX_DOCKER_SOCKET_DIR`     | `/run/devbox`     | Project daemon socket dir, bind-mounted into the container      |
-| `TZ`                           | `Europe/Prague`   | Container timezone                                              |
-| `DEVBOX_GITHUB_USER`           | `rozsival`        | Seeds keys from `github.com/<user>.keys`                        |
-| `DEVBOX_EXTRA_AUTHORIZED_KEYS` | *(empty)*         | Extra keys, newline-separated                                   |
-| `GIT_PERSONAL_NAME` / `_EMAIL` | personal identity | Applied to `~/.gitconfig`                                       |
-| `GIT_WORK_NAME` / `_EMAIL`  | work identity  | Applied to `~/.config/work/.gitconfig`                       |
+| Variable                       | Default           | Purpose                                                                               |
+|--------------------------------|-------------------|---------------------------------------------------------------------------------------|
+| `BIND_ADDR`                    | *(empty)*         | Publish address; empty = `up` refuses                                                 |
+| `DEVBOX_SSH_PORT`              | `2223`            | Host port (container always uses `2222`)                                              |
+| `DEVBOX_DATA_DIR`              | `/home/dev`       | Host path; must equal container home (path identity)                                  |
+| `HOST_UID` / `HOST_GID`        | `1001`            | Dedicated `dev` host user; owns the data dir and project daemon                       |
+| `DEVBOX_DOCKER_SOCKET_DIR`     | `/run/devbox`     | Project daemon socket dir, bind-mounted into the container                            |
+| `TZ`                           | `Europe/Prague`   | Container timezone                                                                    |
+| `DEVBOX_GITHUB_USER`           | `rozsival`        | Seeds keys from `github.com/<user>.keys`                                              |
+| `DEVBOX_EXTRA_AUTHORIZED_KEYS` | *(empty)*         | Extra keys, newline-separated                                                         |
+| `GIT_PERSONAL_NAME` / `_EMAIL` | personal identity | Applied to `~/.gitconfig`                                                             |
+| `GIT_WORK_NAME` / `_EMAIL`  | work identity  | Applied to `~/.config/work/.gitconfig`                                             |
 | `GIT_PERSONAL_PUBKEY`          | *(empty)*         | Laptop's personal authentication public key; selects the forwarded key for manual git |
-| `GIT_PERSONAL_SIGNINGKEY`      | *(empty)*         | Laptop's personal signing public key (`git config user.signingkey` on the laptop) |
-| `GIT_WORK_PUBKEY`           | *(empty)*         | Same, for `~/projects/work/**`                               |
-| `GIT_WORK_SIGNINGKEY`       | *(empty)*         | Same, for `~/projects/work/**`                               |
+| `GIT_PERSONAL_SIGNINGKEY`      | *(empty)*         | Laptop's personal signing public key (`git config user.signingkey` on the laptop)     |
+| `GIT_WORK_PUBKEY`           | *(empty)*         | Same, for `~/projects/work/**`                                                     |
+| `GIT_WORK_SIGNINGKEY`       | *(empty)*         | Same, for `~/projects/work/**`                                                     |
 
 `.env` holds no secrets: tool credentials go in `~/.config/devbox/secrets.env` inside the container and
 project secrets in each project's own `.env`. See [Secrets](secrets.md).

@@ -11,23 +11,23 @@ anything inside can leave, and put nothing inside that is not worth its own blas
 
 ## Three layers
 
-| Layer                    | Holds                                     | Scope of a leak                              |
-|---------------------------|--------------------------------------------|-----------------------------------------------|
-| Identity (public keys)    | `~/.ssh/id_personal.pub`, `~/.ssh/id_work.pub` | none by itself - selects which forwarded key GitHub sees |
-| Box-wide tools            | `~/.config/devbox/secrets.env`            | the tools' own credentials                     |
-| Per project                | that project's `.env`                     | one project                                    |
+| Layer                  | Holds                                             | Scope of a leak                                          |
+|------------------------|---------------------------------------------------|----------------------------------------------------------|
+| Identity (public keys) | `~/.ssh/id_personal.pub`, `~/.ssh/id_work.pub` | none by itself - selects which forwarded key GitHub sees |
+| Box-wide tools         | `~/.config/devbox/secrets.env`                    | the tools' own credentials                               |
+| Per project            | that project's `.env`                             | one project                                              |
 
 Everything lives on the `/home/dev` bind mount, so all of it survives container and image rebuilds and is
 established once per host.
 
-| Secret                       | Lives in                                  | Established by                        |
-|------------------------------|-------------------------------------------|---------------------------------------|
-| SSH identity public keys (both accounts) | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `GIT_*_PUBKEY` / `GIT_*_SIGNINGKEY` in `.env` - no private key ever present |
-| `gh` tokens, one per account | `~/.config/devbox/secrets.env`            | you, two fine-grained GitHub PATs     |
-| Model API keys for OMP       | `~/.config/devbox/secrets.env`            | you, plain values                     |
-| GitHub App (work-app)  | `~/.config/work/work-app/`       | you, `app-id` + `app.pem` at mode 600 - consumed per git operation by `devbox-git-credential` ([Git identities](git.md)) |
-| Per-project secrets          | `<project>/.env`                          | you, rendered on the laptop           |
-| GCP service-account key      | `~/.config/gcloud/<gcp-project>-*.json`   | you, one per project, mode 600        |
+| Secret                                   | Lives in                                                             | Established by                                                                                                           |
+|------------------------------------------|----------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| SSH identity public keys (both accounts) | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `GIT_*_PUBKEY` / `GIT_*_SIGNINGKEY` in `.env` - no private key ever present                            |
+| `gh` tokens, one per account             | `~/.config/devbox/secrets.env`                                       | you, two fine-grained GitHub PATs                                                                                        |
+| Model API keys for OMP                   | `~/.config/devbox/secrets.env`                                       | you, plain values                                                                                                        |
+| GitHub App (work-app)              | `~/.config/work/work-app/`                                  | you, `app-id` + `app.pem` at mode 600 - consumed per git operation by `devbox-git-credential` ([Git identities](git.md)) |
+| Per-project secrets                      | `<project>/.env`                                                     | you, rendered on the laptop                                                                                              |
+| GCP service-account key                  | `~/.config/gcloud/<gcp-project>-*.json`                              | you, one per project, mode 600                                                                                           |
 
 ## Manual checklist
 

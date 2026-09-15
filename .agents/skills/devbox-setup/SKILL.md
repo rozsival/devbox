@@ -121,8 +121,8 @@ for the devbox: they are already your normal laptop keys, already registered the
    plus `actions`/`checks` read, plus `issues`/`pull-requests` write only if agents should post. The working
    directory picks which one is used (`~/projects/work/**` is work, as with git identities);
    `devbox-gh-token --account` reports the choice. Do **not** use `gh auth login`: its web flow cannot
-   request less than `repo` + `read:org` + `gist`, i.e. non-expiring account-wide write, stored in plaintext
-   (no keyring in the container). A plain box-wide `GH_TOKEN` still works but overrides both and disables the
+   request less than `repo` + `read:org` + `gist`, i.e. non-expiring account-wide write, stored in plaintext (no keyring
+   in the container). A plain box-wide `GH_TOKEN` still works but overrides both and disables the
    per-directory choice.
 3. Fill the rest of `~/.config/devbox/secrets.env` (mode 600) with plain `KEY=value` pairs for credentials
    every project shares - model API keys for OMP. It is sourced by every shell, interactive or not. Never
@@ -162,7 +162,7 @@ details in `docs/toolchain.md#agent-skills-and-browser-automation`.
 | `up` aborts on empty `BIND_ADDR`        | Preflight working as designed. Tailscale up, then `env`            |
 | `Too many authentication failures`      | Missing `IdentitiesOnly yes` in the `Host devbox` block            |
 | `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS` or on GitHub; restart    |
-| herdr machine stuck `offline`           | 1Password locked or key not approved for herdr; unlock/approve    |
+| herdr machine stuck `offline`           | 1Password locked or key not approved for herdr; unlock/approve     |
 | `Host key verification failed`          | Data dir was wiped; `ssh-keygen -R '[workstation]:2223'`         |
 | `Permission denied` writing `/home/dev` | `${DEVBOX_DATA_DIR}` not owned by `HOST_UID:HOST_GID`              |
 | SSH itself is the broken thing          | `./bin/devbox shell` on the host bypasses the container's sshd     |

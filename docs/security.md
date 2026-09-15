@@ -6,13 +6,13 @@ devbox.
 
 ## Boundaries
 
-| Boundary                   | Enforced by                                                                  |
-|----------------------------|------------------------------------------------------------------------------|
-| No host filesystem access  | Only `${DEVBOX_DATA_DIR}` is mounted, at `/home/dev` (but see limit 5)       |
-| No host root Docker daemon | `/var/run/docker.sock` is not mounted; the reachable daemon is rootless      |
-| No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true` |
-| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` - Tailnet address only                |
-| No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`         |
+| Boundary                   | Enforced by                                                                                                                                                |
+|----------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| No host filesystem access  | Only `${DEVBOX_DATA_DIR}` is mounted, at `/home/dev` (but see limit 5)                                                                                     |
+| No host root Docker daemon | `/var/run/docker.sock` is not mounted; the reachable daemon is rootless                                                                                    |
+| No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true`                                                                               |
+| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` - Tailnet address only                                                                                              |
+| No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`                                                                                       |
 | No private keys at rest    | The devbox holds no SSH private key; `AllowAgentForwarding yes` only lets `ssh -A devbox` borrow the laptop's forwarded 1Password agent for one connection |
 
 ## No root process at runtime
@@ -36,13 +36,13 @@ ssh workstation 'cd ~/devbox && ./bin/devbox logs | grep "Server listening"'    
 Authority is enumerated, not ambient. Each credential is scoped, separately revocable, and separately
 attributable:
 
-| Purpose                             | Credential                                                | Reach                                                      |
-|---------------------------------------|--------------------------------------------------------------|----------------------------------------------------------------|
-| Agent git (clone, pull, push, commit) | per-repository GitHub App installation token, else a fine-grained PAT | App: one repo, 1h. PAT: its named repos, `contents: write` |
-| Manual git, incl. signing (you)       | the laptop's 1Password agent, forwarded per connection (`ssh -A devbox`) | same as your laptop; the container stores no private key |
-| Dashboards, CI, issues                | one fine-grained PAT per GitHub account                     | named repos, scoped per token                                  |
-| LLM inference                         | per-project GCP service-account key                          | one dev project, predict-only                                  |
-| Project secrets                       | that project's `.env`                                        | one project                                                     |
+| Purpose                               | Credential                                                               | Reach                                                      |
+|---------------------------------------|--------------------------------------------------------------------------|------------------------------------------------------------|
+| Agent git (clone, pull, push, commit) | per-repository GitHub App installation token, else a fine-grained PAT    | App: one repo, 1h. PAT: its named repos, `contents: write` |
+| Manual git, incl. signing (you)       | the laptop's 1Password agent, forwarded per connection (`ssh -A devbox`) | same as your laptop; the container stores no private key   |
+| Dashboards, CI, issues                | one fine-grained PAT per GitHub account                                  | named repos, scoped per token                              |
+| LLM inference                         | per-project GCP service-account key                                      | one dev project, predict-only                              |
+| Project secrets                       | that project's `.env`                                                    | one project                                                |
 
 Notably absent: any 1Password account (`op` is not installed), any private key for GitHub, and any Google
 user credential. See [Secrets](secrets.md).

@@ -112,8 +112,8 @@ the host's root Docker daemon.
   so nothing in the bind mount can rewrite the daemon's command line
 - `bin/sync-omp` - laptop-side: copies `~/.omp/agent/config.yml` into the devbox over `Host devbox`; only
   the preset, never the per-machine OMP state
-- `bin/install-agent` - laptop-side, idempotent: installs the same agent git override the devbox bootstraps
-  (`omp` launcher, `gh` shim, credential helper, fence, `devbox-gh-token`, `agent*.gitconfig`, an
+- `bin/install-agent` - laptop-side, idempotent: installs the same agent git override the devbox bootstraps (`omp`
+  launcher, `gh` shim, credential helper, fence, `devbox-gh-token`, `agent*.gitconfig`, an
   `~/.local/bin/omp` symlink to the launcher); regenerates every file, reads/edits nothing of the user's;
   reports whether `omp` resolves to the launcher and prints the remaining manual steps (PATs, App
   credentials)
