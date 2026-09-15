@@ -5,14 +5,12 @@ description: Explains how the devbox works - the container-as-sandbox model, the
 
 # devbox basics
 
-`devbox` provisions one Docker container on the `workstation` workstation. The container runs its own
-unprivileged `sshd`, published only on the node's Tailscale address, so a [herdr](https://herdr.dev) client on
-the laptop attaches to it as a saved machine and runs OMP agents inside it.
+`devbox` provisions one Docker container on `workstation`: its own unprivileged `sshd`, published only on
+its Tailscale address. A [herdr](https://herdr.dev) laptop client attaches to it as a saved machine, running
+OMP agents inside.
 
-The point of the design: **the container is the sandbox**. An agent running with bypassed permissions reaches
-the project tree, the internet and a rootless project Docker daemon, never the host filesystem and never the
-host's root Docker daemon. Explaining any part of the devbox well means explaining which of those boundaries
-it protects.
+**The container is the sandbox.** A bypassed-permission agent reaches the project tree, internet, and a
+rootless project Docker daemon - never the host filesystem or its root Docker daemon.
 
 ## The mental model
 
@@ -23,44 +21,42 @@ herdr client   --ssh-->   BIND_ADDR:2223  --DNAT-->          :2222  sshd running
                           ${DEVBOX_DATA_DIR}                 ${DEVBOX_DATA_DIR}
 ```
 
-Four facts that answer most questions:
+Four facts:
 
-1. **Work happens inside the container.** The laptop's `~/projects` and the workstation's `~/projects` are
-   different trees from the container's `/home/dev/projects`. A repo must be cloned in the container to be
-   visible to agents there.
-2. **`/home/dev` is a host bind mount** (`${DEVBOX_DATA_DIR}`, which must be `/home/dev` on the host too).
-   Everything that must survive an image rebuild - keys, dotfiles, `~/.config/gh`, project checkouts, the
-   sshd host key, Docker images and volumes - lives there. Everything else (installed packages, `/opt/nvm`)
-   is in the container's writable layer and is lost on recreate.
-3. **The published port is the entire network boundary.** `${BIND_ADDR}:2223:2222` in
-   `docker-compose.yml` plus `127.0.0.1:2223`. Docker's DNAT rules match the bound address, so UFW cannot
-   restrict a published port - binding to the Tailscale IP is what keeps the devbox off the public internet.
-   An empty `BIND_ADDR` makes `./bin/devbox up` refuse to start rather than publish on `0.0.0.0`.
-4. **No root, no root socket.** The image ends as `USER dev`, PID 1 is `dev`, `cap_drop: [ALL]`,
-   `no-new-privileges`, and the host's root Docker socket is deliberately not mounted. Projects that need
-   containers talk to a *second* daemon: a rootless `dockerd` owned by the dedicated unprivileged host user
-   `dev`, socket `/run/devbox/docker.sock`, provisioned once with `sudo ./bin/rootless-docker`. Inside the
-   box, `docker` and `docker compose` then just work. Published project ports land on the devbox bridge
-   gateway (`--ip` plus `--default-network-opt`, since the first covers only the default bridge) and are
-   held there by `devbox-docker-firewall`, an nftables table matching that daemon's own socket cgroup, so an
-   explicit `0.0.0.0:` port spec cannot reach the Tailnet or the LAN either (`docs/docker.md`).
+1. **Work happens inside the container.** Laptop, workstation `~/projects` differ from the container's
+   `/home/dev/projects` - clone repos there for agents to see them.
+2. **`/home/dev` is a host bind mount** (`${DEVBOX_DATA_DIR}`, also `/home/dev` on the host). Surviving a
+   rebuild: keys, dotfiles, `~/.config/gh`, project checkouts, sshd host key, Docker images, volumes. Not
+   surviving: installed packages, `/opt/nvm` (writable layer, lost on recreate).
+3. **The published port is the entire network boundary**: `${BIND_ADDR}:2223:2222` in `docker-compose.yml`
+   plus `127.0.0.1:2223`. Docker's DNAT matches the bound address, so UFW can't restrict it - binding to the
+   Tailscale IP keeps devbox off the public internet. An empty `BIND_ADDR` makes `./bin/devbox up` refuse to
+   start rather than publish on `0.0.0.0`.
+4. **No root, no root socket.** `USER dev`, PID 1 `dev`, `cap_drop: [ALL]`, `no-new-privileges`; the host's
+   root Docker socket is never mounted. Project containers come from a *second* daemon: a rootless
+   `dockerd` owned by the dedicated host user `dev`, socket `/run/devbox/docker.sock`, provisioned once by
+   `sudo ./bin/rootless-docker` - after which `docker` and `docker compose` work in the box. That daemon
+   publishes project ports on the devbox bridge gateway (`--ip` plus `--default-network-opt`, since `--ip`
+   alone covers only the default bridge). `devbox-docker-firewall` - nftables matching the daemon's socket
+   cgroup - holds the line regardless: even an explicit `0.0.0.0:` port never reaches the Tailnet or the
+   LAN (`docs/docker.md`).
 
 ## The four ways in
 
 | Route                | Run from    | Use it for                                                  |
 |----------------------|-------------|-------------------------------------------------------------|
-| `herdr`              | Laptop      | Normal work; panes survive client exit and network loss     |
+| `herdr`              | Laptop      | Normal work; panes survive client exit, network loss        |
 | `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git`          |
-| Moshi                | Phone       | Watching and steering an agent away from the desk           |
-| `./bin/devbox shell` | Workstation | Recovery when SSH, `authorized_keys` or Tailscale is broken |
+| Moshi                | Phone       | Watching, steering an agent away from the desk               |
+| `./bin/devbox shell` | Workstation | Recovery when SSH, `authorized_keys`, or Tailscale broken    |
 
-All four land as `dev` in the same `/home/dev`. `devbox` is an **SSH config alias**, not a shell alias: a
-`Host devbox` block with `Port 2223`, `User dev` and `IdentityFile ~/.ssh/devbox.pub`. Anything that reads
-`~/.ssh/config` honours it, which is why `rsync`, `git` and `ssh -L` work unchanged.
+All four land as `dev` in `/home/dev`. `devbox` is an **SSH config alias**, not a shell alias: a
+`Host devbox` block (`Port 2223`, `User dev`, `IdentityFile ~/.ssh/devbox.pub`) that anything reading
+`~/.ssh/config` honours - so `rsync`, `git` and `ssh -L` work unchanged.
 
-Moshi is a plain SSH client plus `moshi-hook`, the daemon `bootstrap` installs and `entrypoint.sh` starts;
-without it the phone gets a terminal but no notifications or approvals. Its phone key belongs in
-`DEVBOX_EXTRA_AUTHORIZED_KEYS`, because the entrypoint rewrites `authorized_keys` on every start (`docs/toolchain.md`).
+Moshi is a plain SSH client plus `moshi-hook` (daemon `bootstrap` installs, `entrypoint.sh` starts) - without
+it the phone gets a terminal but no notifications or approvals. Its phone key belongs in
+`DEVBOX_EXTRA_AUTHORIZED_KEYS`: `authorized_keys` gets rewritten every start (`docs/toolchain.md`).
 
 Dev servers are never published. Forward them: `ssh -N -L 5173:localhost:5173 devbox`.
 
@@ -70,52 +66,47 @@ Dev servers are never published. Forward them: `ssh -N -L 5173:localhost:5173 de
 - `~/projects/work/` - work identity via `includeIf gitdir:`, clone with
   `git@work.github.com:<org>/<repo>`
 
-The alias matters for new clones: URL rewriting configured in an `includeIf` file cannot apply before the repo
-directory exists, so the first clone into `~/projects/work/` must use `git@work.github.com:` explicitly.
-Existing `git@github.com:` remotes inside that tree are rewritten by `insteadOf` afterwards.
+New clones need the alias: `includeIf` rewriting can't apply before the repo directory exists, so first
+clone into `~/projects/work/` needs `git@work.github.com:` explicitly; `insteadOf` rewrites existing
+`git@github.com:` remotes in that tree.
 
-The devbox holds no private key for either identity. Manual git work (a pane's push, a signed commit) borrows
-the laptop's 1Password agent, forwarded for one connection with `ssh -A devbox`. Agent sessions never touch
-that forwarded agent at all - the `omp` launcher rewrites their git to HTTPS with a per-operation token (a GitHub App
-installation token, or a fine-grained PAT) and a bot author, unsigned. Full mechanism:
-`docs/git.md`.
+The devbox holds no private key for either identity: manual git (pane push, signed commit) borrows the
+laptop's 1Password agent, forwarded per connection with `ssh -A devbox`; agent sessions never touch it - the
+`omp` launcher rewrites their git to HTTPS with a per-operation token (GitHub App installation token or
+fine-grained PAT) and bot author, unsigned. Full mechanism: `docs/git.md`.
 
 ## Two optional extras, not installed by default
 
-`./bin/devbox skills` (on the workstation) installs `agent-browser`, `skill-creator` and `find-skills`
-globally under `~/.agents/skills`, plus the `agent-browser` CLI and a Chrome build - so panes can drive a
-real headless browser. `./bin/sync-omp` (on the laptop) copies `~/.omp/agent/config.yml` into the devbox so
-its panes share the laptop's OMP preset. Neither runs during bootstrap; both are idempotent.
+`./bin/devbox skills` (workstation) installs `agent-browser`, `skill-creator`, `find-skills` into
+`~/.agents/skills`, plus its CLI and a Chrome build, so panes can drive a headless browser. `./bin/sync-omp`
+(laptop) copies `~/.omp/agent/config.yml` into the devbox so panes share the laptop's OMP preset. Neither
+runs during bootstrap; both are idempotent.
 
 ## What credentials live in the box
 
-Authority is enumerated, never ambient. The container has **no 1Password account** (`op` is not installed), **no private
-key for GitHub**, and **no Google user credential** (`gcloud` is not installed either). Three
-layers:
+Authority is enumerated, never ambient: **no 1Password account** (`op` not installed), **no GitHub private
+key**, **no Google user credential** (`gcloud` not installed). Three layers:
 
-- **Identity** - public keys only, installed from `.env` (`GIT_*_PUBKEY` for authentication,
-  `GIT_*_SIGNINGKEY` for signing - GitHub registers the two separately); no private key at rest. Manual
-  clone/pull/push/sign borrows the laptop's 1Password agent, forwarded per connection (`ssh -A devbox`).
-  Agent sessions authenticate over HTTPS with a per-operation token instead
-- **Box-wide tool credentials** - `~/.config/devbox/secrets.env`, plain `KEY=value` at mode 600, sourced by
-  every shell including non-interactive `ssh devbox <cmd>`; holds model API keys and one fine-grained GitHub
-  token per account (`GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK`). Nothing exports `GH_TOKEN`: the `gh` shim in
-  `~/.local/libexec/devbox-agent` resolves the token per invocation from the working directory, the same
-  rule that picks a git identity (`devbox-gh-token --account` reports it)
-- **Per project** - that project's own `.env`, rendered on the laptop and copied in, so a leak stays scoped
-  to one project. GCP keys are per-project too, via `GOOGLE_APPLICATION_CREDENTIALS`
+- **Identity** - public keys only, from `.env` (`GIT_*_PUBKEY` auth, `GIT_*_SIGNINGKEY` signing - GitHub
+  registers them separately); no private key at rest - same borrow/token split as above.
+- **Box-wide tool credentials** - `~/.config/devbox/secrets.env`, plain `KEY=value` mode 600, sourced by
+  every shell including non-interactive `ssh devbox <cmd>`; holds model API keys, one fine-grained GitHub
+  token per account (`GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK`). Nothing exports `GH_TOKEN` - the `gh` shim in
+  `~/.local/libexec/devbox-agent` resolves it per invocation from the working directory, same rule as git
+  identity (`devbox-gh-token --account` reports it)
+- **Per project** - that project's `.env`, rendered on the laptop, copied in, so a leak stays scoped there;
+  GCP keys are per-project too, via `GOOGLE_APPLICATION_CREDENTIALS`
 
-The container is an isolation boundary for the host filesystem and a containment boundary for authority - it
-is **not** a confidentiality boundary. Outbound network is unrestricted, so assume anything inside can leave.
+The container isolates the host filesystem, contains authority - not a confidentiality boundary. Outbound
+network is unrestricted; assume anything inside can leave.
 
 ## Where to look things up
 
-Answer from these files rather than from memory; each ends with an FAQ section covering the failures actually
-hit in practice.
+Answer from these files, not memory - each ends with an FAQ of real failures.
 
 | Question                                             | File                 |
 |------------------------------------------------------|----------------------|
-| First deploy, `.env` reference, laptop key, SSH cfg  | `docs/setup.md`      |
+| First deploy, `.env`, laptop key, SSH cfg           | `docs/setup.md`      |
 | Getting a shell, cloning, port forwarding            | `docs/connecting.md` |
 | Identity split, signing, verification                | `docs/git.md`        |
 | Installed tools, pinned versions, agent skills       | `docs/toolchain.md`  |
@@ -124,17 +115,16 @@ hit in practice.
 | Exposure model, why UFW cannot help                  | `docs/networking.md` |
 | Redeploy, restart, backup, `doctor`, troubleshooting | `docs/operations.md` |
 | Project containers, path identity, `devbox-ports`    | `docs/docker.md`     |
-| Boundaries and what an escaped agent reaches         | `docs/security.md`   |
-| Conventions for changing this repo                   | `AGENTS.md`          |
+| Boundaries; what an escaped agent reaches            | `docs/security.md`   |
+| Conventions for this repo                            | `AGENTS.md`          |
 
 ## Misconceptions worth correcting on sight
 
 - "I'll clone it on the laptop and push it over" - no; clone in the container, the bind mount does the rest.
-- "Let's open another port for the dev server" - no; `ssh -L` exists precisely so `docker-compose.yml` stays
-  a one-port file.
-- "Add the Docker socket so agents can run containers" - the host's *root* socket is the one thing the design
-  forbids. Project containers come from the rootless sibling daemon; a nested daemon is impossible here at
-  all, because rootless needs setuid `newuidmap` and this container has `cap_drop: ALL` plus
-  `no-new-privileges`.
+- "Let's open another port for the dev server" - no; `ssh -L` exists so `docker-compose.yml` stays a
+  one-port file.
+- "Add the Docker socket so agents can run containers" - the host's *root* socket is the one thing
+  forbidden. Project containers come from the rootless sibling daemon; nesting a daemon here is impossible:
+  rootless needs setuid `newuidmap` and this container has `cap_drop: ALL` plus `no-new-privileges`.
 - "`ssh devbox` is a shell alias in `.bashrc`" - it is `~/.ssh/config`.
 - "Firewall the port" - `ufw deny` cannot see Docker's DNAT; `BIND_ADDR` is the control.

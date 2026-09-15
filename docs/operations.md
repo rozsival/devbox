@@ -1,6 +1,6 @@
 # 🔄 Operations
 
-Day-to-day running: redeploy, restart, persistence, backup, and the failure modes worth knowing.
+Day-to-day ops: redeploy, restart, persistence, backup, and the failure modes worth knowing.
 
 ## Redeploy
 
@@ -8,11 +8,11 @@ Day-to-day running: redeploy, restart, persistence, backup, and the failure mode
 ./bin/push workstation --up
 ```
 
-Repeatable by design and non-destructive: `.env`, `${DEVBOX_DATA_DIR}`, the installed identity public keys
-and the sshd host key all survive, and `bootstrap` re-runs as a no-op. Verify with `./bin/devbox keys` - the
-printed public keys and host-key fingerprint must be identical before and after.
+Repeatable, non-destructive: `.env`, `${DEVBOX_DATA_DIR}`, identity public keys, and the sshd host key
+survive; `bootstrap` re-runs as a no-op. Verify with `./bin/devbox keys` - public keys and host-key
+fingerprint must match before and after.
 
-Use `rebuild` instead of `up` when a pinned version changed and you want a cache-free image:
+Use `rebuild` over `up` for a cache-free image after a pinned version changes:
 
 ```bash
 ssh workstation 'cd ~/devbox && ./bin/devbox rebuild && ./bin/devbox doctor'
@@ -20,10 +20,10 @@ ssh workstation 'cd ~/devbox && ./bin/devbox rebuild && ./bin/devbox doctor'
 
 ## Persistence
 
-`${DEVBOX_DATA_DIR}` on the host is bind-mounted at `/home/dev`: dotfiles, both SSH identity public keys, the
-sshd host key, `~/.config/gh`, and the whole `~/projects` tree. A bind mount rather than a named volume so
-`tar` can back it up and the host user (same UID) can inspect it. Container and image rebuilds keep
-everything, including the client's `known_hosts` entry.
+`${DEVBOX_DATA_DIR}` bind-mounts at `/home/dev`: dotfiles, both SSH identity public keys, the sshd host
+key, `~/.config/gh`, and the whole `~/projects` tree. A bind mount (not a named volume) lets `tar` back it
+up and the host user (same UID) inspect it. Rebuilds keep everything, including the client's `known_hosts`
+entry.
 
 | Event                            | Filesystem | Running panes |
 |----------------------------------|------------|---------------|
@@ -33,12 +33,11 @@ everything, including the client's `known_hosts` entry.
 | `./bin/devbox rebuild`           | kept       | lost          |
 | `${DEVBOX_DATA_DIR}` deleted     | lost       | lost          |
 
-Panes survive client loss because the herdr server runs in the container; they do not survive the container
-restarting with it.
+Panes survive client loss - herdr's server runs in the container - but not a container restart.
 
-Images, the build cache and named volumes for project containers live under
-`/home/dev/.local/share/docker`, on the same bind mount - they survive `rebuild` and are excluded from
-`bin/push` like the rest of the data dir. Pruning is manual: `docker system prune`.
+Images, build cache, and named volumes for project containers live on the same bind mount, under
+`/home/dev/.local/share/docker`: survive `rebuild`, excluded from `bin/push` like the rest of the data dir.
+Prune manually: `docker system prune`.
 
 ## Backup
 
@@ -48,14 +47,13 @@ scp workstation:/tmp/devbox-home.tar.gz "devbox-home-$(date +%F).tar.gz"
 ssh -t workstation 'sudo rm -f /tmp/devbox-home.tar.gz'
 ```
 
-`sudo` is needed because the tree belongs to the dedicated `dev` account, not to your host user. The
-exclusion drops the project daemon's images, build cache **and named volumes** - all of
-`~/.local/share/docker`. Images rebuild from a `Dockerfile`; if a named volume holds data you care about,
-dump it instead (`docker compose exec db pg_dump …`), which is the portable copy anyway.
+`sudo` is needed - the tree belongs to the dedicated `dev` account, not your host user. The exclusion drops
+the project daemon's images, build cache **and named volumes** - all of `~/.local/share/docker`. Images
+rebuild from a `Dockerfile`; a named volume worth keeping should be dumped instead
+(`docker compose exec db pg_dump …`), which is the portable copy anyway.
 
-Restore by extracting into place with the ownership preserved (`HOST_UID:HOST_GID`, i.e. `dev:devbox`), then
-`./bin/devbox up`. The `.env` file on the host is worth copying separately - it is not in the repo and not in
-the data dir.
+Restore: extract into place with ownership preserved (`HOST_UID:HOST_GID`, i.e. `dev:devbox`), then
+`./bin/devbox up`. Copy the host's `.env` separately - it's in neither the repo nor the data dir.
 
 ## Health
 
@@ -64,11 +62,11 @@ ssh workstation 'cd ~/devbox && ./bin/devbox doctor'     # full check, non-zero 
 ssh workstation 'cd ~/devbox && ./bin/devbox logs -f'    # follow sshd output
 ```
 
-The compose healthcheck is `ss -ltn | grep -q ":2222"` every 30s with a 20s start period, so a container that
-comes up without a listening sshd is reported `unhealthy` rather than silently broken.
+The compose healthcheck, `ss -ltn | grep -q ":2222"` every 30s with a 20s start period, reports
+`unhealthy` (not silently broken) for a container up without a listening sshd.
 
-`doctor` also probes `docker --version` and `docker compose version` in the toolchain list, that the project
-Docker daemon is reachable from the container and rootless, and that `host.docker.internal` resolves.
+`doctor` also probes `docker --version`, `docker compose version`, whether the project Docker daemon is
+reachable from the container and rootless, and whether `host.docker.internal` resolves.
 
 ## Troubleshooting
 
@@ -77,76 +75,75 @@ The agent offered more than six keys. Add `IdentitiesOnly yes` + `IdentityFile ~
 `Host` block.
 
 **herdr machine flaps between `connecting` and `offline`**
-The devbox key is served by the 1Password agent, which is locked or has not approved the key for herdr -
-background connections cannot answer that prompt. Unlock and approve; if it keeps flapping, the dedicated
-file key is the documented exception - see [Setup](setup.md#1-create-the-laptop-key).
+The 1Password agent serving the devbox key is locked or hasn't approved it for herdr, which can't answer
+background prompts. Unlock and approve; if it persists, use the documented file-key exception - see
+[Setup](setup.md#1-create-the-laptop-key).
 
 **`up` fails with `BIND_ADDR is empty`**
-The preflight working as intended. Run `./bin/devbox env` (Tailscale must be up first).
+Preflight working as intended. Run `./bin/devbox env` (Tailscale must be up first).
 
 **`doctor` reports `published on 0.0.0.0`**
-A `ports` entry lost its address scope. The devbox is internet-exposed until fixed: correct
+A `ports` entry lost its address scope - the devbox is internet-exposed until fixed. Correct
 `docker-compose.yml`, then `up`.
 
 **Container is `unhealthy`**
-sshd is not listening. `./bin/devbox logs` - usually a failed `authorized_keys` fetch or wrong permissions on
-`/home/dev/.ssh`.
+sshd isn't listening. `./bin/devbox logs` - usually a failed `authorized_keys` fetch or wrong permissions
+on `/home/dev/.ssh`.
 
 **`Host key verification failed`**
-The data dir was recreated, so the host key is new. `ssh-keygen -R '[workstation]:2223'`, reconnect, accept
+Data dir was recreated, so the host key is new. `ssh-keygen -R '[workstation]:2223'`, reconnect, accept
 once.
 
 **Permission denied writing to `/home/dev`**
-`${DEVBOX_DATA_DIR}` is not owned by `HOST_UID:HOST_GID`. `sudo chown -R 1000:1000 <dir>`.
+`${DEVBOX_DATA_DIR}` isn't owned by `HOST_UID:HOST_GID`. `sudo chown -R 1000:1000 <dir>`.
 
 **A globally installed package "disappeared"**
-Anything written to the container's writable layer is lost whenever the container is recreated (`rebuild`, or
-`down`/`up` onto a new image) - `npm install -g <pkg>` and `nvm install <version>` write to `/opt`, not to
-the bind mount. Pin it in the `Dockerfile` instead - see [Toolchain](toolchain.md#adding-a-tool).
+The container's writable layer is lost on recreate (`rebuild`, or `down`/`up` onto a new image) -
+`npm install -g <pkg>` and `nvm install <version>` write to `/opt`, not the bind mount. Pin it in the
+`Dockerfile` instead - see [Toolchain](toolchain.md#adding-a-tool).
 
 **`wt switch` does not change directory**
-It was run inside a pipeline, so its `cd` happened in a subshell. Run it directly.
+Run inside a pipeline, its `cd` happens in a subshell. Run it directly.
 
 **`docker: Cannot connect to the Docker daemon`**
-The project daemon is down or was never provisioned. On the host: `sudo ./bin/rootless-docker --check`, then
+Project daemon is down or never provisioned. On the host: `sudo ./bin/rootless-docker --check`, then
 `systemctl --user --machine=dev@.host status docker` for the daemon's own log.
 
 **A project's bind mount is empty**
-Path identity was broken: the project must live under `/home/dev`, and `DEVBOX_DATA_DIR` must equal
-`/home/dev` - the daemon resolves bind-mount sources on the host. `sudo ./bin/rootless-docker --check` reports
-a mismatch.
+Path identity broke: the project must live under `/home/dev` and `DEVBOX_DATA_DIR` must equal it - the
+daemon resolves bind-mount sources on the host. `sudo ./bin/rootless-docker --check` reports mismatches.
 
 **`ssh devbox` closes mid-session with no error**
-The container went away under the session. sshd was killed with it, so nothing was left to send a disconnect
-message and the client just sees the socket close. Three things do that:
+The container went away under the session, killing sshd with it - nothing sent a disconnect, so the client
+just sees the socket close. Three things do that:
 
-1. **A deploy.** `./bin/devbox up` after an `.env`, `docker-compose.yml` or `Dockerfile` change recreates the
-   container; `rebuild` and `down` always do. All three now count live sessions and prompt first, and
-   `./bin/devbox sessions` shows who is connected before you deploy.
-2. **A Docker restart on the host.** A manual `sudo apt upgrade` that pulls `docker-ce` or `containerd.io`
-   restarts the daemon and every container with it - `grep -h Upgrade /var/log/apt/history.log |
-   grep -E 'docker|containerd'` dates it. `unattended-upgrades` will *not* do this on its own:
-   `Allowed-Origins` in `/etc/apt/apt.conf.d/50unattended-upgrades` lists only Ubuntu and ESM origins, and
-   Docker ships from `download.docker.com`. Verify before blaming it.
+1. **A deploy.** `./bin/devbox up` after an `.env`, `docker-compose.yml` or `Dockerfile` change recreates
+   the container; `rebuild`/`down` always do. All three count live sessions and prompt first;
+   `./bin/devbox sessions` shows who's connected before deploying.
+2. **A Docker restart on the host.** A manual `sudo apt upgrade` pulling `docker-ce` or `containerd.io`
+   restarts the daemon and every container - `grep -h Upgrade /var/log/apt/history.log |
+   grep -E 'docker|containerd'` dates it. `unattended-upgrades` alone won't: `Allowed-Origins` in
+   `/etc/apt/apt.conf.d/50unattended-upgrades` lists only Ubuntu and ESM origins; Docker ships from
+   `download.docker.com`. Verify before blaming it.
 3. **A host reboot or OOM kill.** `docker inspect devbox --format '{{.State.StartedAt}} {{.State.OOMKilled}}
    {{.RestartCount}}'` separates the two.
 
-A session that merely *hangs* is the opposite case: that is the network, and `ClientAliveInterval 30` with
+A session that merely *hangs* is the opposite - the network; `ClientAliveInterval 30` with
 `ClientAliveCountMax 6` in `container/sshd_config` ends it after ~3 minutes of an unreachable client.
 
 ## ❓ FAQ
 
 **Does the container come back after a host reboot?**
-Yes - `restart: unless-stopped`. Tailscale must be up for the published address to bind; if the host boots
-without it, `up` again once it is.
+Yes - `restart: unless-stopped`. Tailscale must be up for the published address to bind; boot without it,
+run `up` again once it is.
 
 **How do I stop everything without losing state?**
 `./bin/devbox down`. State is on the bind mount; only running processes end.
 
 **Can I run two devboxes on one host?**
-Only with an override: `container_name: devbox` is hard-coded in `docker-compose.yml`, and `bin/devbox`
-targets that service name. A second checkout needs a `docker-compose.override.yml` changing
-`container_name`, plus a distinct `DEVBOX_SSH_PORT`, `DEVBOX_DATA_DIR` and compose project name.
+Only with an override: `container_name: devbox` is hard-coded in `docker-compose.yml`, which `bin/devbox`
+targets by name. A second checkout needs a `docker-compose.override.yml` changing `container_name`, plus
+distinct `DEVBOX_SSH_PORT`, `DEVBOX_DATA_DIR`, and compose project name.
 
 **How do I see what changed before deploying?**
 Rehearse the sync with `-n`:
@@ -156,13 +153,13 @@ rsync -azni --delete --exclude .git --exclude .env --exclude 'data/' --exclude .
 ```
 
 **Is `bootstrap` safe to run while I am working in a pane?**
-Yes. Every step is guarded and it only touches config files; it does not restart sshd or kill sessions.
+Yes - every step is guarded, touching only config files; it doesn't restart sshd or kill sessions.
 
 **Where do container logs live?**
 Docker's json-file log for the `devbox` service - `./bin/devbox logs`. sshd logs to stderr (`-e`), so
 authentication failures appear there.
 
 **How do I move the devbox to another workstation?**
-`bin/push` to the new host, `./bin/devbox env`, restore the data tarball (or start fresh and re-run the
-[manual checklist](secrets.md#manual-checklist)), then `./bin/devbox up`. The SSH host key comes from the data
-dir, so a restore keeps the laptop's `known_hosts` valid.
+`bin/push` to the new host, `./bin/devbox env`, restore the data tarball (or start fresh, re-running the
+[manual checklist](secrets.md#manual-checklist)), then `./bin/devbox up`. The SSH host key comes from the
+data dir, so a restore keeps the laptop's `known_hosts` valid.

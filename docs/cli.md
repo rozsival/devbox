@@ -1,8 +1,7 @@
 # ⌨️ CLI reference
 
 Two entrypoints, both hand-written bash with `set -euo pipefail`: `bin/devbox` runs **on the workstation**,
-`bin/push` runs **on the laptop**. Log prefixes are `[INFO]`, `[OK]`, `[WARN]`, `[ERROR]`, matching
-`workstation`.
+`bin/push` on **the laptop**. Log prefixes `[INFO]`, `[OK]`, `[WARN]`, `[ERROR]` match `workstation`.
 
 ## `bin/devbox`
 
@@ -23,38 +22,37 @@ Usage: ./bin/devbox <command>
   doctor            Check host wiring, exposure, and the in-container toolchain
 ```
 
-Every command loads `.env` first and fails with a pointer to `.env.example` if it is missing.
+Every command loads `.env` first, failing toward `.env.example` if missing.
 
-`up`, `down` and `rebuild` count established SSH sessions first. Recreating or stopping the container kills
-them mid-keystroke and the client prints nothing at all, so with sessions live they prompt on a terminal and
-refuse outright in a script; `--force` (`-f`) skips the prompt. A `docker compose up` that changes nothing
-leaves the container running, so a no-op `up` never asks.
+`up`, `down` and `rebuild` count established SSH sessions first: recreating or stopping kills them
+mid-keystroke with no client output, so live sessions get a terminal prompt, or refusal in a script;
+`--force`/`-f` skips it. A `docker compose up` that changes nothing leaves the container running, so a
+no-op `up` never asks.
 
-- **`env`** - never clobbers an existing `.env`; rewrites `BIND_ADDR` from `tailscale ip -4` and
-  `HOST_UID`/`HOST_GID` from the `dev` host user when it exists, otherwise from the invoking user.
-- **`up`** - preflight (`BIND_ADDR` non-empty; `DEVBOX_DATA_DIR` present and owned by `HOST_UID:HOST_GID`,
-  created with `install -d` when absent; a *warning*, not a failure, when the project Docker socket is
-  missing, with a pointer to `sudo ./bin/rootless-docker`), `docker compose build`, then
-  `docker compose up -d`. The build runs before the session check because a fresh image is itself a reason
-  for compose to recreate.
-- **`down`** - `docker compose down`. The bind mount and `.env` are untouched.
+- **`env`** - never clobbers `.env`; sets `BIND_ADDR` from `tailscale ip -4`, `HOST_UID`/`HOST_GID` from
+  `dev` if present, else invoking user.
+- **`up`** - preflight (`BIND_ADDR` non-empty; `DEVBOX_DATA_DIR` present, owned `HOST_UID:HOST_GID`,
+  `install -d`'d if absent; missing project Docker socket only *warns*, toward `sudo ./bin/rootless-docker`),
+  then `docker compose build` and `docker compose up -d`. Build precedes the session check - a fresh image
+  alone justifies recreating.
+- **`down`** - `docker compose down`. Bind mount and `.env` untouched.
 - **`rebuild`** - `docker compose build --no-cache && docker compose up -d`. Use after a `Dockerfile` change.
-- **`bootstrap`** - `docker compose exec` of `container/bootstrap.sh`; idempotent and reprints the checklist.
-- **`skills`** - `docker compose exec` of `container/skills.sh`: the three global agent skills plus the
-  `agent-browser` CLI and its Chrome build. Optional, idempotent, and separate from `bootstrap` because the
-  first run downloads ~180 MB. See [Toolchain](toolchain.md#agent-skills-and-browser-automation).
-- **`shell`** - `docker compose exec -it devbox bash -l`. Works even when sshd or Tailscale is broken.
-- **`sessions`** - established connections to the container's sshd plus the last 10 `Accepted`/`Disconnected`
-  lines, for tracing a disconnect after the fact.
+- **`bootstrap`** - `docker compose exec` of `container/bootstrap.sh`; idempotent, reprints the checklist.
+- **`skills`** - `docker compose exec` of `container/skills.sh`: three global agent skills plus
+  `agent-browser`'s CLI and Chrome build. Optional, idempotent, kept separate from `bootstrap` - first run
+  downloads ~180 MB. See [Toolchain](toolchain.md#agent-skills-and-browser-automation).
+- **`shell`** - `docker compose exec -it devbox bash -l`. Works even with sshd or Tailscale broken.
+- **`sessions`** - established sshd connections plus the last 10 `Accepted`/`Disconnected` lines, tracing a
+  disconnect after the fact.
 - **`logs`** - `--tail 100` by default; `-f` follows.
-- **`hook`** - stops `moshi-hook` and starts it again with a detached `docker compose exec`, then prints
-  `moshi-hook status`. The non-destructive restart path: the daemon is a child of the entrypoint, so the
-  alternative would be recreating the container and killing every SSH session with it. Needed after
-  `moshi-hook pair` and after a crash. See [Toolchain](toolchain.md#moshi-and-moshi-hook).
-- **`keys`** - prints the authentication (`id_*.pub`) and signing (`signing_*.pub`) public keys per identity (or
-  `not set` if the `GIT_*_PUBKEY` / `GIT_*_SIGNINGKEY` value is empty in `.env`) and the sshd host-key
-  fingerprint. Not a paste target: they're already your laptop's own keys, already on GitHub.
-- **`doctor`** - the checks below. It runs all of them, reports each one, and exits non-zero if any failed.
+- **`hook`** - stops and restarts `moshi-hook` via detached `docker compose exec`, prints
+  `moshi-hook status`. Non-destructive: the daemon is a child of the entrypoint; alternative is recreating
+  the container, killing every SSH session. Needed after `moshi-hook pair` or a crash. See
+  [Toolchain](toolchain.md#moshi-and-moshi-hook).
+- **`keys`** - prints authentication (`id_*.pub`) and signing (`signing_*.pub`) public keys per identity
+  (`not set` if `GIT_*_PUBKEY`/`GIT_*_SIGNINGKEY` empty in `.env`), plus sshd host-key fingerprint. Not a
+  paste target - your laptop's own keys, already on GitHub.
+- **`doctor`** - runs every check below, reports each, exits non-zero if any failed.
 
 ### What `doctor` checks
 
@@ -63,11 +61,13 @@ leaves the container running, so a no-op `up` never asks.
 3. Something listening on `BIND_ADDR:${DEVBOX_SSH_PORT}`, and **nothing** on `0.0.0.0`
 4. Container health status is `healthy`
 5. PID 1 runs as `dev` (no root process)
-6. Eleven toolchain probes, each with its real exit code: `herdr`, `omp`, `node`, `pnpm`, `gh`, `lazygit`,
-   `wt`, `terraform`, `git`, `docker`, `docker compose`
-7. The `moshi-hook` daemon is installed and running - unpaired is reported as a warning, not a failure
-8. The project Docker daemon is reachable from inside the container and reports `rootless`
-9. `host.docker.internal` resolves inside the container
+6. Eleven toolchain probes, real exit codes: `herdr`, `omp`, `node`, `pnpm`, `gh`, `lazygit`, `wt`,
+   `terraform`, `git`, `docker`, `docker compose`
+7. `moshi-hook` daemon installed and running - unpaired warns, doesn't fail
+8. Project Docker daemon reachable from the container, reporting `rootless`
+9. `host.docker.internal` resolves inside the container to the project daemon's published address (`--ip`
+   in `/etc/systemd/user/docker.service`) - a mismatch strands every published project port
+10. `devbox-docker-firewall` service active - without it, published project ports reach the Tailnet and LAN
 
 ## `bin/rootless-docker`
 
@@ -75,25 +75,25 @@ leaves the container running, so a no-op `up` never asks.
 Usage: sudo ./bin/rootless-docker [--check]
 ```
 
-Host-side, one-time provisioning for the project Docker daemon: a second, rootless `dockerd` running as a
+Host-side, one-time provisioning for the project Docker daemon: a second, rootless `dockerd` running as
 dedicated unprivileged host user `dev` (uid 1001, group `devbox`) - never the host's root daemon, never
-nested in the container. See [Docker](docker.md) for the reasoning.
+nested in the container. See [Docker](docker.md).
 
-Must run with `sudo`. Every step is idempotent, so a re-run is a no-op. `--check` reports what is missing and
-changes nothing.
+Requires `sudo`; every step is idempotent, so re-runs are no-ops. `--check` reports what's missing, changes
+nothing.
 
 What it provisions:
 
 - installs `uidmap` and `slirp4netns`
-- creates the `dev:devbox` host user (uid 1001), no password, no keys, no sudo
-- moves `DEVBOX_DATA_DIR` to `/home/dev` and chowns it, so container and host bind-mount paths match
-- writes `/etc/nftables.d/devbox-docker.nft` and enables `devbox-docker-firewall.service`, which keeps
-  published project ports off every interface but loopback and the devbox bridge
-- adds one `ufw` rule so the devbox bridge can reach the gateway address ports are published on
+- creates `dev:devbox` host user (uid 1001): no password, no keys, no sudo
+- moves `DEVBOX_DATA_DIR` to `/home/dev`, chowning it so host and container bind-mount paths match
+- writes `/etc/nftables.d/devbox-docker.nft`, enables `devbox-docker-firewall.service`: keeps published
+  project ports off every interface but loopback and the devbox bridge
+- adds one `ufw` rule so the devbox bridge reaches the gateway address ports publish on
 - writes `/etc/tmpfiles.d/devbox-docker.conf` so `/run/devbox` exists before the daemon starts and on reboot
-- runs `loginctl enable-linger dev`, so the never-logged-in account still gets a systemd user manager
+- runs `loginctl enable-linger dev`: gives the never-logged-in account a systemd user manager
 - writes its own root-owned `/etc/systemd/user/docker.service` running
-  `dockerd-rootless.sh --host unix:///run/devbox/docker.sock`, and restarts the daemon when that file changes
+  `dockerd-rootless.sh --host unix:///run/devbox/docker.sock`, restarting the daemon when that file changes
 - patches `.env`: `DEVBOX_DATA_DIR=/home/dev`, `HOST_UID`/`HOST_GID=1001`,
   `DEVBOX_DOCKER_SOCKET_DIR=/run/devbox`
 
@@ -113,11 +113,11 @@ Environment:
   DEVBOX_REMOTE_PATH  remote repo path (default: ~/devbox)
 ```
 
-The sync is `rsync -az --delete` excluding `.git`, `.env`, `data/` and `.DS_Store`. It checks for `rsync` on
-both sides first and prints the exact remedy if it is missing.
+Sync: `rsync -az --delete` excluding `.git`, `.env`, `data/` and `.DS_Store`. Checks for `rsync` on both
+sides first, printing the exact remedy if missing.
 
-`--up` runs the remote `up` over `ssh -t`, so when that `up` would recreate the container with sessions
-attached its prompt reaches your terminal instead of failing the push. `--force` answers it up front.
+`--up` runs the remote `up` over `ssh -t`, so a recreate-with-sessions prompt reaches your terminal instead
+of failing the push; `--force` answers it up front.
 
 ```bash
 ./bin/push workstation              # sync only
@@ -138,9 +138,9 @@ Environment:
   OMP_CONFIG        source file (default: ~/.omp/agent/config.yml)
 ```
 
-Copies this laptop's OMP preset into the devbox and keeps one `config.yml.bak` there. It talks to the
-container's sshd (`Host devbox`, port 2223), not the workstation's, so the file lands inside the bind-mounted
-`/home/dev`. Unlike `bin/push` it is not part of a deploy - the preset is personal state, not repo content.
+Copies this laptop's OMP preset into the devbox, keeping one `config.yml.bak` there. Talks to the
+container's sshd (`Host devbox`, port 2223), not the workstation's, so the file lands inside bind-mounted
+`/home/dev`. Unlike `bin/push`, not part of a deploy - the preset is personal state, not repo content.
 
 ## `bin/install-agent`
 
@@ -148,11 +148,12 @@ container's sshd (`Host devbox`, port 2223), not the workstation's, so the file 
 Usage: ./bin/install-agent
 ```
 
-Laptop-side, idempotent: installs the same agent git override the devbox bootstraps - the `omp` launcher,
-`gh` shim, credential helper and fence in `~/.local/libexec/devbox-agent`, `devbox-gh-token` in
-`~/.local/bin`, a `~/.local/bin/omp` symlink to the launcher, and `~/.config/devbox/agent*.gitconfig`. Every
-file is regenerated on every run; nothing of yours is read or edited. Reports whether `omp` currently
-resolves to the launcher and prints the remaining manual steps (PATs, App credentials). See
+Laptop-side, idempotent: installs the same agent git override the devbox bootstraps - `omp` launcher, `gh`
+shim, credential helper (`devbox-git-credential`), SSH fence (`devbox-git-no-ssh`) in
+`~/.local/libexec/devbox-agent`; `devbox-gh-token` in `~/.local/bin`; a `~/.local/bin/omp` symlink to the
+launcher; `~/.config/devbox/agent*.gitconfig`. All regenerated every run; nothing else of yours is touched,
+except `~/.config/devbox/secrets.env` - created from the template if absent, else left with mode reset to 600.
+Reports whether `omp` resolves to the launcher, plus remaining manual steps (PATs, App credentials). See
 [Git identities](git.md#laptop-install).
 
 ## `bin/laptop-doctor`
@@ -161,44 +162,43 @@ resolves to the launcher and prints the remaining manual steps (PATs, App creden
 Usage: ./bin/laptop-doctor
 ```
 
-Laptop-side, read-only counterpart of `devbox doctor`: no private key on disk and the five named `.pub`
-files all held by the 1Password agent; every `Host` block selecting one `.pub` through that agent with
-`IdentitiesOnly`; both gitconfigs signing through `op-ssh-sign` with the `signing_*.pub` keys and an
-`allowed_signers` file; `omp` resolving to the launcher, every installed agent file identical to the repo
-template, and no agent token (`x-access-token`) stored in the macOS keychain - the sign that a system
-credential helper ran ahead of `devbox-git-credential`; `secrets.env` at mode 600 with both PATs accepted by
-`gh`, the App pem readable as a key; and the four connections (`git@github.com`, `git@work.github.com`,
-`workstation`, `devbox`) authenticating - the two GitHub aliases to two different accounts. Reports every
-check, exits non-zero if any failed. Safe to run from inside an agent session: it drops the launcher's
-exports and PATH entry first, since it audits your own configuration. The `devbox-laptop` skill walks the
-fixes.
+Laptop-side, read-only counterpart of `devbox doctor`: no private key on disk, all five named `.pub` files
+held by the 1Password agent; every `Host` block selecting one via that agent with `IdentitiesOnly`; both
+gitconfigs signing through `op-ssh-sign` with `signing_*.pub` keys and an `allowed_signers` file; `omp`
+resolving to the launcher, every installed agent file matching the repo template, no agent token
+(`x-access-token`) in the macOS keychain - a sign a system credential helper preempted
+`devbox-git-credential`; `secrets.env` at mode 600, both PATs accepted by `gh`, the App pem readable as a
+key; and all four connections (`git@github.com`, `git@work.github.com`, `workstation`, `devbox`)
+authenticating - the two GitHub aliases mapping two accounts. Reports every check, exits non-zero on
+failure. Safe inside an agent session: drops the launcher's exports and PATH entry first, auditing your own
+config. The `devbox-laptop` skill walks the fixes.
 
 ## ❓ FAQ
 
 **Why plain bash instead of bashly, like `workstation`?**
-Ten commands and no code-generation step. `bin/src` plus a `pnpm run build:cli` pipeline would be pure
-overhead here. Keep it hand-written.
+Ten commands, no code-generation step needed - `bin/src` plus `pnpm run build:cli` would be pure overhead.
+Keep it hand-written.
 
 **Can I run `bin/devbox` from the laptop?**
 No - it drives the local Docker daemon. Use `ssh workstation 'cd ~/devbox && ./bin/devbox <cmd>'`, or
 `./bin/push workstation --up` for the common case.
 
 **Is `--delete` dangerous?**
-It only applies to paths that are synced, and `.env`, `data/` and `.git` are excluded. Files you added to the
-remote copy of a *tracked* directory will be removed - that is intentional, the remote is a mirror.
+Only applies to synced paths - `.env`, `data/` and `.git` are excluded. Files added to a *tracked*
+directory's remote copy are removed; intentional, the remote is a mirror.
 
 **`up` vs `rebuild` - which do I need?**
-`up` after a compose, `.env`, `container/` or `home/` change (it rebuilds layers that changed). `rebuild` when
-you need a cache-free image, e.g. after bumping a pinned version.
+`up` after a compose, `.env`, `container/` or `home/` change - rebuilds changed layers. `rebuild` for a
+cache-free image, e.g. after bumping a pinned version.
 
 **Does `bootstrap` overwrite my dotfiles?**
-Only the two generated ones: `~/.bashrc.d/devbox.sh` and `~/.ssh/config`, both rewritten from the templates
-on every run. `~/.gitconfig`, both `secrets*.env` files and the OMP config are created if absent and then
-left alone; derived Git identity values are re-applied with `git config --global` on each run.
+Only the two generated ones - `~/.bashrc.d/devbox.sh` and `~/.ssh/config` - rewritten from templates every
+run. `~/.gitconfig`, both `secrets*.env` files, and the OMP config: created if absent, then left alone;
+derived Git identity values re-apply via `git config --global` each run.
 
 **`doctor` says `BIND_ADDR is X but Tailscale reports Y`.**
 The node's Tailscale address changed. `./bin/devbox env && ./bin/devbox up`.
 
 **How do I tell whether the project Docker daemon is provisioned?**
-`sudo ./bin/rootless-docker --check` reports every missing piece and changes nothing. `./bin/devbox doctor`
-also checks that the daemon is reachable and rootless from inside the container.
+`sudo ./bin/rootless-docker --check` reports every missing piece, changes nothing. `./bin/devbox doctor`
+also checks the daemon is reachable and rootless from inside the container.

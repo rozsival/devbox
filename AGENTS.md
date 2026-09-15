@@ -51,7 +51,8 @@ the host's root Docker daemon.
   - `docs/git.md` - the two identities, manual vs agent git, the credential helper, signing, laptop install
   - `docs/toolchain.md` - pinned versions, install locations, OMP, Moshi/`moshi-hook`, agent skills, adding a tool
   - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, GCP ADC, App credentials
-  - `docs/cli.md` - `bin/devbox`, `bin/push` and `bin/sync-omp` reference
+  - `docs/cli.md` - `bin/devbox`, `bin/rootless-docker`, `bin/push`, `bin/sync-omp`, `bin/install-agent` and
+    `bin/laptop-doctor` reference
   - `docs/networking.md` - exposure model, why UFW cannot block a published port, tunnels
   - `docs/docker.md` - the rootless project daemon, path identity, reaching services, `devbox-ports`
   - `docs/operations.md` - redeploy, persistence, backup, health, troubleshooting
