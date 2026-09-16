@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
-# edit home/.local/libexec/devbox-agent/omp in the repo.
+# edit home/.local/libexec/devbox-agent/omp-launcher in the repo.
 #
 # PATH launcher in front of the real `omp`. Everything an agent session does to
 # git - clone, fetch, push, commit, and every tool that shells out to git - runs
@@ -9,27 +9,68 @@
 # commits) and the agent (HTTPS, per-operation tokens, bot author, unsigned)
 # with no per-repository setup. See docs/git.md.
 #
-# This directory sits first on the PATH so the launcher wins over the real
-# binary, which on the devbox is ~/.local/bin/omp (upstream's installer) and on
-# the laptop wherever it was installed; the loop below finds it by skipping
-# itself, so `omp update` replacing the real binary never breaks the launcher.
+# Reached as `omp` through a symlink - `<this dir>/omp` on the devbox, where
+# devbox.sh puts this directory first on the PATH, and `~/.local/bin/omp` on the
+# laptop - never as a file literally named `omp`, and never as the file `omp
+# update` would write to. The real binary is found by skipping every PATH entry
+# that resolves here, so `omp update` replacing it never breaks the launcher.
 set -euo pipefail
 
 self="$(readlink -f "${BASH_SOURCE[0]}")"
 self_dir="$(dirname "${self}")"
 
+# The real omp is the first PATH entry that is not this launcher under any of
+# its names; `clean_dirs` is the same PATH with every launcher entry removed
+# (see the update passthrough below).
 real=''
+clean_dirs=()
 IFS=: read -ra path_dirs <<<"${PATH}"
 for dir in "${path_dirs[@]}"; do
   candidate="${dir}/omp"
-  [[ -f ${candidate} && -x ${candidate} ]] || continue
-  [[ "$(readlink -f "${candidate}")" == "${self}" ]] && continue
-  real="${candidate}"
-  break
+  if [[ -f ${candidate} && -x ${candidate} ]]; then
+    if [[ "$(readlink -f "${candidate}")" == "${self}" ]]; then
+      continue
+    fi
+    if [[ -z ${real} ]]; then
+      real="${candidate}"
+    fi
+  fi
+  clean_dirs+=("${dir}")
 done
 if [[ -z ${real} ]]; then
   printf '%s\n' 'omp launcher: no other omp on the PATH - install OMP (curl -fsSL https://omp.sh/install.sh | sh)' >&2
   exit 127
+fi
+
+# `omp update` decides what to replace by looking `omp` up on the PATH, and
+# takes over whatever it finds there - a plain file in place, a symlink through
+# its target. Both would be this launcher. Every launcher entry is therefore
+# dropped for that one subcommand, so the lookup lands on the real install
+# (bun/npm-managed on the laptop, the standalone binary in ~/.local/bin on the
+# devbox), which is what the updater must replace. Without this, `omp update`
+# overwrote the launcher with the release binary: agent sessions afterwards ran
+# under your own gitconfig and reached for your SSH keys, silently.
+#
+# An argv shape this does not recognise (a global flag taking a separate value
+# before the subcommand) keeps the launcher's own PATH, and then the symlink
+# layout is the backstop: the updater's shebang check refuses to replace a
+# script it reached through a symlink, so the worst case is a one-line error.
+# No git runs here, so none of the exports below apply.
+subcommand=''
+for arg in "$@"; do
+  if [[ ${arg} == -* ]]; then
+    continue
+  fi
+  subcommand="${arg}"
+  break
+done
+if [[ ${subcommand} == update ]]; then
+  PATH="$(
+    IFS=:
+    printf '%s' "${clean_dirs[*]:-}"
+  )"
+  export PATH
+  exec "${real}" "$@"
 fi
 
 # The agent's git configuration, read instead of ~/.gitconfig: HTTPS rewrites,

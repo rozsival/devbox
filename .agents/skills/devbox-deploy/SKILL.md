@@ -60,7 +60,8 @@ entrypoint and bootstrap. That's why `up` answers both; unchanged, it's idempote
 `Container devbox Running`, nothing restarts.
 
 One caveat for `home/`: bootstrap rewrites several files unconditionally - `~/.bashrc.d/devbox.sh`,
-`~/.ssh/config`, `~/.local/libexec/devbox-agent/{omp,gh,devbox-git-credential,devbox-git-no-ssh}`,
+`~/.bash_profile`, `~/.ssh/config`,
+`~/.local/libexec/devbox-agent/{omp-launcher,omp,gh,devbox-git-credential,devbox-git-no-ssh}`,
 `~/.config/devbox/agent*.gitconfig` - all generated, not hand-edited, so template edits land next run.
 `~/.gitconfig`, `~/.config/devbox/secrets.env`, OMP config are create-if-absent: editing those templates
 doesn't reach an existing home - delete the file under `${DEVBOX_DATA_DIR}`, or apply by hand. Git
@@ -74,8 +75,8 @@ This matters: "will I lose my keys / repos / gh login" is a flat no, by construc
 - `${DEVBOX_DATA_DIR}` is a host bind mount, not the image: `~/.ssh/id_*.pub`,
   `~/.ssh/signing_*.pub` (public keys only - devbox holds no private key), sshd host key under
   `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/secrets.env`, `~/.config/devbox/agent*.gitconfig`,
-  `~/.local/libexec/devbox-agent` (`omp` launcher, `gh` shim, credential helper, fence), `~/.gitconfig`,
-  every project checkout, project daemon's images, build cache, named volumes under
+  `~/.local/libexec/devbox-agent` (`omp-launcher` plus its `omp` symlink, `gh` shim, credential helper,
+  fence), `~/.gitconfig`, every project checkout, project daemon's images, build cache, named volumes under
   `~/.local/share/docker` - all persist across `up`, `rebuild`, image changes.
 - `--delete` applies only to synced paths; it *will* remove hand-added files from a tracked directory's
   remote copy - the remote is a mirror, deliberately.
@@ -101,8 +102,9 @@ ssh workstation 'cd ~/devbox && ./bin/devbox doctor'
 
 `doctor` runs all checks, reports each, exits non-zero on any failure: compose present, `BIND_ADDR` equal
 to `tailscale ip -4`, port listening on `BIND_ADDR`, **nothing** on `0.0.0.0`, container `healthy`, PID 1
-as `dev`, eleven toolchain probes, real exit codes, `moshi-hook` running (unpaired warns, stopped fails -
-`./bin/devbox hook` restarts it), project Docker daemon reachable and rootless, `host.docker.internal`
+as `dev`, eleven toolchain probes, real exit codes, the agent git override intact (`omp` resolving through
+a symlink to `omp-launcher`, not a file an `omp update` replaced), `moshi-hook` running (unpaired warns,
+stopped fails - `./bin/devbox hook` restarts it), project Docker daemon reachable and rootless, `host.docker.internal`
 resolving to publish address, and `devbox-docker-firewall` active.
 
 If `doctor` reports `BIND_ADDR is X but Tailscale reports Y`, the node's address changed:

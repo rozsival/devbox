@@ -75,9 +75,10 @@ signature for <email>` with the *signing* key's fingerprint.
 ./bin/install-agent
 ```
 
-Installs the devbox's bootstrap override, from `home/` templates: the `omp` launcher
-(`~/.local/bin/omp` → `~/.local/libexec/devbox-agent/omp`), `gh` shim, `devbox-git-credential`,
-`devbox-git-no-ssh`, `devbox-gh-token`, `~/.config/devbox/agent*.gitconfig`. Every OMP session through a
+Installs the devbox's bootstrap override, from `home/` templates: `omp-launcher`
+(`~/.local/bin/omp` → `~/.local/libexec/devbox-agent/omp` → `omp-launcher`, symlinks at both hops), `gh`
+shim, `devbox-git-credential`, `devbox-git-no-ssh`, `devbox-gh-token`,
+`~/.config/devbox/agent*.gitconfig`. Every OMP session through a
 shell after gets HTTPS remotes, per-operation tokens, a bot author, no signing, a `gh` with no stored login
 - shell/IDE on same clones keep SSH remote, 1Password agent, signed commits. Re-run after `git pull`
 touches `home/`; `laptop-doctor` reports drift from templates.
@@ -85,6 +86,12 @@ touches `home/`; `laptop-doctor` reports drift from templates.
 The launcher only covers what resolves `omp` via PATH - a herdr pane or alias naming the binary by
 absolute path (`~/.bun/bin/omp`) bypasses it; use plain `omp`. Proof: `echo $GIT_CONFIG_GLOBAL` prints
 `~/.config/devbox/agent.gitconfig`; empty means session predates install or bypassed launcher.
+
+`omp update` is safe: the launcher drops its own PATH entries for that subcommand, so the updater replaces
+the real install (bun/npm-managed here, `~/.local/bin/omp` on the devbox) and not the launcher. Before that
+passthrough, an update wrote the release binary over the launcher and agent sessions silently fell back to
+`~/.gitconfig` - SSH remotes, your keys. Re-run `./bin/install-agent` if a session ever reaches for a key;
+the symlinks are what `laptop-doctor` checks.
 
 ## Phase 5 - what the override needs
 
@@ -112,6 +119,7 @@ Check: `./bin/laptop-doctor` validates both tokens against GitHub, pem as a key;
 | `Host devbox: ForwardAgent yes`                   | Remove it; forward via `ssh -A devbox` when needed                                                      |
 | `user.signingkey is …`                            | Points at literal or auth key; use `signing_*.pub`                                                      |
 | `omp resolves to …, not the launcher`             | `./bin/install-agent`; put `~/.local/bin` first on PATH                                                 |
+| `… is not a symlink to …/omp-launcher`            | An `omp` release binary replaced a launcher symlink; `./bin/install-agent`, then `omp update` again     |
 | `differ from the repo templates`                  | `./bin/install-agent` (templates changed since last install)                                            |
 | `the keychain holds an agent token`               | Homebrew's `osxkeychain` preempted the helper; erase via `git credential-osxkeychain erase`, reinstall  |
 | `no <account> token` / `token is rejected`        | Fill/re-issue the PAT in `secrets.env` (phase 5)                                                        |

@@ -300,9 +300,16 @@ done
 # GIT_SSH_COMMAND that refuses, for its own process tree only. The directory is
 # first on the PATH from devbox.sh so `omp` resolves to the launcher ahead of
 # ~/.local/bin/omp. All generated files: reinstalled on every run.
-for tool in omp devbox-git-credential devbox-git-no-ssh; do
+#
+# `omp` here is a symlink to the launcher script, never the script itself:
+# `omp update` resolves what to replace by looking `omp` up on the PATH, and
+# would take over a plain file in place. The launcher drops its own PATH entries
+# for that subcommand so the update lands on ~/.local/bin/omp (§1); the symlink
+# is the backstop, since the updater refuses to replace a script behind one.
+for tool in omp-launcher devbox-git-credential devbox-git-no-ssh; do
   install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${agent_dir}/${tool}"
 done
+ln -sfn "${agent_dir}/omp-launcher" "${agent_dir}/omp"
 for cfg in agent.gitconfig agent-work.gitconfig; do
   install -m 644 "${TEMPLATE_DIR}/.config/devbox/${cfg}" "${secrets_dir}/${cfg}"
 done

@@ -43,10 +43,13 @@ ssh workstation 'cd ~/devbox && ./bin/devbox doctor'
 - **`~/.local/bin`** - OMP and `moshi-hook`, installed by `bootstrap` rather than baked in, so `omp update`
   and `moshi-hook update` work without a rebuild. Also `devbox-gh-token`, the per-directory GitHub token resolver
   ([Secrets](secrets.md#gh)).
-- **`~/.local/libexec/devbox-agent`** - the `omp` launcher, `gh` shim, and two git-fencing scripts
-  (`devbox-git-credential`, `devbox-git-no-ssh`). `home/.bashrc.d/devbox.sh` puts it first on every devbox
-  shell's `PATH`, shadowing `gh`; the launcher does likewise for one process tree elsewhere, including the
-  laptop (`./bin/install-agent`). See [Git identities](git.md#agent-sessions).
+- **`~/.local/libexec/devbox-agent`** - `omp-launcher`, the `gh` shim, and two git-fencing scripts
+  (`devbox-git-credential`, `devbox-git-no-ssh`), plus an `omp` symlink to the launcher.
+  `home/.bashrc.d/devbox.sh` puts it first on every devbox shell's `PATH`, shadowing `gh` and `omp`; the
+  launcher does likewise for one process tree elsewhere, including the laptop (`./bin/install-agent`).
+  `home/.bash_profile` re-asserts that order for login shells, where the distro's `~/.profile` prepends
+  `~/.local/bin` *after* sourcing `~/.bashrc` and would otherwise put the real `omp` in front. See
+  [Git identities](git.md#agent-sessions).
 - **`/usr/local/lib/docker/cli-plugins`** - home for `docker compose`/`docker buildx` as CLI plugins; only
   the client ships in the image, the daemon is the host's rootless `dev` daemon (below).
 
@@ -67,8 +70,12 @@ Keep `DOCKER_CLI_VERSION` equal to the host daemon's - compose refuses an API ne
 ```bash
 omp                 # TUI
 omp --version
-omp update          # updates in place; no image rebuild
+omp update          # updates ~/.local/bin/omp in place; no image rebuild
 ```
+
+`omp` on the `PATH` is the agent launcher, not the binary; `omp update` passes through to the real install
+it shadows, which is why the launcher survives an update. See
+[Git identities](git.md#omp-update).
 
 `~/.omp/agent/config.yml` seeds from `home/.omp/agent/config.yml` only if absent, with
 `secrets: { enabled: true }` obfuscating an API key in the environment - `~/.config/devbox/secrets.env` or

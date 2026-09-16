@@ -11,6 +11,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPO_ROOT
 readonly TEMPLATE_DIR="${REPO_ROOT}/home"
 readonly AGENT_DIR="${HOME}/.local/libexec/devbox-agent"
+readonly BIN_DIR="${HOME}/.local/bin"
 readonly CONFIG_DIR="${HOME}/.config/devbox"
 readonly SSH_DIR="${HOME}/.ssh"
 readonly OP_AGENT_SOCK="${HOME}/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
@@ -150,13 +151,19 @@ fi
 
 # -- 4. Agent git override: installed and identical to the templates ---------
 log_info 'agent git override'
-if resolved="$(command -v omp 2>/dev/null)" && [[ "$(readlink -f "${resolved}")" == "${AGENT_DIR}/omp" ]]; then
+if resolved="$(command -v omp 2>/dev/null)" && [[ "$(readlink -f "${resolved}")" == "${AGENT_DIR}/omp-launcher" ]]; then
   log_success "omp → ${resolved} → launcher"
 else
   fail "omp resolves to ${resolved:-nothing}, not the launcher - run ./bin/install-agent and put ~/.local/bin first on the PATH"
 fi
+# Both hops must stay symlinks. A plain file named `omp` on the PATH is what
+# `omp update` takes over in place: that is how a release binary once landed on
+# top of the launcher, leaving agent sessions on your own gitconfig and SSH keys.
+for link in "${AGENT_DIR}/omp" "${BIN_DIR}/omp"; do
+  [[ -L ${link} ]] || fail "${link} is not a symlink to ${AGENT_DIR}/omp-launcher - an omp release binary may have replaced it; run ./bin/install-agent"
+done
 stale=()
-for rel in .local/libexec/devbox-agent/omp .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
+for rel in .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
   .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .config/devbox/agent.gitconfig \
   .config/devbox/agent-work.gitconfig; do
   cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")

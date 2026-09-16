@@ -434,6 +434,25 @@ cmd_doctor() {
     fail 'one or more toolchain probes failed'
   fi
 
+  # The agent git override: `omp` on the PATH must be the launcher, reached
+  # through a symlink. A plain file there is what `omp update` takes over in
+  # place - agent sessions then read ~/.gitconfig and reach for SSH keys.
+  local launcher_state
+  launcher_state="$(compose exec -T "${SERVICE}" bash -lc '
+    agent_dir="$HOME/.local/libexec/devbox-agent"
+    [[ -L "${agent_dir}/omp" ]] || { echo notalink; exit 0; }
+    resolved="$(command -v omp 2>/dev/null || true)"
+    [[ "$(readlink -f "${resolved}")" == "${agent_dir}/omp-launcher" ]] || { echo bypassed; exit 0; }
+    echo ok
+  ' 2>/dev/null | tr -cd 'a-z')"
+  case "${launcher_state}" in
+  ok) log_success 'agent git override: omp resolves to the launcher' ;;
+  notalink)
+    fail '~/.local/libexec/devbox-agent/omp is not a symlink to omp-launcher - an omp release binary may have replaced it; run ./bin/devbox bootstrap'
+    ;;
+  *) fail "agent git override: omp does not resolve to the launcher - run './bin/devbox bootstrap'" ;;
+  esac
+
   # Moshi's notifications, approvals and Chat View all arrive through this
   # daemon, which the entrypoint starts because the container has no systemd.
   # Unpaired is a warning, not a failure: the box works, the phone just gets

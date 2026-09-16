@@ -65,8 +65,8 @@ and the laptop's `Host devbox` block keeps it off - only an explicit `ssh -A dev
 ## Agent sessions
 
 Every agent session - an `omp`-launched process and everything it shells out to (`gh`, `wt`, `lazygit`, git
-itself) - runs under five exports the `omp` launcher (`~/.local/libexec/devbox-agent/omp`) sets for its
-process tree, before `exec`-ing real `omp`:
+itself) - runs under five exports the `omp` launcher (`~/.local/libexec/devbox-agent/omp-launcher`, reached
+as `omp` through a symlink) sets for its process tree, before `exec`-ing real `omp`:
 
 | Export                | Value                              | What it does                                         |
 |-----------------------|-------------------------------------|-------------------------------------------------------|
@@ -85,6 +85,21 @@ a file that itself `includeIf`s a second makes the rule work under an env overri
 
 **Caveat:** a repository's own `.git/config` `user.email` wins over `GIT_CONFIG_GLOBAL` - local always
 outranks global in git. Stock git behavior.
+
+### `omp update`
+
+`omp update` picks what to replace by looking `omp` up on the `PATH`, and takes over whatever it finds -
+a plain file in place, a symlink through its target. Both are the launcher, so the launcher drops its own
+`PATH` entries for that one subcommand: the lookup then lands on the real install - bun/npm-managed on the
+laptop, the standalone binary in `~/.local/bin` on the devbox - which is what the updater must replace.
+`omp update` works normally; the launcher is untouched, and no export applies (no git runs).
+
+Belt and braces, because the failure was silent: `omp` is a **symlink** to `omp-launcher` at both hops
+(`~/.local/bin/omp` → `~/.local/libexec/devbox-agent/omp` → `omp-launcher`), never a file named `omp`.
+An argv shape the passthrough does not recognise therefore hits the updater's own refusal to replace a
+script behind a symlink - a one-line error - instead of a release binary landing on top of the launcher,
+which leaves agent sessions on your `~/.gitconfig`, with SSH remotes and your keys. `./bin/laptop-doctor`
+checks both hops are still symlinks.
 
 ### `agent.gitconfig`
 
@@ -168,9 +183,10 @@ bootstraps from:
 ./bin/install-agent
 ```
 
-It installs the launcher, `gh` shim, `devbox-git-credential`, and `devbox-git-no-ssh` into
-`~/.local/libexec/devbox-agent`; `devbox-gh-token` into `~/.local/bin`; symlinks `~/.local/bin/omp` to the
-launcher; writes `~/.config/devbox/agent*.gitconfig`, regenerating every file each run.
+It installs `omp-launcher`, the `gh` shim, `devbox-git-credential`, and `devbox-git-no-ssh` into
+`~/.local/libexec/devbox-agent`; `devbox-gh-token` into `~/.local/bin`; symlinks `~/.local/bin/omp` →
+`~/.local/libexec/devbox-agent/omp` → `omp-launcher`; writes `~/.config/devbox/agent*.gitconfig`,
+regenerating every file each run.
 `~/.config/devbox/secrets.env` is created from the example if absent and never overwritten. The installer
 reads or edits nothing of yours.
 
@@ -232,6 +248,16 @@ Yes. Personal is the global default; only `~/projects/work/**` is overridden. Th
 Nothing is broken - the `insteadOf` rewrite applies, since the directory exists. Confirm with
 `GIT_TRACE=1 git fetch 2>&1 | grep ssh` that the work key is used, or set the URL explicitly:
 `git remote set-url origin git@work.github.com:<org>/<repo>`.
+
+**After `omp update`, my agent tried to use my SSH keys.**
+Fixed in the launcher, and worth recognising: before the `update` passthrough existed, the updater resolved
+`omp` on the launcher's own `PATH` and wrote the release binary straight over the launcher script, so later
+sessions read `~/.gitconfig` - SSH remotes, your keys, 1Password prompting. Repair is
+`./bin/install-agent` on the laptop, `./bin/devbox bootstrap` on the devbox; both are idempotent and the
+update itself is not lost (re-run `omp update`). Recognition cue: `./bin/laptop-doctor` reports the
+installed launcher no longer matching the repo template - the `~/.local/bin/omp` symlink stays intact, it
+is the file behind it that became a ~180 MB binary. Inside a session, `echo $GIT_CONFIG_GLOBAL` printing
+nothing says the same thing.
 
 **`bootstrap` tells me to repoint a stale `github-work:` remote.**
 The alias used to be `github-work`; it is `work.github.com` now, on the laptop and the devbox alike.

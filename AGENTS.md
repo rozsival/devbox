@@ -76,8 +76,8 @@ the host's root Docker daemon.
   installs from `.env`, deletes any earlier devbox-generated private key and prints its fingerprint to
   revoke), `~/.ssh/config`, known_hosts, the two-identity Git config, shell, `gh` (the
   `~/.local/libexec/devbox-agent` shim plus the per-account token checklist), the box-wide `secrets.env`, the
-  agent git override (`omp` launcher, credential helper, fence, `agent*.gitconfig`), `moshi-hook` plus its
-  OMP extension, and the printed manual checklist
+  agent git override (the launcher plus its `omp` symlink, credential helper, fence, `agent*.gitconfig`),
+  `moshi-hook` plus its OMP extension, and the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels), `AllowAgentForwarding yes` (the `ssh -A devbox` escape hatch only - the
   container holds no private key of its own) and `MaxSessions 32` (herdr channels)
@@ -87,15 +87,24 @@ the host's root Docker daemon.
   because `--with-deps` needs root. Global npm installs pass `--prefix "$HOME/.local"` per call so the bins
   stay on the bind mount; never export `NPM_CONFIG_PREFIX` - nvm then refuses to activate its default Node
 - `home/` - templates installed into `/home/dev` by bootstrap (and onto the laptop by `bin/install-agent`);
-  generated files, not user-edited. `home/.local/libexec/devbox-agent/` holds the `omp` launcher (exports
+  generated files, not user-edited. `home/.local/libexec/devbox-agent/` holds `omp-launcher` (exports
   `GIT_CONFIG_GLOBAL`, the SSH fence, `GIT_TERMINAL_PROMPT=0` and a login-less `GH_CONFIG_DIR` for its own
-  process tree only - on the laptop, bare `gh` would otherwise fall back to your OAuth login) and the `gh`
+  process tree only - on the laptop, bare `gh` would otherwise fall back to your OAuth login), reached as
+  `omp` only through a symlink and never as a file named `omp`, because `omp update` resolves its install
+  target by looking `omp` up on the PATH and takes a plain file there over in place - it once wrote the
+  release binary onto the launcher, dropping agent sessions back on the user's gitconfig and SSH keys; the
+  launcher drops its own PATH entries for the `update` subcommand so the updater lands on the real install,
+  and the symlink confines a missed argv shape to the updater's shebang refusal. Beside it, the `gh`
   shim that deliberately shadows the real `gh` on the PATH: with `devbox-gh-token` it resolves
   `GH_TOKEN_PERSONAL` or `GH_TOKEN_WORK` per invocation from the working directory, on the same
   `~/projects/work/**` rule as git's `includeIf`, because an agent's cwd is a project while its shell was
   opened in `$HOME`. Nothing exports `GH_TOKEN`; `gh auth login` is rejected by design (`docs/secrets.md`).
   `home/.config/devbox/agent*.gitconfig` sets the bot author, unsigned commits, and the HTTPS
-  credential-helper rewrite for agent git (`docs/git.md`)
+  credential-helper rewrite for agent git (`docs/git.md`). `home/.bash_profile` exists only to reassert the
+  `PATH` order for login shells: bash prefers it over `~/.profile`, which it sources first, because the
+  distro's file prepends `~/.local/bin` *after* `~/.bashrc` and so put the real `omp` ahead of the launcher
+  in every interactive `ssh devbox`, herdr pane and `./bin/devbox shell`; `devbox.sh` therefore asserts the
+  order (move to front) instead of prepending only when absent
 - `container/devbox-ports` - symlinked to `/usr/local/bin` by the `Dockerfile`, so a host edit is live
   without a rebuild; mirrors published project ports onto the container's own `127.0.0.1`
 - `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`,
@@ -113,15 +122,16 @@ the host's root Docker daemon.
   so nothing in the bind mount can rewrite the daemon's command line
 - `bin/sync-omp` - laptop-side: copies `~/.omp/agent/config.yml` into the devbox over `Host devbox`; only
   the preset, never the per-machine OMP state
-- `bin/install-agent` - laptop-side, idempotent: installs the same agent git override the devbox bootstraps (`omp`
-  launcher, `gh` shim, credential helper, fence, `devbox-gh-token`, `agent*.gitconfig`, an
-  `~/.local/bin/omp` symlink to the launcher); regenerates every file, reads/edits nothing of the user's;
-  reports whether `omp` resolves to the launcher and prints the remaining manual steps (PATs, App
-  credentials)
+- `bin/install-agent` - laptop-side, idempotent: installs the same agent git override the devbox bootstraps
+  (`omp-launcher`, `gh` shim, credential helper, fence, `devbox-gh-token`, `agent*.gitconfig`, and `omp`
+  symlinks to the launcher in `~/.local/libexec/devbox-agent` and `~/.local/bin`); regenerates every file,
+  reads/edits nothing of the user's; reports whether `omp` resolves to the launcher and prints the
+  remaining manual steps (PATs, App credentials)
 - `bin/laptop-doctor` - laptop-side, read-only counterpart of `devbox doctor`: no private key on disk, the
   five named `.pub` files held by the 1Password agent, every `Host` block selecting one `.pub` through it,
   both gitconfigs signing via `op-ssh-sign` with the `signing_*.pub` keys, the agent override installed and
-  byte-identical to `home/`, no agent token in the macOS keychain (a system `credential.helper` running
+  byte-identical to `home/` with both `omp` hops still symlinks (a plain file is an `omp update` takeover),
+  no agent token in the macOS keychain (a system `credential.helper` running
   ahead of ours), both PATs accepted by `gh`, the App pem valid, and the four connections authenticating
   (the two GitHub aliases to different accounts). Unsets the launcher's exports and strips its PATH entry
   first, so it is meaningful from inside an agent session. `file_mode` uses perl because BSD and GNU `stat`
