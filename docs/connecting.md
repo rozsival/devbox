@@ -129,7 +129,10 @@ involves neither the laptop nor 1Password, which is why it is the recommended on
 **Which tools resolve in a non-interactive `ssh devbox '<cmd>'`?**
 All of them: pinned binaries in `/usr/local/bin` (`node`/`npm`/`npx`/`corepack`/`pnpm`, symlinked from
 `/opt/nvm`); `~/.bashrc.d/devbox.sh` loads *above* Ubuntu's non-interactive early return, putting
-`~/.local/bin` (OMP's install dir) on `PATH`. Verify: `ssh devbox 'command -v omp node pnpm herdr'`.
+`~/.local/bin` (OMP's install dir) on `PATH`, and `~/.bash_profile` reasserts that order for login shells,
+where `~/.profile` would re-prepend `~/.local/bin` ahead of the agent launcher. Verify both routes:
+`ssh devbox 'command -v omp node pnpm herdr'` and `ssh devbox 'bash -lc "command -v omp"'` - the second
+must print `~/.local/libexec/devbox-agent/omp`, the launcher.
 
 **Can I use VS Code / JetBrains Remote?**
 Yes - point Remote-SSH at `devbox`: an OpenSSH server, `sftp` enabled.

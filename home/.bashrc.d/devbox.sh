@@ -8,13 +8,28 @@
 # ~/.local/libexec/devbox-agent goes in front of it: that is where the `omp`
 # launcher lives (the agent git override, docs/git.md) and the `gh` shim that
 # picks a GitHub token per working directory (docs/secrets.md).
-for dir in "$HOME/.local/bin" "$HOME/.local/libexec/devbox-agent"; do
-  case ":$PATH:" in
-  *":$dir:"*) ;;
-  *) export PATH="$dir:$PATH" ;;
-  esac
-done
-unset dir
+#
+# Order is asserted, not "prepend if absent": a login shell reads ~/.profile,
+# which sources this file and *then* prepends ~/.local/bin, putting the real omp
+# binary ahead of the launcher. ~/.bash_profile calls this function again after
+# ~/.profile has run, so it has to move both directories to the front even when
+# they are already on the PATH.
+devbox_path_reset() {
+  local entry dirs=() kept=()
+  IFS=: read -ra dirs <<<"$PATH"
+  for entry in "${dirs[@]}"; do
+    case "$entry" in
+    '' | "$HOME/.local/bin" | "$HOME/.local/libexec/devbox-agent") continue ;;
+    esac
+    kept+=("$entry")
+  done
+  PATH="$HOME/.local/libexec/devbox-agent:$HOME/.local/bin"
+  for entry in "${kept[@]}"; do
+    PATH="$PATH:$entry"
+  done
+  export PATH
+}
+devbox_path_reset
 
 # Node lives outside the bind-mounted home (the mount would shadow it), so nvm
 # and corepack keep their state in /opt. /usr/local/bin holds node/npm/pnpm

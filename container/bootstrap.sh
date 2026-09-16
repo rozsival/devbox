@@ -173,6 +173,13 @@ install -m 644 "${TEMPLATE_DIR}/.bashrc.d/devbox.sh" "${HOME_DIR}/.bashrc.d/devb
 # `cp -n` never touches a file the user already has.
 cp -n /etc/skel/.bashrc /etc/skel/.profile /etc/skel/.bash_logout "${HOME_DIR}/" 2>/dev/null || true
 
+# Bash prefers ~/.bash_profile over ~/.profile for login shells, and this one
+# runs ~/.profile first: the skeleton file ends by prepending ~/.local/bin,
+# *after* it has sourced ~/.bashrc, which put the real omp binary ahead of the
+# agent launcher in every login shell (an interactive `ssh devbox`, a herdr
+# pane, `./bin/devbox shell`). Generated, reinstalled on every run.
+install -m 644 "${TEMPLATE_DIR}/.bash_profile" "${HOME_DIR}/.bash_profile"
+
 bashrc="${HOME_DIR}/.bashrc"
 touch "${bashrc}"
 if ! grep -q '.bashrc.d' "${bashrc}"; then
