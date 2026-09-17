@@ -158,11 +158,9 @@ shim, credential helper (`devbox-git-credential`), SSH fence (`devbox-git-no-ssh
 `~/.local/libexec/devbox-agent`; `devbox-gh-token` in `~/.local/bin`; `omp` symlinks in both directories
 pointing at the launcher; `~/.config/devbox/git/agent*.gitconfig`, whose directory is left read-only (mode
 500, files 444) so a `git config --global` in a session cannot rewrite the agent identity. All regenerated
-every run; nothing else of
-yours is touched, except `~/.config/devbox/secrets.env` - created from the template if absent, else left
-with mode reset to 600. Reports whether `omp` resolves to the launcher, plus remaining manual steps (PATs,
-App credentials). See
-[Git identities](git.md#laptop-install).
+every run; nothing else of yours is touched, except `~/.config/devbox/secrets.env` - created from the
+template if absent, else left with mode reset to 600. Reports whether `omp` resolves to the launcher, plus
+remaining manual steps (PATs, App credentials). See [Git identities](git.md#laptop-install).
 
 ## `bin/laptop-doctor`
 
@@ -174,9 +172,9 @@ Laptop-side, read-only counterpart of `devbox doctor`: no private key on disk, a
 held by the 1Password agent; every `Host` block selecting one via that agent with `IdentitiesOnly`; both
 gitconfigs signing through `op-ssh-sign` with `signing_*.pub` keys and an `allowed_signers` file; `omp`
 resolving to the launcher through symlinks at both hops (a plain file is what an `omp update` takes over),
-every installed agent file matching the repo template, `~/.config/devbox/git/` still read-only,
-no agent token
-(`x-access-token`) in the macOS keychain - a sign a system credential helper preempted
+every installed agent file matching the repo template, `~/.config/devbox/git/` still read-only and no
+login shell writing a git identity into it, no agent token (`x-access-token`) in the macOS keychain - a
+sign a system credential helper preempted
 `devbox-git-credential`; `secrets.env` at mode 600, both PATs accepted by `gh`, the App pem readable as a
 key; and all four connections (`git@github.com`, `git@work.github.com`, `workstation`, `devbox`)
 authenticating - the two GitHub aliases mapping two accounts. Reports every check, exits non-zero on

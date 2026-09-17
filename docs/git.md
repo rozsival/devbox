@@ -290,8 +290,14 @@ agent at all but `~/.extra`, sourced by `~/.bash_profile`, so any login bash a s
 Delete those two lines from the dotfile. The directory is mode 500 now, so the
 same call fails with `could not lock config file`; repair a drifted copy with `./bin/install-agent`
 (laptop) or `./bin/devbox bootstrap` (devbox). Both doctors compare the two files against the templates
-and check the mode. A commit already made is only fixable by rewriting history
-(`git commit --amend --reset-author`, or `git rebase -x` for a range) and force-pushing.
+and check the mode. Commits already made are only fixable by rewriting history, and `--reset-author` is
+the wrong tool: it takes the author from the shell doing the rewrite, so from your own terminal it stamps
+you again. Name the author instead, per commit to rewrite, and leave your own commits alone:
+`git rebase -i <base>` with
+`exec git commit --amend --no-edit --author='rozsival-agent <rozsival-agent@users.noreply.github.com>'`
+after each offending pick. Any rebase re-creates the commits it touches, so your own signatures in that
+range are lost and need re-signing from your terminal; then force-push, after checking nobody else has
+pulled the branch.
 
 **`bootstrap` tells me to repoint a stale `github-work:` remote.**
 The alias used to be `github-work`; it is `work.github.com` now, on the laptop and the devbox alike.

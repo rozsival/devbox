@@ -102,9 +102,9 @@ the host's root Docker daemon.
   `home/.config/devbox/git/agent*.gitconfig` sets the bot author, unsigned commits, and the HTTPS
   credential-helper rewrite for agent git (`docs/git.md`); both installers leave that directory at mode 500
   with 444 files, because `GIT_CONFIG_GLOBAL` points into it and a `git config --global` inside a session
-  therefore rewrites the agent's own identity - one such call put the user's name and email on five agent
-  commits, and git's lock file makes the directory mode the only thing that stops it.
-  `home/.bash_profile` exists only to reassert the
+  therefore rewrites the agent's own identity - `~/.extra` did exactly that from every login bash, putting
+  the user's name and email on five agent commits, and git's lock file makes the directory mode the only
+  thing that stops such a write. `home/.bash_profile` exists only to reassert the
   `PATH` order for login shells: bash prefers it over `~/.profile`, which it sources first, because the
   distro's file prepends `~/.local/bin` *after* `~/.bashrc` and so put the real `omp` ahead of the launcher
   in every interactive `ssh devbox`, herdr pane and `./bin/devbox shell`; `devbox.sh` therefore asserts the
@@ -128,17 +128,16 @@ the host's root Docker daemon.
   the preset, never the per-machine OMP state
 - `bin/install-agent` - laptop-side, idempotent: installs the same agent git override the devbox bootstraps
   (`omp-launcher`, `gh` shim, credential helper, fence, `devbox-gh-token`, the read-only
-  `git/agent*.gitconfig`, and `omp`
-  symlinks to the launcher in `~/.local/libexec/devbox-agent` and `~/.local/bin`); regenerates every file,
-  reads/edits nothing of the user's; reports whether `omp` resolves to the launcher and prints the
-  remaining manual steps (PATs, App credentials)
+  `git/agent*.gitconfig`, and `omp` symlinks to the launcher in `~/.local/libexec/devbox-agent` and
+  `~/.local/bin`); regenerates every file, reads/edits nothing of the user's; reports whether `omp`
+  resolves to the launcher and prints the remaining manual steps (PATs, App credentials)
 - `bin/laptop-doctor` - laptop-side, read-only counterpart of `devbox doctor`: no private key on disk, the
   five named `.pub` files held by the 1Password agent, every `Host` block selecting one `.pub` through it,
   both gitconfigs signing via `op-ssh-sign` with the `signing_*.pub` keys, the agent override installed and
-  byte-identical to `home/` with both `omp` hops still symlinks (a plain file is an `omp update` takeover)
-  and `~/.config/devbox/git` still unwritable,
-  no agent token in the macOS keychain (a system `credential.helper` running
-  ahead of ours), both PATs accepted by `gh`, the App pem valid, and the four connections authenticating
+  byte-identical to `home/` with both `omp` hops still symlinks (a plain file is an `omp update` takeover),
+  `~/.config/devbox/git` still unwritable and no login shell writing a git identity into it, no agent
+  token in the macOS keychain (a system `credential.helper` running ahead of ours), both PATs accepted by
+  `gh`, the App pem valid, and the four connections authenticating
   (the two GitHub aliases to different accounts). Unsets the launcher's exports and strips its PATH entry
   first, so it is meaningful from inside an agent session. `file_mode` uses perl because BSD and GNU `stat`
   disagree and both can be on a macOS PATH

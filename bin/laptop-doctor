@@ -191,14 +191,28 @@ fi
 if [[ -e ${CONFIG_DIR}/agent.gitconfig || -e ${CONFIG_DIR}/agent-work.gitconfig ]]; then
   fail "${CONFIG_DIR}/agent*.gitconfig exists outside the read-only directory - run ./bin/install-agent, then restart any agent session older than it (its GIT_CONFIG_GLOBAL still names the old path)"
 fi
-# The writer that caused this: a login shell running `git config --global
-# user.name/email` (bash sources ~/.extra from ~/.bash_profile) rewrites
-# whatever GIT_CONFIG_GLOBAL names, which inside a session is the agent's own
-# configuration. Harmless in your own shell, identity theft in a session.
-if [[ -r ${HOME}/.extra ]] && grep -qE '^[[:space:]]*git config --global[[:space:]]+user\.(name|email)' "${HOME}/.extra"; then
-  log_warn "~/.extra runs 'git config --global user.name/email': in an agent session that targets ${git_config_dir}/agent.gitconfig, which is why it is read-only now. The write fails loudly there, so this is noise rather than damage - but delete those two lines (the GIT_AUTHOR_*/GIT_COMMITTER_* assignments above them serve your own shell) and no login shell inside a session will error"
+# The class of writer that caused this, caught by behaviour rather than by
+# grepping one dotfile: a login shell that runs `git config --global …` writes
+# into whatever GIT_CONFIG_GLOBAL names, and inside a session that is the
+# agent's own configuration. ~/.extra (sourced by ~/.bash_profile) did exactly
+# that here, and every login bash a session started re-stamped the author.
+# ~/.gitconfig already carries the identity, so such a line is redundant even
+# for your own shell. Probe with a throwaway file: a login shell that writes
+# nothing leaves it empty.
+shell_writes=()
+for shell in bash zsh; do
+  command -v "${shell}" >/dev/null 2>&1 || continue
+  probe="$(mktemp)"
+  GIT_CONFIG_GLOBAL="${probe}" "${shell}" -lc true >/dev/null 2>&1 || true
+  if [[ -s ${probe} ]]; then
+    shell_writes+=("${shell} ($(git config --file "${probe}" --list 2>/dev/null | tr '\n' ' '))")
+  fi
+  rm -f "${probe}"
+done
+if ((${#shell_writes[@]})); then
+  log_warn "a login shell writes global git config: ${shell_writes[*]} - in an agent session that targets ${git_config_dir}/agent.gitconfig, which is why it is read-only now (the write fails loudly there). Remove the 'git config --global' lines from your dotfiles; ~/.gitconfig already holds your identity"
 else
-  log_success 'no dotfile writes a git identity into the agent gitconfig'
+  log_success 'no login shell writes into the agent gitconfig'
 fi
 # The tokens the helper mints are used with username x-access-token; if one is
 # in the macOS keychain, a system credential helper ran ahead of ours in an

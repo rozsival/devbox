@@ -74,6 +74,7 @@
 	required = true
 
 # Same directory rule as ~/.gitconfig: work repositories get the App's own
-# bot identity. Must stay after [user] - later wins.
+# bot identity. Must stay after [user] - later wins. Relative path: git resolves
+# it against this file's own directory, so the pair moves together.
 [includeIf "gitdir:~/projects/work/"]
-	path = ~/.config/devbox/git/agent-work.gitconfig
+	path = agent-work.gitconfig
