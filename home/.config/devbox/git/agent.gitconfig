@@ -1,5 +1,5 @@
 # Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
-# edit home/.config/devbox/agent.gitconfig in the repo.
+# edit home/.config/devbox/git/agent.gitconfig in the repo.
 #
 # The git configuration of an agent session. The `omp` launcher in
 # ~/.local/libexec/devbox-agent exports GIT_CONFIG_GLOBAL pointing here, so every
@@ -7,6 +7,13 @@
 # OMP itself - reads this file *instead of* ~/.gitconfig. Nothing else on the
 # machine sees it: the same clone opened in an IDE or a plain shell keeps its SSH
 # remote, the 1Password agent and the signing key. See docs/git.md.
+#
+# ~/.config/devbox/git/ is installed read-only (dir 500, files 444) because
+# `git config --global` inside a session writes *here*: one such call replaced
+# the author with the user's own name and email, and five commits carried it
+# before anyone noticed. git needs to create a lock file beside the file it
+# rewrites, so a directory without write permission turns that into an
+# immediate "could not lock config file" instead of silent drift.
 #
 # Self-contained on purpose. ~/.gitconfig carries `url.<ssh-alias>.insteadOf`
 # rewrites for the same prefixes as below, and when two rewrites tie on length
@@ -69,4 +76,4 @@
 # Same directory rule as ~/.gitconfig: work repositories get the App's own
 # bot identity. Must stay after [user] - later wins.
 [includeIf "gitdir:~/projects/work/"]
-	path = ~/.config/devbox/agent-work.gitconfig
+	path = ~/.config/devbox/git/agent-work.gitconfig

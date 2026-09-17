@@ -453,6 +453,27 @@ cmd_doctor() {
   *) fail "agent git override: omp does not resolve to the launcher - run './bin/devbox bootstrap'" ;;
   esac
 
+  # The agent gitconfigs: GIT_CONFIG_GLOBAL points into ~/.config/devbox/git, so
+  # `git config --global` in a session rewrites the agent identity itself - on
+  # the laptop one such call put the user's own name and email on five commits.
+  # The directory mode is what stops it, since git locks beside the file.
+  local gitconfig_state
+  gitconfig_state="$(compose exec -T "${SERVICE}" bash -lc '
+    dir="$HOME/.config/devbox/git"
+    for cfg in agent.gitconfig agent-work.gitconfig; do
+      cmp -s "/opt/devbox/home/.config/devbox/git/${cfg}" "${dir}/${cfg}" || { echo stale; exit 0; }
+    done
+    [[ -w "${dir}" ]] && { echo writable; exit 0; }
+    echo ok
+  ' 2>/dev/null | tr -cd 'a-z')"
+  case "${gitconfig_state}" in
+  ok) log_success 'agent gitconfigs read-only and matching the templates' ;;
+  writable)
+    fail "~/.config/devbox/git is writable - a stray 'git config --global' in a session would rewrite the agent identity; run './bin/devbox bootstrap'"
+    ;;
+  *) fail "~/.config/devbox/git/agent*.gitconfig differs from the templates or is missing - run './bin/devbox bootstrap'" ;;
+  esac
+
   # Moshi's notifications, approvals and Chat View all arrive through this
   # daemon, which the entrypoint starts because the container has no systemd.
   # Unpaired is a warning, not a failure: the box works, the phone just gets

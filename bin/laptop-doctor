@@ -164,14 +164,41 @@ for link in "${AGENT_DIR}/omp" "${BIN_DIR}/omp"; do
 done
 stale=()
 for rel in .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
-  .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .config/devbox/agent.gitconfig \
-  .config/devbox/agent-work.gitconfig; do
+  .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .config/devbox/git/agent.gitconfig \
+  .config/devbox/git/agent-work.gitconfig; do
   cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
 done
 if ((${#stale[@]})); then
   fail "differ from the repo templates: ${stale[*]} - run ./bin/install-agent"
 else
   log_success 'launcher, shim, helper, fence and agent gitconfigs match the repo templates'
+fi
+# The gitconfigs must also be unwritable, directory included: GIT_CONFIG_GLOBAL
+# points in there, so `git config --global` in a session rewrites them - that is
+# how the agent author became your own name and email for five commits. git
+# locks beside the file it writes, so the directory mode is the one that counts.
+git_config_dir="${CONFIG_DIR}/git"
+if [[ -w ${git_config_dir} ]]; then
+  fail "${git_config_dir} is writable - a stray 'git config --global' in a session would rewrite the agent identity; run ./bin/install-agent"
+elif [[ -w ${git_config_dir}/agent.gitconfig || -w ${git_config_dir}/agent-work.gitconfig ]]; then
+  fail "${git_config_dir}/agent*.gitconfig is writable - run ./bin/install-agent"
+else
+  log_success 'agent gitconfigs read-only (directory 500, files 444)'
+fi
+# A file at the pre-move path means something still points there: either
+# ./bin/install-agent has not run since the move, or an agent session started
+# before it is alive and its login shells keep writing your identity into it.
+if [[ -e ${CONFIG_DIR}/agent.gitconfig || -e ${CONFIG_DIR}/agent-work.gitconfig ]]; then
+  fail "${CONFIG_DIR}/agent*.gitconfig exists outside the read-only directory - run ./bin/install-agent, then restart any agent session older than it (its GIT_CONFIG_GLOBAL still names the old path)"
+fi
+# The writer that caused this: a login shell running `git config --global
+# user.name/email` (bash sources ~/.extra from ~/.bash_profile) rewrites
+# whatever GIT_CONFIG_GLOBAL names, which inside a session is the agent's own
+# configuration. Harmless in your own shell, identity theft in a session.
+if [[ -r ${HOME}/.extra ]] && grep -qE '^[[:space:]]*git config --global[[:space:]]+user\.(name|email)' "${HOME}/.extra"; then
+  log_warn "~/.extra runs 'git config --global user.name/email': in an agent session that targets ${git_config_dir}/agent.gitconfig, which is why it is read-only now. The write fails loudly there, so this is noise rather than damage - but delete those two lines (the GIT_AUTHOR_*/GIT_COMMITTER_* assignments above them serve your own shell) and no login shell inside a session will error"
+else
+  log_success 'no dotfile writes a git identity into the agent gitconfig'
 fi
 # The tokens the helper mints are used with username x-access-token; if one is
 # in the macOS keychain, a system credential helper ran ahead of ours in an

@@ -295,7 +295,7 @@ done
 
 # -- 12. Agent git override ---------------------------------------------------
 # What makes one clone serve both you and an agent: the `omp` launcher exports
-# GIT_CONFIG_GLOBAL=~/.config/devbox/agent.gitconfig (HTTPS rewrites, the
+# GIT_CONFIG_GLOBAL=~/.config/devbox/git/agent.gitconfig (HTTPS rewrites, the
 # per-operation credential helper, the bot author, signing off) and a
 # GIT_SSH_COMMAND that refuses, for its own process tree only. The directory is
 # first on the PATH from devbox.sh so `omp` resolves to the launcher ahead of
@@ -310,9 +310,23 @@ for tool in omp-launcher devbox-git-credential devbox-git-no-ssh; do
   install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${agent_dir}/${tool}"
 done
 ln -sfn "${agent_dir}/omp-launcher" "${agent_dir}/omp"
+
+# The two gitconfigs and their directory are read-only: GIT_CONFIG_GLOBAL points
+# in there, so `git config --global` in a session would rewrite them - on the
+# laptop one such call replaced the agent author with the user's own name and
+# email, and five commits carried it. git needs a lock file beside the config it
+# rewrites, so a directory without write permission is what stops it; reinstalling
+# from the templates is why both modes are lifted here first.
+git_config_dir="${secrets_dir}/git"
+install -d -m 700 "${git_config_dir}"
+chmod 700 "${git_config_dir}"
 for cfg in agent.gitconfig agent-work.gitconfig; do
-  install -m 644 "${TEMPLATE_DIR}/.config/devbox/${cfg}" "${secrets_dir}/${cfg}"
+  rm -f "${git_config_dir}/${cfg}"
+  install -m 444 "${TEMPLATE_DIR}/.config/devbox/git/${cfg}" "${git_config_dir}/${cfg}"
 done
+# Copies from before the directory existed: nothing reads them now.
+rm -f "${secrets_dir}/agent.gitconfig" "${secrets_dir}/agent-work.gitconfig"
+chmod 500 "${git_config_dir}"
 
 # -- 13. OMP config -----------------------------------------------------------
 omp_config_dir="${HOME_DIR}/.omp/agent"

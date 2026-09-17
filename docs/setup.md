@@ -137,7 +137,7 @@ Agents run on the laptop too, same launcher, same mechanism:
 
 Installs `omp-launcher`, `gh` shim, credential helper, fence in `~/.local/libexec/devbox-agent`;
 `devbox-gh-token` in `~/.local/bin`; `omp` symlinked to the launcher in both directories;
-`~/.config/devbox/agent*.gitconfig`;
+`~/.config/devbox/git/agent*.gitconfig` (directory left read-only);
 `~/.config/devbox/secrets.env` from template if missing. Idempotent: regenerates generated files, keeps
 `secrets.env`, touches nothing else. Reports whether `omp` resolves to the launcher, and prints the two
 manual steps: PATs in `~/.config/devbox/secrets.env`, App credentials at

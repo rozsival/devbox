@@ -44,10 +44,24 @@ ln -sfn "${AGENT_DIR}/omp-launcher" "${AGENT_DIR}/omp"
 ln -sfn "${AGENT_DIR}/omp" "${BIN_DIR}/omp"
 
 # -- Agent git configuration ---------------------------------------------------
+# Read-only, directory included: GIT_CONFIG_GLOBAL points here, so a stray
+# `git config --global` in a session rewrites *these* files - that is how the
+# author once became your own name and email for five commits. git writes a
+# lock file beside the config it rewrites, so only a directory without write
+# permission stops it; the files are reinstalled from the templates here, which
+# is why they must be chmod'ed back first.
 install -d -m 700 "${CONFIG_DIR}"
+readonly GIT_CONFIG_DIR="${CONFIG_DIR}/git"
+install -d -m 700 "${GIT_CONFIG_DIR}"
+chmod 700 "${GIT_CONFIG_DIR}"
 for cfg in agent.gitconfig agent-work.gitconfig; do
-  install -m 644 "${TEMPLATE_DIR}/.config/devbox/${cfg}" "${CONFIG_DIR}/${cfg}"
+  rm -f "${GIT_CONFIG_DIR}/${cfg}"
+  install -m 444 "${TEMPLATE_DIR}/.config/devbox/git/${cfg}" "${GIT_CONFIG_DIR}/${cfg}"
 done
+# Any copy from before the directory existed is dead weight an agent could
+# still be pointed at by a stale launcher.
+rm -f "${CONFIG_DIR}/agent.gitconfig" "${CONFIG_DIR}/agent-work.gitconfig"
+chmod 500 "${GIT_CONFIG_DIR}"
 
 # The two fine-grained PATs the helper falls back to where the App is not
 # installed, and what the gh shim uses. Same file as on the devbox; created from
@@ -74,7 +88,7 @@ for dir in "${path_dirs[@]}"; do
   break
 done
 
-log_success "Installed ${AGENT_DIR}/{omp-launcher,omp→omp-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${BIN_DIR}/{omp,devbox-gh-token}, ${CONFIG_DIR}/agent*.gitconfig"
+log_success "Installed ${AGENT_DIR}/{omp-launcher,omp→omp-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${BIN_DIR}/{omp,devbox-gh-token}, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
 [[ -n ${real_omp} ]] || log_warn "No real omp found on the PATH besides the launcher - install OMP first (curl -fsSL https://omp.sh/install.sh | sh)."
 if ((launcher_wins)); then
   log_success "'omp' resolves to the launcher (real binary: ${real_omp:-none})."

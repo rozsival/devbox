@@ -74,8 +74,20 @@ if [[ ${subcommand} == update ]]; then
 fi
 
 # The agent's git configuration, read instead of ~/.gitconfig: HTTPS rewrites,
-# the credential helper, the bot author, signing off.
-export GIT_CONFIG_GLOBAL="${HOME}/.config/devbox/agent.gitconfig"
+# the credential helper, the bot author, signing off. Its directory is installed
+# read-only, because a `git config --global` anywhere in this process tree
+# writes *here* - and a login bash does exactly that if ~/.extra or a similar
+# dotfile pins the user's identity that way, which is how five agent commits
+# came to be authored by the laptop's owner.
+export GIT_CONFIG_GLOBAL="${HOME}/.config/devbox/git/agent.gitconfig"
+if [[ ! -r ${GIT_CONFIG_GLOBAL} ]]; then
+  printf 'devbox: %s is missing - run ./bin/install-agent (laptop) or ./bin/devbox bootstrap (devbox)\n' \
+    "${GIT_CONFIG_GLOBAL}" >&2
+  exit 1
+fi
+# These four outrank every configuration file, including the one above, so a
+# dotfile that sets them for the user's own shell must not reach an agent's git.
+unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
 # Fence, not transport: any remote the HTTPS rewrite does not cover fails with
 # a one-line explanation instead of reaching an SSH key or a forwarded agent.
 # Environment rather than config so a repository-local core.sshCommand cannot

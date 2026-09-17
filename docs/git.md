@@ -70,7 +70,7 @@ as `omp` through a symlink) sets for its process tree, before `exec`-ing real `o
 
 | Export                | Value                              | What it does                                         |
 |-----------------------|-------------------------------------|-------------------------------------------------------|
-| `GIT_CONFIG_GLOBAL`   | `~/.config/devbox/agent.gitconfig` | replaces `~/.gitconfig`, not merged     |
+| `GIT_CONFIG_GLOBAL`   | `~/.config/devbox/git/agent.gitconfig` | replaces `~/.gitconfig`, not merged     |
 | `GIT_SSH_COMMAND`     | `…/devbox-git-no-ssh`              | refuses every SSH remote, exit 255      |
 | `GIT_TERMINAL_PROMPT` | `0`                                | missing credential errors, never hangs  |
 | `GH_CONFIG_DIR`       | `~/.config/devbox/gh`              | `gh` sees no login: shim token, or none |
@@ -85,6 +85,28 @@ a file that itself `includeIf`s a second makes the rule work under an env overri
 
 **Caveat:** a repository's own `.git/config` `user.email` wins over `GIT_CONFIG_GLOBAL` - local always
 outranks global in git. Stock git behavior.
+
+**Read-only by install.** `~/.config/devbox/git/` is a directory of mode 500 holding both gitconfigs at
+444, because `GIT_CONFIG_GLOBAL` points *into* it: a `git config --global …` anywhere in a session
+rewrites the agent's own configuration. That is not hypothetical, and it needs no agent - on this laptop
+`~/.bash_profile` sources `~/.extra`, which ends in
+
+```bash
+git config --global user.name "$GIT_AUTHOR_NAME"
+git config --global user.email "$GIT_AUTHOR_EMAIL"
+```
+
+so *every login bash started inside a session* stamped the owner's name and email into
+`agent.gitconfig`, and five commits in a personal repo carried it before anyone looked. git creates a lock
+file beside the config it rewrites, so a directory without write permission turns that into an immediate
+`error: could not lock config file` - loud, at the offending call, instead of silent drift. Reading is
+unaffected. Fix the dotfile too (the `GIT_AUTHOR_*`/`GIT_COMMITTER_*` assignments above those lines serve
+your own shell perfectly well); `./bin/laptop-doctor` flags the pattern. The launcher additionally
+`unset`s `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL`, which
+outrank every configuration file, and refuses to start at all if the gitconfig is missing - no session may
+run without an identity, because that is what invites something to set one. Both doctors check the mode
+and compare the files against the repo templates; the installers (`./bin/install-agent`,
+`./bin/devbox bootstrap`) lift the mode, regenerate, and lock it again.
 
 ### `omp update`
 
@@ -185,8 +207,8 @@ bootstraps from:
 
 It installs `omp-launcher`, the `gh` shim, `devbox-git-credential`, and `devbox-git-no-ssh` into
 `~/.local/libexec/devbox-agent`; `devbox-gh-token` into `~/.local/bin`; symlinks `~/.local/bin/omp` →
-`~/.local/libexec/devbox-agent/omp` → `omp-launcher`; writes `~/.config/devbox/agent*.gitconfig`,
-regenerating every file each run.
+`~/.local/libexec/devbox-agent/omp` → `omp-launcher`; and writes `~/.config/devbox/git/agent*.gitconfig`,
+regenerating every file each run and locking their directory read-only afterwards.
 `~/.config/devbox/secrets.env` is created from the example if absent and never overwritten. The installer
 reads or edits nothing of yours.
 
@@ -258,6 +280,18 @@ update itself is not lost (re-run `omp update`). Recognition cue: `./bin/laptop-
 installed launcher no longer matching the repo template - the `~/.local/bin/omp` symlink stays intact, it
 is the file behind it that became a ~180 MB binary. Inside a session, `echo $GIT_CONFIG_GLOBAL` printing
 nothing says the same thing.
+
+**An agent committed under my own name and email.**
+Different failure from the one above, and the fence was working: HTTPS remote, per-operation token,
+unsigned commit - only the author was wrong. The `[user]` section of the installed
+`~/.config/devbox/git/agent.gitconfig` had been rewritten, which is what a `git config --global user.name
+…` inside a session does: `GIT_CONFIG_GLOBAL` points at that file. On this laptop the caller was not an
+agent at all but `~/.extra`, sourced by `~/.bash_profile`, so any login bash a session started did it.
+Delete those two lines from the dotfile. The directory is mode 500 now, so the
+same call fails with `could not lock config file`; repair a drifted copy with `./bin/install-agent`
+(laptop) or `./bin/devbox bootstrap` (devbox). Both doctors compare the two files against the templates
+and check the mode. A commit already made is only fixable by rewriting history
+(`git commit --amend --reset-author`, or `git rebase -x` for a range) and force-pushing.
 
 **`bootstrap` tells me to repoint a stale `github-work:` remote.**
 The alias used to be `github-work`; it is `work.github.com` now, on the laptop and the devbox alike.

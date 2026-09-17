@@ -62,7 +62,8 @@ entrypoint and bootstrap. That's why `up` answers both; unchanged, it's idempote
 One caveat for `home/`: bootstrap rewrites several files unconditionally - `~/.bashrc.d/devbox.sh`,
 `~/.bash_profile`, `~/.ssh/config`,
 `~/.local/libexec/devbox-agent/{omp-launcher,omp,gh,devbox-git-credential,devbox-git-no-ssh}`,
-`~/.config/devbox/agent*.gitconfig` - all generated, not hand-edited, so template edits land next run.
+`~/.config/devbox/git/agent*.gitconfig` (reinstalled through their read-only directory: bootstrap lifts the
+mode, regenerates, locks it again) - all generated, not hand-edited, so template edits land next run.
 `~/.gitconfig`, `~/.config/devbox/secrets.env`, OMP config are create-if-absent: editing those templates
 doesn't reach an existing home - delete the file under `${DEVBOX_DATA_DIR}`, or apply by hand. Git
 identity re-applies via `git config --global` regardless.
@@ -74,7 +75,7 @@ This matters: "will I lose my keys / repos / gh login" is a flat no, by construc
 - `.env` is gitignored **and** rsync-excluded, so host-local config survives every push.
 - `${DEVBOX_DATA_DIR}` is a host bind mount, not the image: `~/.ssh/id_*.pub`,
   `~/.ssh/signing_*.pub` (public keys only - devbox holds no private key), sshd host key under
-  `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/secrets.env`, `~/.config/devbox/agent*.gitconfig`,
+  `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/secrets.env`, `~/.config/devbox/git/agent*.gitconfig`,
   `~/.local/libexec/devbox-agent` (`omp-launcher` plus its `omp` symlink, `gh` shim, credential helper,
   fence), `~/.gitconfig`, every project checkout, project daemon's images, build cache, named volumes under
   `~/.local/share/docker` - all persist across `up`, `rebuild`, image changes.

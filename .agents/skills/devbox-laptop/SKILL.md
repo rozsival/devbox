@@ -78,20 +78,30 @@ signature for <email>` with the *signing* key's fingerprint.
 Installs the devbox's bootstrap override, from `home/` templates: `omp-launcher`
 (`~/.local/bin/omp` → `~/.local/libexec/devbox-agent/omp` → `omp-launcher`, symlinks at both hops), `gh`
 shim, `devbox-git-credential`, `devbox-git-no-ssh`, `devbox-gh-token`,
-`~/.config/devbox/agent*.gitconfig`. Every OMP session through a
+`~/.config/devbox/git/agent*.gitconfig` (directory locked to mode 500 afterwards). Every OMP session through a
 shell after gets HTTPS remotes, per-operation tokens, a bot author, no signing, a `gh` with no stored login
 - shell/IDE on same clones keep SSH remote, 1Password agent, signed commits. Re-run after `git pull`
 touches `home/`; `laptop-doctor` reports drift from templates.
 
 The launcher only covers what resolves `omp` via PATH - a herdr pane or alias naming the binary by
 absolute path (`~/.bun/bin/omp`) bypasses it; use plain `omp`. Proof: `echo $GIT_CONFIG_GLOBAL` prints
-`~/.config/devbox/agent.gitconfig`; empty means session predates install or bypassed launcher.
+`~/.config/devbox/git/agent.gitconfig`; empty means session predates install or bypassed launcher.
 
 `omp update` is safe: the launcher drops its own PATH entries for that subcommand, so the updater replaces
 the real install (bun/npm-managed here, `~/.local/bin/omp` on the devbox) and not the launcher. Before that
 passthrough, an update wrote the release binary over the launcher and agent sessions silently fell back to
 `~/.gitconfig` - SSH remotes, your keys. Re-run `./bin/install-agent` if a session ever reaches for a key;
 the symlinks are what `laptop-doctor` checks.
+
+A session's git config is the file `GIT_CONFIG_GLOBAL` names, so any `git config --global …` in its
+process tree rewrites the agent's own identity. The real caller here was `~/.extra` (sourced by
+`~/.bash_profile`), whose `git config --global user.name/email` lines ran in every login bash a session
+started - five agent commits ended up authored by the laptop owner. Remedies, both applied:
+`~/.config/devbox/git/` is mode 500 with 444 files, so such a call now fails with `could not lock config
+file`, and the launcher unsets `GIT_AUTHOR_*`/`GIT_COMMITTER_*` (they outrank every gitconfig) and refuses
+to start without a readable agent gitconfig. `laptop-doctor` checks the mode, the `cmp` against the
+templates, and the `~/.extra` pattern; `./bin/install-agent` repairs a drifted copy. Commits already
+authored wrongly need `git commit --amend --reset-author` (or `rebase -x`) plus a force-push.
 
 ## Phase 5 - what the override needs
 
