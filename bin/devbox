@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Host-side CLI for the devbox container. Hand-written bash on purpose: ~9
-# commands and no code generation, so workstation's bashly pipeline would be
+# commands and no code generation, so a bashly-style generation step would be
 # pure overhead here.
 set -euo pipefail
 
@@ -283,24 +283,57 @@ cmd_logs() {
 
 cmd_keys() {
   require_env_file
-  # shellcheck disable=SC2016 # the script body must expand inside the container
-  compose exec -T "${SERVICE}" bash -c '
-    set -e
-    for identity in personal work; do
+  if compose exec -T "${SERVICE}" true >/dev/null 2>&1; then
+    log_info 'Reading identities.conf from the container (its authoritative copy).'
+    # shellcheck disable=SC2016 # the script body must expand inside the container
+    compose exec -T "${SERVICE}" bash -c '
+      set -e
+      . "$HOME/.local/libexec/devbox-identities"
+      for slug in $(di_slugs); do
+        printf "%-12s alias %s\n" "$slug" "$(di_get "$slug" alias)"
+        for kind in id signing; do
+          if [[ "$kind" == signing ]]; then field=signing_pubkey; else field=pubkey; fi
+          file="$HOME/.ssh/${kind}_${slug}.pub"
+          if [[ -f "$file" ]]; then
+            printf "%-12s %-8s %s\n" "" "$kind" "$(cat "$file")"
+          else
+            printf "%-12s %-8s %s\n" "" "$kind" "(not set - $field for [$slug] in ~/.config/devbox/identities.conf)"
+          fi
+        done
+      done
+      echo
+      echo "sshd host key fingerprint:"
+      ssh-keygen -lf "$HOME/.ssh/host/ssh_host_ed25519_key.pub"
+    '
+  else
+    local reader data_dir identities_file slug field kind file
+    reader="${REPO_ROOT}/home/.local/libexec/devbox-identities"
+    data_dir="$(env_get DEVBOX_DATA_DIR)"
+    identities_file="${data_dir}/.config/devbox/identities.conf"
+    log_warn "Container not reachable; reading ${identities_file} directly."
+    for slug in $(DEVBOX_IDENTITIES_FILE="${identities_file}" "${reader}" list); do
+      printf '%-12s alias %s\n' "${slug}" \
+        "$(DEVBOX_IDENTITIES_FILE="${identities_file}" "${reader}" get "${slug}" alias)"
       for kind in id signing; do
-        file="$HOME/.ssh/${kind}_${identity}.pub"
-        var="GIT_${identity^^}_$([[ $kind == id ]] && echo PUBKEY || echo SIGNINGKEY)"
-        if [[ -f "$file" ]]; then
-          printf "%-18s %s\n" "$identity/$kind" "$(cat "$file")"
+        if [[ "${kind}" == signing ]]; then field=signing_pubkey; else field=pubkey; fi
+        file="${data_dir}/.ssh/${kind}_${slug}.pub"
+        if [[ -f "${file}" ]]; then
+          printf '%-12s %-8s %s\n' '' "${kind}" "$(cat "${file}")"
         else
-          printf "%-18s %s\n" "$identity/$kind" "(not set - $var in .env)"
+          printf '%-12s %-8s %s\n' '' "${kind}" "(not set - ${field} for [${slug}] in ~/.config/devbox/identities.conf)"
         fi
       done
     done
     echo
-    echo "sshd host key:"
-    ssh-keygen -lf "$HOME/.ssh/host/ssh_host_ed25519_key.pub"
-  '
+    if [[ -f "${data_dir}/.ssh/host/ssh_host_ed25519_key.pub" ]]; then
+      echo 'sshd host key fingerprint:'
+      ssh-keygen -lf "${data_dir}/.ssh/host/ssh_host_ed25519_key.pub"
+    else
+      log_warn 'sshd host key not found on the bind mount.'
+    fi
+  fi
+  echo
+  log_info "These are the laptop's own keys; nothing needs pasting anywhere."
 }
 
 cmd_hook() {
@@ -453,25 +486,74 @@ cmd_doctor() {
   *) fail "agent git override: omp does not resolve to the launcher - run './bin/devbox bootstrap'" ;;
   esac
 
+  # The identity registry itself: every identity-derived file (SSH keys and
+  # config, ~/.gitconfig's per-tree includes, allowed_signers, the agent
+  # gitconfigs, GitHub tokens and Apps) is skipped as one block by bootstrap
+  # when this fails, so a broken registry costs configuration with no other
+  # symptom until something tries to use it.
+  local registry_output registry_line
+  # shellcheck disable=SC2016 # the script body must expand inside the container
+  if registry_output="$(compose exec -T "${SERVICE}" bash -lc '"$HOME/.local/libexec/devbox-identities" check' 2>&1)"; then
+    log_success 'identity registry valid (devbox-identities check)'
+  else
+    fail 'identity registry check failed - everything identity-derived is skipped until it is fixed:'
+    while IFS= read -r registry_line; do
+      [[ -z "${registry_line}" ]] || log_warn "  ${registry_line}"
+    done <<<"${registry_output}"
+  fi
+
   # The agent gitconfigs: GIT_CONFIG_GLOBAL points into ~/.config/devbox/git, so
   # `git config --global` in a session rewrites the agent identity itself - on
   # the laptop one such call put the user's own name and email on five commits.
-  # The directory mode is what stops it, since git locks beside the file.
+  # The directory mode is what stops it, since git locks beside the file. The
+  # expected file set is registry-driven, not hard-coded: the root
+  # agent.gitconfig plus one agent-<slug>.gitconfig per identity that has its
+  # own agent_name or agent_email - so a renamed, added or dropped account is
+  # caught here too, in both directions (missing and unexpected files).
   local gitconfig_state
-  gitconfig_state="$(compose exec -T "${SERVICE}" bash -lc '
+  # shellcheck disable=SC2016 # the script body must expand inside the container
+  gitconfig_state="$(compose exec -T "${SERVICE}" bash -c '
+    set -e
+    . "$HOME/.local/libexec/devbox-identities"
     dir="$HOME/.config/devbox/git"
-    for cfg in agent.gitconfig agent-work.gitconfig; do
-      cmp -s "/opt/devbox/home/.config/devbox/git/${cfg}" "${dir}/${cfg}" || { echo stale; exit 0; }
+    export DEVBOX_IDENTITIES_TEMPLATE_DIR=/opt/devbox/home/.config/devbox/git
+    # every tree-claiming identity; the default one has no include of its own
+    bad=""
+    [[ -f "$dir/agent.gitconfig" && "$(di_render_agent_gitconfig)" == "$(cat "$dir/agent.gitconfig")" ]] ||
+      bad="agent.gitconfig"
+    expected_slugs=""
+    for slug in $(di_dir_slugs); do
+      expected_slugs="$expected_slugs $slug"
+      name="agent-${slug}.gitconfig"
+      [[ -f "$dir/$name" && "$(di_render_agent_author "$slug")" == "$(cat "$dir/$name")" ]] ||
+        bad="$bad $name"
     done
-    [[ -w "${dir}" ]] && { echo writable; exit 0; }
-    echo ok
-  ' 2>/dev/null | tr -cd 'a-z')"
+    for f in "$dir"/agent-*.gitconfig; do
+      [[ -e "$f" ]] || continue
+      slug="$(basename "$f" .gitconfig)"
+      slug="${slug#agent-}"
+      case " $expected_slugs " in
+      *" $slug "*) ;;
+      *) bad="$bad unexpected:$(basename "$f")" ;;
+      esac
+    done
+    if [[ -n "$bad" ]]; then
+      printf "stale:%s\n" "${bad# }"
+    elif [[ -w "$dir" ]]; then
+      echo writable
+    else
+      echo ok
+    fi
+  ' 2>/dev/null || echo error)"
   case "${gitconfig_state}" in
-  ok) log_success 'agent gitconfigs read-only and matching the templates' ;;
+  ok) log_success 'agent gitconfigs read-only and matching the registry' ;;
   writable)
     fail "~/.config/devbox/git is writable - a stray 'git config --global' in a session would rewrite the agent identity; run './bin/devbox bootstrap'"
     ;;
-  *) fail "~/.config/devbox/git/agent*.gitconfig differs from the templates or is missing - run './bin/devbox bootstrap'" ;;
+  stale:*)
+    fail "~/.config/devbox/git/{${gitconfig_state#stale:}} do not match identities.conf (missing, stale, or not expected by the registry) - run './bin/devbox bootstrap'"
+    ;;
+  *) fail "could not check ~/.config/devbox/git against the registry - run './bin/devbox bootstrap'" ;;
   esac
 
   # Moshi's notifications, approvals and Chat View all arrive through this

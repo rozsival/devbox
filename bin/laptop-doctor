@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # Laptop-side: check that this machine matches the layout the devbox expects
-# from it - private keys only in 1Password, the named public halves in ~/.ssh,
-# ssh and git configured to select through them, the agent git override
-# installed and current, the tokens and App credentials it needs, and the
-# connections it makes. Read-only; each check reports, and the exit status is
-# non-zero if any failed. See .agents/skills/devbox-laptop and docs/git.md.
+# from it - the identity registry, private keys only in 1Password, the named
+# public halves in ~/.ssh, ssh and git configured to select through them, the
+# agent git override installed and current, the tokens and App credentials it
+# needs, and the connections it makes. Read-only; each check reports, and the
+# exit status is non-zero if any failed. See .agents/skills/devbox-laptop and
+# docs/git.md.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPO_ROOT
 readonly TEMPLATE_DIR="${REPO_ROOT}/home"
-readonly AGENT_DIR="${HOME}/.local/libexec/devbox-agent"
+readonly LIBEXEC_DIR="${HOME}/.local/libexec"
+readonly AGENT_DIR="${LIBEXEC_DIR}/devbox-agent"
 readonly BIN_DIR="${HOME}/.local/bin"
 readonly CONFIG_DIR="${HOME}/.config/devbox"
 readonly SSH_DIR="${HOME}/.ssh"
@@ -24,6 +26,16 @@ PATH=":${PATH}:"
 PATH="${PATH//:${AGENT_DIR}:/:}"
 PATH="${PATH#:}"
 PATH="${PATH%:}"
+
+# The workstation's SSH alias is per-laptop, so it lives in the same gitignored
+# file ./bin/push reads rather than in a second variable of its own: one name,
+# one place, or the documented one-liner that sets it up would leave these
+# checks silently skipped.
+if [[ -f "${REPO_ROOT}/.push.env" ]]; then
+  # shellcheck source=/dev/null # per-laptop, not repo content
+  . "${REPO_ROOT}/.push.env"
+fi
+workstation_host="${DEVBOX_HOST:-}"
 
 log_info() { echo -e "\033[0;34m[INFO]\033[0m  $*"; }
 log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
@@ -40,6 +52,35 @@ fail() {
 file_mode() {
   perl -e 'printf "%o\n", (stat $ARGV[0])[2] & 07777' "$1"
 }
+
+# -- 0. Identity registry -------------------------------------------------------
+# Everything below that names a slug, a directory or a host comes from this
+# file; a broken registry must not stop the checks that do not depend on it
+# (keys still get checked, the launcher symlinks still get checked), so it is
+# read once here and every later section gates its own identity-derived part
+# on ${identities_ok} rather than failing outright.
+log_info 'identity registry'
+identities_lib="${LIBEXEC_DIR}/devbox-identities"
+identities_file="${CONFIG_DIR}/identities.conf"
+identities_ok=0
+slugs=''
+default_slug=''
+if [[ ! -r ${identities_lib} ]]; then
+  fail "${identities_lib} missing - run ./bin/install-agent"
+else
+  # Sourced, not shelled out to, so every section below can call di_* directly
+  # and render a fresh agent gitconfig to compare against what is installed.
+  # shellcheck source=../home/.local/libexec/devbox-identities
+  . "${identities_lib}"
+  if ! di_check; then
+    fail "${identities_file} is not usable - the identity-derived checks below are skipped"
+  else
+    identities_ok=1
+    slugs="$(di_slugs)"
+    default_slug="$(di_default)"
+    log_success "${identities_file} valid: $(tr '\n' ' ' <<<"${slugs}") (default: ${default_slug})"
+  fi
+fi
 
 # -- 1. Private keys: none on disk, all in 1Password --------------------------
 log_info 'Keys'
@@ -63,7 +104,14 @@ else
   fail '1Password SSH agent not reachable (1Password → Developer → SSH agent, and unlock)'
 fi
 
-for pub in id_personal signing_personal id_work signing_work devbox; do
+pub_list=()
+if ((identities_ok)); then
+  for slug in ${slugs}; do
+    pub_list+=("id_${slug}" "signing_${slug}")
+  done
+fi
+pub_list+=(devbox)
+for pub in "${pub_list[@]}"; do
   file="${SSH_DIR}/${pub}.pub"
   if [[ ! -f ${file} ]]; then
     fail "${file} missing"
@@ -114,9 +162,23 @@ check_host() {
   # shellcheck disable=SC2088  # literal ~ in a message
   fail "Host ${host}: IdentityFile is '${files//$'\n'/, }', expected one of: $(printf '~/.ssh/%s.pub ' "$@")"
 }
-check_host github.com id_personal
-check_host work.github.com id_work
-check_host workstation devbox id_personal
+if ((identities_ok)); then
+  for slug in ${slugs}; do
+    check_host "$(di_get "${slug}" alias)" "id_${slug}"
+  done
+fi
+# Not identity-derived: no slug names the workstation, so it comes from
+# DEVBOX_HOST (env or .push.env) rather than a hard-coded hostname in a repo
+# meant to go public.
+if [[ -n ${workstation_host} ]]; then
+  if ((identities_ok)); then
+    check_host "${workstation_host}" devbox "id_${default_slug}"
+  else
+    check_host "${workstation_host}" devbox
+  fi
+else
+  log_info 'DEVBOX_HOST not set (env or .push.env) - skipping the Host <workstation> ssh config check'
+fi
 check_host devbox devbox
 if [[ "$(ssh -G devbox 2>/dev/null | sed -n 's/^forwardagent //p')" == yes ]]; then
   fail 'Host devbox: ForwardAgent yes - herdr would carry your agent into every session; forward explicitly with ssh -A instead'
@@ -135,18 +197,35 @@ check_git() {
 check_git 'gpg.format' ssh "$(git config --global gpg.format || true)"
 check_git 'gpg.ssh.program' /Applications/1Password.app/Contents/MacOS/op-ssh-sign "$(git config --global gpg.ssh.program || true)"
 check_git 'commit.gpgsign' true "$(git config --global commit.gpgsign || true)"
-check_git 'user.signingkey' "${SSH_DIR}/signing_personal.pub" "$(git config --global user.signingkey || true)"
 check_git 'gpg.ssh.allowedSignersFile' "${SSH_DIR}/allowed_signers" "$(git config --global gpg.ssh.allowedSignersFile || true)"
-work_cfg="$(git config --global 'includeIf.gitdir:~/projects/work/.path' || true)"
-if [[ -z ${work_cfg} ]]; then
-  fail 'includeIf gitdir:~/projects/work/ is not configured in ~/.gitconfig'
+if ((identities_ok)); then
+  check_git 'user.signingkey' "${SSH_DIR}/signing_${default_slug}.pub" "$(git config --global user.signingkey || true)"
+  for slug in ${slugs}; do
+    [[ ${slug} != "${default_slug}" ]] || continue
+    # The literal ~ form, not the expanded one: this is hand-written in
+    # ~/.gitconfig, and git's own includeIf gitdir: matching is what expands it.
+    dir_raw="$(di_raw "${slug}" dir)"
+    while [[ ${dir_raw} == */ && ${dir_raw} != / ]]; do dir_raw="${dir_raw%/}"; done
+    include_cfg="$(git config --global "includeIf.gitdir:${dir_raw}/.path" || true)"
+    if [[ -z ${include_cfg} ]]; then
+      # shellcheck disable=SC2088  # literal ~ in a message
+      fail "includeIf gitdir:${dir_raw}/ is not configured in ~/.gitconfig"
+    else
+      check_git "[${slug}] user.signingkey" "${SSH_DIR}/signing_${slug}.pub" "$(git config --file "${include_cfg/#\~/${HOME}}" user.signingkey || true)"
+    fi
+  done
+  signing_keys_on_disk=0
+  for slug in ${slugs}; do
+    [[ -f "${SSH_DIR}/signing_${slug}.pub" ]] || continue
+    signing_keys_on_disk=$((signing_keys_on_disk + 1))
+  done
+  if [[ -f ${SSH_DIR}/allowed_signers ]] && (($(grep -c . "${SSH_DIR}/allowed_signers") >= signing_keys_on_disk)); then
+    log_success "allowed_signers lists ${signing_keys_on_disk} identit$([[ ${signing_keys_on_disk} == 1 ]] && echo y || echo ies)"
+  else
+    fail "${SSH_DIR}/allowed_signers missing or incomplete (one line per identity with a signing key on disk: <email> <key type> <key>)"
+  fi
 else
-  check_git 'work user.signingkey' "${SSH_DIR}/signing_work.pub" "$(git config --file "${work_cfg/#\~/${HOME}}" user.signingkey || true)"
-fi
-if [[ -f ${SSH_DIR}/allowed_signers ]] && (($(grep -c . "${SSH_DIR}/allowed_signers") >= 2)); then
-  log_success 'allowed_signers lists both identities'
-else
-  fail "${SSH_DIR}/allowed_signers missing or incomplete (one line per identity: <email> <key type> <key>)"
+  log_warn 'identity registry unusable - skipping user.signingkey, includeIf and allowed_signers checks'
 fi
 
 # -- 4. Agent git override: installed and identical to the templates ---------
@@ -162,34 +241,90 @@ fi
 for link in "${AGENT_DIR}/omp" "${BIN_DIR}/omp"; do
   [[ -L ${link} ]] || fail "${link} is not a symlink to ${AGENT_DIR}/omp-launcher - an omp release binary may have replaced it; run ./bin/install-agent"
 done
+# The reader is installed in libexec and reached by name through ~/.local/bin,
+# because that is the only one of the two the shells put on the PATH - and every
+# checklist, doc and `doctor` message tells people to run `devbox-identities
+# check`.
+reader_link="${BIN_DIR}/devbox-identities"
+if [[ ! -L ${reader_link} ]]; then
+  fail "${reader_link} is not a symlink to ${identities_lib} - 'devbox-identities' will not resolve by name; run ./bin/install-agent"
+elif [[ "$(readlink -f "${reader_link}")" != "$(readlink -f "${identities_lib}")" ]]; then
+  fail "${reader_link} points at $(readlink "${reader_link}"), not ${identities_lib}; run ./bin/install-agent"
+else
+  log_success 'devbox-identities resolves by name through ~/.local/bin'
+fi
 stale=()
 for rel in .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
-  .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .config/devbox/git/agent.gitconfig \
-  .config/devbox/git/agent-work.gitconfig; do
+  .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .local/libexec/devbox-identities; do
   cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
 done
+git_config_dir="${CONFIG_DIR}/git"
+if ((identities_ok)); then
+  # Rendered, not copied, so drift is checked against a fresh render rather
+  # than a template file that no longer exists on disk.
+  rendered_root="$(mktemp)"
+  DEVBOX_IDENTITIES_TEMPLATE_DIR="${TEMPLATE_DIR}/.config/devbox/git" di_render_agent_gitconfig >"${rendered_root}"
+  cmp -s "${rendered_root}" "${git_config_dir}/agent.gitconfig" || stale+=("${git_config_dir}/agent.gitconfig")
+  rm -f "${rendered_root}"
+  expected_agent_configs=()
+  # Every identity that claims a tree: that is what bootstrap and install-agent
+  # render, because git applies every matching include and a nested tree would
+  # otherwise inherit the outer identity's author.
+  for slug in $(di_dir_slugs); do
+    expected_agent_configs+=("agent-${slug}.gitconfig")
+    rendered_slug="$(mktemp)"
+    di_render_agent_author "${slug}" >"${rendered_slug}"
+    cmp -s "${rendered_slug}" "${git_config_dir}/agent-${slug}.gitconfig" || stale+=("${git_config_dir}/agent-${slug}.gitconfig")
+    rm -f "${rendered_slug}"
+  done
+  # A dropped or renamed identity must not keep claiming a tree through a file
+  # install-agent no longer knows to regenerate.
+  for f in "${git_config_dir}"/agent-*.gitconfig; do
+    [[ -e ${f} ]] || continue
+    name="${f##*/}"
+    known=0
+    for expected in "${expected_agent_configs[@]:-}"; do
+      [[ ${name} != "${expected}" ]] || {
+        known=1
+        break
+      }
+    done
+    ((known)) || stale+=("${f} (no matching identity in ${identities_file})")
+  done
+else
+  log_warn 'identity registry unusable - skipping the agent gitconfig render comparison'
+fi
 if ((${#stale[@]})); then
   fail "differ from the repo templates: ${stale[*]} - run ./bin/install-agent"
 else
-  log_success 'launcher, shim, helper, fence and agent gitconfigs match the repo templates'
+  log_success 'launcher, shim, helper, fence, devbox-identities and agent gitconfigs match the repo templates'
 fi
 # The gitconfigs must also be unwritable, directory included: GIT_CONFIG_GLOBAL
 # points in there, so `git config --global` in a session rewrites them - that is
 # how the agent author became your own name and email for five commits. git
 # locks beside the file it writes, so the directory mode is the one that counts.
-git_config_dir="${CONFIG_DIR}/git"
 if [[ -w ${git_config_dir} ]]; then
   fail "${git_config_dir} is writable - a stray 'git config --global' in a session would rewrite the agent identity; run ./bin/install-agent"
-elif [[ -w ${git_config_dir}/agent.gitconfig || -w ${git_config_dir}/agent-work.gitconfig ]]; then
-  fail "${git_config_dir}/agent*.gitconfig is writable - run ./bin/install-agent"
 else
-  log_success 'agent gitconfigs read-only (directory 500, files 444)'
+  writable_agent_cfg=()
+  for f in "${git_config_dir}"/agent*.gitconfig; do
+    [[ -e ${f} && -w ${f} ]] && writable_agent_cfg+=("${f}")
+  done
+  if ((${#writable_agent_cfg[@]})); then
+    fail "${writable_agent_cfg[*]} writable - run ./bin/install-agent"
+  else
+    log_success 'agent gitconfigs read-only (directory 500, files 444)'
+  fi
 fi
 # A file at the pre-move path means something still points there: either
 # ./bin/install-agent has not run since the move, or an agent session started
 # before it is alive and its login shells keep writing your identity into it.
-if [[ -e ${CONFIG_DIR}/agent.gitconfig || -e ${CONFIG_DIR}/agent-work.gitconfig ]]; then
-  fail "${CONFIG_DIR}/agent*.gitconfig exists outside the read-only directory - run ./bin/install-agent, then restart any agent session older than it (its GIT_CONFIG_GLOBAL still names the old path)"
+stale_root_cfg=()
+for f in "${CONFIG_DIR}/agent.gitconfig" "${CONFIG_DIR}"/agent-*.gitconfig; do
+  [[ -e ${f} ]] && stale_root_cfg+=("${f}")
+done
+if ((${#stale_root_cfg[@]})); then
+  fail "${stale_root_cfg[*]} exists outside the read-only directory - run ./bin/install-agent, then restart any agent session older than it (its GIT_CONFIG_GLOBAL still names the old path)"
 fi
 # The class of writer that caused this, caught by behaviour rather than by
 # grepping one dotfile: a login shell that runs `git config --global …` writes
@@ -236,56 +371,83 @@ elif [[ "$(file_mode "${secrets_file}")" != 600 ]]; then
 else
   log_success "${secrets_file} present, mode 600"
 fi
-for account in "personal:${HOME}" "work:${HOME}/projects/work"; do
-  name="${account%%:*}"
-  if ! token="$("${HOME}/.local/bin/devbox-gh-token" "${account#*:}" 2>/dev/null)" || [[ -z ${token} ]]; then
-    fail "no ${name} token: set GH_TOKEN_$(tr '[:lower:]' '[:upper:]' <<<"${name}") in ${secrets_file} (fine-grained; contents write on repos agents push without the App)"
-  elif ! GH_TOKEN="${token}" GH_CONFIG_DIR="${CONFIG_DIR}/gh" timeout 15 gh auth status >/dev/null 2>&1; then
-    fail "the ${name} token is rejected by gh - expired, revoked, or GitHub unreachable"
-  else
-    log_success "${name} token accepted by gh"
-  fi
-done
-app_dir="${HOME}/.config/work/work-app"
-if [[ -r ${app_dir}/app-id && -r ${app_dir}/app.pem ]]; then
-  if [[ "$(file_mode "${app_dir}/app.pem")" != 600 ]]; then
-    fail "${app_dir}/app.pem is not mode 600"
-  elif openssl pkey -in "${app_dir}/app.pem" -noout >/dev/null 2>&1; then
-    log_success "work-app App credentials present (app-id $(tr -d '[:space:]' <"${app_dir}/app-id"))"
-  else
-    fail "${app_dir}/app.pem is not a readable private key"
-  fi
+if ((identities_ok)); then
+  for slug in ${slugs}; do
+    dir="$(di_get "${slug}" dir)"
+    if ! token="$("${HOME}/.local/bin/devbox-gh-token" "${dir:-${HOME}}" 2>/dev/null)" || [[ -z ${token} ]]; then
+      fail "no ${slug} token: set $(di_get "${slug}" token_var) in ${secrets_file} (fine-grained; contents write on repos agents push without the App)"
+    elif ! GH_TOKEN="${token}" GH_CONFIG_DIR="${CONFIG_DIR}/gh" timeout 15 gh auth status >/dev/null 2>&1; then
+      fail "the ${slug} token is rejected by gh - expired, revoked, or GitHub unreachable"
+    else
+      log_success "${slug} token accepted by gh"
+    fi
+    app_dir="$(di_get "${slug}" app)"
+    [[ -n ${app_dir} ]] || continue
+    if [[ -r ${app_dir}/app-id && -r ${app_dir}/app.pem ]]; then
+      if [[ "$(file_mode "${app_dir}/app.pem")" != 600 ]]; then
+        fail "${app_dir}/app.pem is not mode 600"
+      elif openssl pkey -in "${app_dir}/app.pem" -noout >/dev/null 2>&1; then
+        log_success "${slug} App credentials present (app-id $(tr -d '[:space:]' <"${app_dir}/app-id"))"
+      else
+        fail "${app_dir}/app.pem is not a readable private key"
+      fi
+    else
+      log_warn "no App credentials in ${app_dir} - ${slug} repositories are pushed with the PAT until app-id + app.pem (mode 600) are there"
+    fi
+  done
 else
-  log_warn "no App credentials in ${app_dir} - work repositories are pushed with the PAT until app-id + app.pem (mode 600) are there"
+  log_warn 'identity registry unusable - skipping per-identity token and App-credential checks'
 fi
 
 # -- 6. Connections ------------------------------------------------------------
 log_info 'connections'
-# Which login answers is only informative; the check is that both aliases
-# authenticate and reach two *different* accounts, which is what the two
-# IdentityFile selections exist for.
+# Which login answers is only informative; the check is that every alias
+# authenticates and that two identities on the same forge reach two *different*
+# accounts, which is what their separate IdentityFile selections exist for.
 github_login() {
   ssh -o BatchMode=yes -o ConnectTimeout=10 -T "git@$1" 2>&1 | sed -n 's/^Hi \([^!]*\)!.*/\1/p' || true
 }
-personal_login="$(github_login github.com)"
-work_login="$(github_login work.github.com)"
-for pair in "github.com:${personal_login}" "work.github.com:${work_login}"; do
-  if [[ -n ${pair#*:} ]]; then
-    log_success "git@${pair%%:*} → ${pair#*:}"
-  else
-    fail "git@${pair%%:*} did not authenticate"
-  fi
-done
-if [[ -n ${personal_login} && ${personal_login} == "${work_login}" ]]; then
-  fail "both aliases reach ${personal_login} - id_work.pub selects the wrong key"
+if ((identities_ok)); then
+  conn_slugs=() conn_aliases=() conn_hosts=() conn_logins=()
+  for slug in ${slugs}; do
+    alias_name="$(di_get "${slug}" alias)"
+    host="$(di_get "${slug}" host)"
+    login="$(github_login "${alias_name}")"
+    conn_slugs+=("${slug}")
+    conn_aliases+=("${alias_name}")
+    conn_hosts+=("${host}")
+    conn_logins+=("${login}")
+    if [[ -n ${login} ]]; then
+      log_success "git@${alias_name} → ${login}"
+    else
+      fail "git@${alias_name} did not authenticate"
+    fi
+  done
+  conn_count=${#conn_slugs[@]}
+  for ((i = 0; i < conn_count; i++)); do
+    for ((j = i + 1; j < conn_count; j++)); do
+      [[ ${conn_hosts[i]} == "${conn_hosts[j]}" ]] || continue
+      [[ -n ${conn_logins[i]} && ${conn_logins[i]} == "${conn_logins[j]}" ]] || continue
+      fail "[${conn_slugs[i]}] and [${conn_slugs[j]}] both reach ${conn_logins[i]} on ${conn_hosts[i]} - one of their id_<slug>.pub files selects the wrong key"
+    done
+  done
+else
+  log_warn 'identity registry unusable - skipping per-identity connection checks'
 fi
-for host in workstation devbox; do
-  if ssh -o BatchMode=yes -o ConnectTimeout=10 "${host}" true 2>/dev/null; then
-    log_success "ssh ${host}"
+if [[ -n ${workstation_host} ]]; then
+  if ssh -o BatchMode=yes -o ConnectTimeout=10 "${workstation_host}" true 2>/dev/null; then
+    log_success "ssh ${workstation_host}"
   else
-    fail "ssh ${host} failed - is 1Password unlocked and the Devbox Laptop key approved?"
+    fail "ssh ${workstation_host} failed - is 1Password unlocked and the Devbox Laptop key approved?"
   fi
-done
+else
+  log_info 'DEVBOX_HOST not set (env or .push.env) - skipping ssh reachability check for the workstation'
+fi
+if ssh -o BatchMode=yes -o ConnectTimeout=10 devbox true 2>/dev/null; then
+  log_success 'ssh devbox'
+else
+  fail 'ssh devbox failed - is 1Password unlocked and the Devbox Laptop key approved?'
+fi
 
 echo
 if ((failures)); then

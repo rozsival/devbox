@@ -6,7 +6,7 @@ daemon owned by a dedicated unprivileged host user** - never the host's root dae
 ## The shape of it
 
 ```
-workstation
+<workstation>
 ├── root dockerd (host)             runs the devbox container itself
 │   └── devbox container            docker CLI + compose, DOCKER_HOST=/run/devbox/docker.sock
 └── rootless dockerd (user dev)     runs the project's containers
@@ -184,10 +184,10 @@ Then set `DOCKER_BIND_IP=172.17.0.1` in that project's devbox `.env` - the gatew
 bind: the boundary table drops connections to a published port from every interface except `lo` and
 `docker0`, including ports published to `0.0.0.0` (see *Where a published port is bound*).
 
-`work/agents` needs exactly this, plus one `devbox-ports` run:
+`<org>/<repo>` needs exactly this, plus one `devbox-ports` run:
 
 ```bash
-cd ~/projects/work-agents
+cd ~/projects/work/<repo>
 echo 'DOCKER_BIND_IP=172.17.0.1' >>.env
 pnpm run docker:start
 devbox-ports
@@ -219,7 +219,7 @@ rebuilds and counting against host disk like any project file.
 | Docker CLI     | `DOCKER_CLI_VERSION` (static tarball) | `Dockerfile`               |
 | Compose plugin | `DOCKER_COMPOSE_VERSION` (+ checksum) | `Dockerfile`               |
 | Buildx plugin  | `DOCKER_BUILDX_VERSION` (+ checksum)  | `Dockerfile`               |
-| Daemon         | The host's `docker-ce`                | `apt-get` on workstation |
+| Daemon         | The host's `docker-ce`                | `apt-get` on the workstation |
 
 Keep `DOCKER_CLI_VERSION` equal to the host daemon's (`docker version` on the host). An older CLI is fine;
 compose refuses an API newer than the server.
@@ -274,5 +274,5 @@ No - they live under `/home/dev/.local/share/docker` on the bind mount, which `b
 `rebuild` never deletes. Removing them is `docker system prune`, by hand.
 
 **Can I use the host's root daemon for something else?**
-It still runs the devbox container itself, and it's yours over `ssh workstation`. Nothing inside the
+It still runs the devbox container itself, and it's yours over `ssh <workstation>`. Nothing inside the
 devbox can reach it.

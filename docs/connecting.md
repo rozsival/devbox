@@ -13,7 +13,7 @@ workstation `~/projects` differ.
 ## herdr panes
 
 ```bash
-herdr                    # select "Workstation devbox" in the sidebar
+herdr                    # select "Devbox" in the sidebar
 ```
 
 A pane opens a login shell in `/home/dev`, running server-side after detach or quit - lid-close or
@@ -28,14 +28,14 @@ default non-interactive SSH `PATH`, so it's missing from `~/.local/bin`.
 to:
 
 ```bash
-ssh -p 2223 -l dev -o IdentitiesOnly=yes -i ~/.ssh/devbox.pub workstation
+ssh -p 2223 -l dev -o IdentitiesOnly=yes -i ~/.ssh/devbox.pub <workstation>
 ```
 
 Interactive, then one-shot; quote so `~` expands remotely, not on the laptop:
 
 ```bash
 ssh devbox
-ssh devbox 'cd ~/projects/rozsival/devbox && git status -sb'
+ssh devbox 'cd ~/projects/devbox && git status -sb'
 ```
 
 Anything reading `~/.ssh/config` honours it: `scp`, `rsync`, `git`, `ssh -L`.
@@ -53,7 +53,7 @@ fails, on purpose: [Git identities](git.md#manual-work-on-the-devbox---the-escap
 ## `./bin/devbox shell`
 
 ```bash
-ssh workstation 'cd ~/devbox && ./bin/devbox shell'   # docker compose exec -it devbox bash -l
+ssh <workstation> 'cd ~/devbox && ./bin/devbox shell'   # docker compose exec -it devbox bash -l
 ```
 
 This bypasses the container's sshd, working even if `authorized_keys`, the host key, or Tailscale is
@@ -61,7 +61,7 @@ broken.
 
 ## Moshi on a phone
 
-Moshi's an SSH client: host `workstation`, port `2223`, user `dev`, container-authorized key. Add the
+Moshi's an SSH client: host `<workstation>`, port `2223`, user `dev`, container-authorized key. Add the
 phone's key to `DEVBOX_EXTRA_AUTHORIZED_KEYS` in `.env` on the workstation, not via Easy Pair - the
 entrypoint rebuilds `authorized_keys` from GitHub plus that variable each start, erasing direct edits at
 the next `./bin/devbox up`.
@@ -75,11 +75,12 @@ Clone inside the container, agent forwarded, target directory picking the identi
 
 ```bash
 ssh -A devbox
-git clone git@github.com:rozsival/<repo> ~/projects/rozsival/<repo>       # personal
-git clone git@work.github.com:<org>/<repo> ~/projects/work/<repo>   # work, alias required
+git clone git@github.com:<your-github-username>/<repo> ~/projects/<repo>       # default identity
+git clone git@work.github.com:<org>/<repo> ~/projects/work/<repo>              # non-default, alias required
 ```
 
-Full rules - why work's alias can't be skipped, how agent sessions authenticate without it - in
+Full rules - why a non-default identity's alias can't be skipped, how agent sessions authenticate without
+it - in
 [Git identities](git.md).
 
 ## Reaching a dev server
@@ -117,7 +118,7 @@ The agent offered more than six keys before the right one; `IdentitiesOnly yes` 
 
 **`Host key verification failed` after a rebuild?**
 Shouldn't happen: the host key lives in `/home/dev/.ssh/host/`'s bind mount, surviving rebuilds. Wiped
-data dir? Remove the stale line: `ssh-keygen -R '[workstation]:2223'`, reconnect.
+data dir? Remove the stale line: `ssh-keygen -R '[<workstation>]:2223'`, reconnect.
 
 **Moshi connected to my *laptop* and 1Password asked to use the Devbox Laptop key - why?**
 Moshi's laptop host runs `herdr`, and every herdr client connects every saved machine itself: the new client

@@ -1,24 +1,26 @@
 ---
 name: devbox-deploy
-description: Pushes repo changes out to the devbox and applies them - ./bin/push, choosing between up, rebuild and bootstrap for the file you actually changed, rehearsing the rsync, and verifying with doctor. Use this whenever someone wants to deploy, redeploy, sync or "push to the devbox", has edited the Dockerfile, docker-compose.yml, container/, home/ or .env and wants it live, is bumping a pinned tool version, asks whether a redeploy will wipe their keys or projects, or needs to restart, roll back or back up the devbox.
+description: Pushes repo changes out to the devbox and applies them - ./bin/push, choosing between up, rebuild and bootstrap for the file you actually changed, ./bin/sync-identities for the identity registry, rehearsing the rsync, and verifying with doctor. Use this whenever someone wants to deploy, redeploy, sync or "push to the devbox", has edited the Dockerfile, docker-compose.yml, container/, home/, .env or identities.conf and wants it live, is bumping a pinned tool version, asks whether a redeploy will wipe their keys or projects, or needs to restart, roll back or back up the devbox.
 ---
 
 # devbox deploy
 
 Deploying is two easily-conflated steps: **sync the repo** to the workstation (`bin/push`, laptop side),
 **apply it** to the running container (`bin/devbox`, workstation side) - picking the wrong one is usually
-why a change seems to do nothing.
+why a change seems to do nothing. Syncing the *identity registry* is a separate, third step
+(`bin/sync-identities`): it never travels with `bin/push`, since `identities.conf` is gitignored, hand-held
+state, not repo content.
 
 Full reference: `docs/cli.md` (flags), `docs/operations.md` (restart, backup, troubleshooting).
 
 ## The common case
 
 ```bash
-./bin/push workstation --up     # rsync, then ./bin/devbox up on the host
+./bin/push <workstation> --up     # rsync, then ./bin/devbox up on the host
 ```
 
 `bin/push` is `rsync -az --delete` excluding `.git`, `.env`, `data/`, `.DS_Store` - host defaults to
-`$DEVBOX_HOST` then `workstation`, remote to `$DEVBOX_REMOTE_PATH` then `~/devbox`.
+`$DEVBOX_HOST` then `<workstation>`, remote to `$DEVBOX_REMOTE_PATH` then `~/devbox`.
 
 `--up` runs remote `up` over `ssh -t` so the live-session prompt reaches a human; an agent has none, so
 `up` refuses instead - correct, not an obstacle. Check `./bin/devbox sessions` first; if connected, sync
@@ -26,7 +28,7 @@ files, report the pending step and whose session dies, let the user decide. `--f
 go-ahead: it kills shells/panes with no client-side message.
 
 `bin/devbox` only runs on the workstation, driving the local Docker daemon. From the laptop that's
-`ssh workstation 'cd ~/devbox && ./bin/devbox <cmd>'`, or just `--up`.
+`ssh <workstation> 'cd ~/devbox && ./bin/devbox <cmd>'`, or just `--up`.
 
 ## Which apply step does the change need
 
@@ -40,6 +42,7 @@ go-ahead: it kills shells/panes with no client-side message.
 | Only a `bin/*` script                 | nothing                          | Read at invocation, on host       |
 | `container/skills.sh`                 | `up`, then `./bin/devbox skills` | Only run on demand                |
 | `~/.omp/agent/config.yml` (laptop)    | `./bin/sync-omp`                 | Personal state, not repo content  |
+| `~/.config/devbox/identities.conf`    | `./bin/sync-identities`          | Hand-held state, not repo content |
 | `bin/rootless-docker` on a new host   | `sudo ./bin/rootless-docker`     | Host provisioning, needs sudo     |
 
 `up` = `docker compose build` then `docker compose up -d` behind a preflight (`BIND_ADDR` non-empty,
@@ -61,12 +64,14 @@ entrypoint and bootstrap. That's why `up` answers both; unchanged, it's idempote
 
 One caveat for `home/`: bootstrap rewrites several files unconditionally - `~/.bashrc.d/devbox.sh`,
 `~/.bash_profile`, `~/.ssh/config`,
-`~/.local/libexec/devbox-agent/{omp-launcher,omp,gh,devbox-git-credential,devbox-git-no-ssh}`,
-`~/.config/devbox/git/agent*.gitconfig` (reinstalled through their read-only directory: bootstrap lifts the
-mode, regenerates, locks it again) - all generated, not hand-edited, so template edits land next run.
-`~/.gitconfig`, `~/.config/devbox/secrets.env`, OMP config are create-if-absent: editing those templates
-doesn't reach an existing home - delete the file under `${DEVBOX_DATA_DIR}`, or apply by hand. Git
-identity re-applies via `git config --global` regardless.
+`~/.local/libexec/devbox-agent/{omp-launcher,omp,gh,devbox-git-credential,devbox-git-no-ssh,devbox-identities}`,
+`~/.config/devbox/git/agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir`
+(reinstalled through their read-only directory: bootstrap lifts the mode, re-renders from
+`identities.conf`, locks it again) - all generated, not hand-edited, so template edits land next run.
+`~/.gitconfig`, `~/.config/devbox/secrets.env`, `~/.config/devbox/identities.conf`, OMP config are
+create-if-absent: editing those templates doesn't reach an existing home - delete the file under
+`${DEVBOX_DATA_DIR}`, or apply by hand (`identities.conf` specifically: edit it, or `./bin/sync-identities`
+from the laptop). Git identity re-applies via `git config --global` regardless.
 
 ## What a redeploy cannot destroy
 
@@ -75,7 +80,8 @@ This matters: "will I lose my keys / repos / gh login" is a flat no, by construc
 - `.env` is gitignored **and** rsync-excluded, so host-local config survives every push.
 - `${DEVBOX_DATA_DIR}` is a host bind mount, not the image: `~/.ssh/id_*.pub`,
   `~/.ssh/signing_*.pub` (public keys only - devbox holds no private key), sshd host key under
-  `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/secrets.env`, `~/.config/devbox/git/agent*.gitconfig`,
+  `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/identities.conf`, `~/.config/devbox/secrets.env`,
+  `~/.config/devbox/git/agent*.gitconfig`,
   `~/.local/libexec/devbox-agent` (`omp-launcher` plus its `omp` symlink, `gh` shim, credential helper,
   fence), `~/.gitconfig`, every project checkout, project daemon's images, build cache, named volumes under
   `~/.local/share/docker` - all persist across `up`, `rebuild`, image changes.
@@ -89,7 +95,7 @@ What does **not** survive a recreate: anything in the container's writable layer
 
 ```bash
 rsync -azni --delete --exclude .git --exclude .env --exclude 'data/' --exclude .DS_Store \
-  ./ workstation:devbox/
+  ./ <workstation>:devbox/
 ```
 
 `-n` is the dry run, `-i` itemizes changes. Without `-i` a dry run prints almost nothing - reads as "no
@@ -98,7 +104,7 @@ changes" when it's not.
 ## Verify after every deploy
 
 ```bash
-ssh workstation 'cd ~/devbox && ./bin/devbox doctor'
+ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 ```
 
 `doctor` runs all checks, reports each, exits non-zero on any failure: compose present, `BIND_ADDR` equal
@@ -121,7 +127,7 @@ revert. `bin/push` syncs the working tree; commit or stash first, or in-flight e
 
 ```bash
 git stash                                                      # or commit
-git switch --detach <good-commit> && ./bin/push workstation --up
+git switch --detach <good-commit> && ./bin/push <workstation> --up
 git switch - && git stash pop                                  # back to where you were
 ```
 
@@ -129,9 +135,9 @@ State lives outside the repo, in a tree owned by dedicated `dev`, so backup need
 host:
 
 ```bash
-ssh -t workstation 'sudo tar -C /home --exclude=dev/.local/share/docker -czf /tmp/devbox-home.tar.gz dev'
-scp workstation:/tmp/devbox-home.tar.gz "devbox-home-$(date +%F).tar.gz"
-ssh -t workstation 'sudo rm -f /tmp/devbox-home.tar.gz'
+ssh -t <workstation> 'sudo tar -C /home --exclude=dev/.local/share/docker -czf /tmp/devbox-home.tar.gz dev'
+scp <workstation>:/tmp/devbox-home.tar.gz "devbox-home-$(date +%F).tar.gz"
+ssh -t <workstation> 'sudo rm -f /tmp/devbox-home.tar.gz'
 ```
 
 The exclusion drops the project daemon's images, cache, named volumes; dump a database you care about,

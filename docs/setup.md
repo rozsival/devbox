@@ -12,7 +12,7 @@ First deploy, per-host config, laptop SSH wiring, in order - each step verifiabl
 Check the workstation in one call:
 
 ```bash
-ssh workstation 'docker --version && docker compose version && tailscale ip -4 && id -u && command -v rsync'
+ssh <workstation> 'docker --version && docker compose version && tailscale ip -4 && id -u && command -v rsync'
 ```
 
 Different host UID is fine: `./bin/devbox env` derives `HOST_UID`/`HOST_GID` from the current user, owning
@@ -31,7 +31,7 @@ Authorize it in both places:
 
 ```bash
 # workstation host (needed by ./bin/push)
-ssh-copy-id -i ~/.ssh/devbox.pub -p 2222 vit@workstation
+ssh-copy-id -i ~/.ssh/devbox.pub -p 2222 <user>@<workstation>
 
 # devbox container: paste the same public key into DEVBOX_EXTRA_AUTHORIZED_KEYS in .env (step 3)
 cat ~/.ssh/devbox.pub
@@ -50,16 +50,16 @@ Two hosts, one machine, different ports: `2222` workstation sshd, `2223` contain
 Host *
   IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 
-Host workstation
-  HostName workstation
+Host <workstation>
+  HostName <workstation>
   Port 2222
-  User vit
+  User <user>
   IdentitiesOnly yes
   IdentityFile ~/.ssh/devbox.pub
   ServerAliveInterval 30
 
 Host devbox
-  HostName workstation
+  HostName <workstation>
   Port 2223
   User dev
   IdentitiesOnly yes
@@ -69,8 +69,9 @@ Host devbox
 ```
 
 `ForwardAgent no` states the default: manual git needs explicit `ssh -A devbox` ([Git identities](git.md)),
-never herdr's connection. GitHub `Host` blocks match: `IdentityFile ~/.ssh/id_personal.pub` for
-`github.com`, `~/.ssh/id_work.pub` for `work.github.com`.
+never herdr's connection. GitHub `Host` blocks match one per identity in `~/.config/devbox/identities.conf`:
+`IdentityFile ~/.ssh/id_<slug>.pub` for the default identity's bare host, the same pattern for
+`<slug>.<host>` on every other account - see [Git identities](git.md#laptop-install).
 
 `IdentitiesOnly yes` is load-bearing: without it the agent offers every key, and the server rejects with
 `Too many authentication failures` first.
@@ -79,14 +80,14 @@ Verify resolved parameters, then the connection:
 
 ```bash
 ssh -G devbox | grep -E '^(hostname|port|user|identityfile|identitiesonly) '
-ssh workstation true
+ssh <workstation> true
 ```
 
 ## 3. Deploy and configure
 
 ```bash
-./bin/push workstation
-ssh workstation 'cd ~/devbox && ./bin/devbox env'
+./bin/push <workstation>                             # or: echo 'DEVBOX_HOST=<workstation>' >.push.env && ./bin/push
+ssh <workstation> 'cd ~/devbox && ./bin/devbox env'
 ```
 
 `env` creates `.env` from `.env.example`: `BIND_ADDR` from `tailscale ip -4`, `HOST_UID`/`HOST_GID` from
@@ -97,23 +98,35 @@ Provision the project Docker daemon once: needs `.env` present, moves `DEVBOX_DA
 under `dev`, refusing while the container runs (before the first `up`):
 
 ```bash
-ssh -t workstation 'cd ~/devbox && sudo ./bin/rootless-docker'
+ssh -t <workstation> 'cd ~/devbox && sudo ./bin/rootless-docker'
 ```
 
 `--check` reports what's missing, unchanged otherwise; see [Docker](docker.md). Then start the container:
 
 ```bash
-ssh workstation 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
+ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
 ```
+
+First boot leaves `~/.config/devbox/identities.conf` absent and prints the command that creates it:
+`cp /opt/devbox/home/.config/devbox/identities.conf.example ~/.config/devbox/identities.conf`. Nothing
+seeds it for you, because the example is a *valid* file and bootstrap would otherwise configure git as
+`Your Name <you@example.com>`.
+
+Fill it in from a shell in the container (`ssh <workstation> 'cd ~/devbox && ./bin/devbox shell'`, or any
+login shell there): one `[slug]` block per account - name, email, the laptop's public keys - with exactly
+one block omitting `dir` to become the default identity. Then re-run `./bin/devbox bootstrap` to derive
+`~/.ssh/config`, `~/.gitconfig`, the agent gitconfigs and `allowed_signers` from it. It lives on the bind
+mount, so it survives every rebuild; `./bin/sync-identities` copies the laptop's own copy over instead of
+retyping it. See [Git identities](git.md).
 
 `.env` is gitignored **and** excluded from `bin/push` - deploys leave it untouched.
 
 ## 4. Attach herdr
 
 ```bash
-ssh devbox true                                    # accept the host key once
-herdr machine add devbox --label "Workstation devbox"  # interactive terminal; verifies the remote binary
-herdr                                              # `Workstation devbox` appears next to `Local`
+ssh devbox true                          # accept the host key once
+herdr machine add devbox --label "Devbox" # interactive terminal; verifies the remote binary
+herdr                                    # `Devbox` appears next to `Local`
 ```
 
 ## 5. Optional but recommended
@@ -121,7 +134,7 @@ herdr                                              # `Workstation devbox` appear
 Two extras outside `bootstrap`, keeping first starts fast, offline-safe:
 
 ```bash
-ssh workstation 'cd ~/devbox && ./bin/devbox skills'   # 3 global agent skills + agent-browser + Chrome
+ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # 3 global agent skills + agent-browser + Chrome
 ./bin/sync-omp                                           # laptop OMP preset → devbox
 ```
 
@@ -137,38 +150,38 @@ Agents run on the laptop too, same launcher, same mechanism:
 
 Installs `omp-launcher`, `gh` shim, credential helper, fence in `~/.local/libexec/devbox-agent`;
 `devbox-gh-token` in `~/.local/bin`; `omp` symlinked to the launcher in both directories;
-`~/.config/devbox/git/agent*.gitconfig` (directory left read-only);
-`~/.config/devbox/secrets.env` from template if missing. Idempotent: regenerates generated files, keeps
-`secrets.env`, touches nothing else. Reports whether `omp` resolves to the launcher, and prints the two
-manual steps: PATs in `~/.config/devbox/secrets.env`, App credentials at
-`~/.config/work/work-app/`. See [Git identities](git.md#laptop-install).
+`~/.config/devbox/git/agent*.gitconfig` (directory left read-only); the identity registry reader
+(`devbox-identities`); `~/.config/devbox/secrets.env` from template if missing. `identities.conf` is never
+created for you - it prints the `cp` command instead, so placeholder values can never become your agent's
+author. Idempotent: regenerates generated files, keeps
+`secrets.env` and `identities.conf`, touches nothing else. Reports whether `omp` resolves to the launcher,
+and prints the remaining manual steps per identity: a `GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env`,
+and - for any identity with an `app` directory set - its GitHub App credentials there. See
+[Git identities](git.md#laptop-install).
 
 `./bin/laptop-doctor` is the laptop's acceptance test. It covers steps 1, 2 and 6 plus the GitHub `Host`
-blocks and the signing config: keys held by 1Password with none on disk, every `Host` selecting one `.pub`,
-both gitconfigs signing via `op-ssh-sign`, the override current, both PATs accepted, and all four
-connections authenticating. Details: [CLI reference](cli.md#binlaptop-doctor).
+blocks and the signing config: keys held by 1Password with none on disk, every `Host` selecting one `.pub`
+per registry identity, every gitconfig signing via `op-ssh-sign`, the override current, every identity's
+token accepted, and all connections authenticating. Details: [CLI reference](cli.md#binlaptop-doctor).
 
 ## `.env` reference
 
-| Variable                       | Default           | Purpose                                                                               |
-|--------------------------------|-------------------|---------------------------------------------------------------------------------------|
-| `BIND_ADDR`                    | *(empty)*         | Publish address; empty = `up` refuses                                                 |
-| `DEVBOX_SSH_PORT`              | `2223`            | Host port (container always uses `2222`)                                              |
-| `DEVBOX_DATA_DIR`              | `/home/dev`       | Host path; must equal container home (path identity)                                  |
-| `HOST_UID` / `HOST_GID`        | `1001`            | Dedicated `dev` host user; owns the data dir and project daemon                       |
-| `DEVBOX_DOCKER_SOCKET_DIR`     | `/run/devbox`     | Project daemon socket dir, bind-mounted into the container                            |
-| `TZ`                           | `Europe/Prague`   | Container timezone                                                                    |
-| `DEVBOX_GITHUB_USER`           | `rozsival`        | Seeds keys from `github.com/<user>.keys`                                              |
-| `DEVBOX_EXTRA_AUTHORIZED_KEYS` | *(empty)*         | Extra keys, newline-separated                                                         |
-| `GIT_PERSONAL_NAME` / `_EMAIL` | personal identity | Applied to `~/.gitconfig`                                                             |
-| `GIT_WORK_NAME` / `_EMAIL`  | work identity  | Applied to `~/.config/work/.gitconfig`                                             |
-| `GIT_PERSONAL_PUBKEY`          | *(empty)*         | Laptop's personal auth key; selects the forwarded key                                 |
-| `GIT_PERSONAL_SIGNINGKEY`      | *(empty)*         | Laptop's personal signing key (`git config user.signingkey` on the laptop)            |
-| `GIT_WORK_PUBKEY`           | *(empty)*         | Same, for `~/projects/work/**`                                                     |
-| `GIT_WORK_SIGNINGKEY`       | *(empty)*         | Same, for `~/projects/work/**`                                                     |
+| Variable                       | Default                 | Purpose                                                                         |
+|---------------------------------|-------------------------|----------------------------------------------------------------------------------|
+| `BIND_ADDR`                    | *(empty)*               | Publish address; empty = `up` refuses                                          |
+| `DEVBOX_SSH_PORT`              | `2223`                  | Host port (container always uses `2222`)                                       |
+| `DEVBOX_DATA_DIR`              | `/home/dev`             | Host path; must equal container home (path identity)                           |
+| `HOST_UID` / `HOST_GID`        | `1001`                  | Dedicated `dev` host user; owns the data dir and project daemon                |
+| `DEVBOX_DOCKER_SOCKET_DIR`     | `/run/devbox`           | Project daemon socket dir, bind-mounted into the container                     |
+| `TZ`                           | `Europe/Prague`         | Container timezone                                                             |
+| `DEVBOX_GITHUB_USER`           | `your-github-username`  | Seeds keys from `github.com/<user>.keys`                                       |
+| `DEVBOX_EXTRA_AUTHORIZED_KEYS` | *(empty)*               | Extra keys, newline-separated                                                  |
 
-`.env` holds no secrets: tool credentials in `~/.config/devbox/secrets.env`, project secrets in each
-project's own `.env`. See [Secrets](secrets.md).
+`.env` carries no git identity: who this box is, per account and per directory tree, lives in
+`~/.config/devbox/identities.conf` (see step 3 above), never in `.env` or `docker-compose.yml`.
+
+`.env` holds no other secrets either: tool credentials in `~/.config/devbox/secrets.env`, project secrets
+in each project's own `.env`. See [Secrets](secrets.md).
 
 ## ❓ FAQ
 
@@ -179,7 +192,7 @@ Rebuilt every container start from `https://github.com/<DEVBOX_GITHUB_USER>.keys
 
 **How do I authorize another client - a phone, a second laptop?**
 Append its public key to `DEVBOX_EXTRA_AUTHORIZED_KEYS` in `.env` **on the workstation**
-(`workstation:~/devbox/.env`; never synced by `bin/push`), run `./bin/devbox up`. Values newline-separate
+(`<workstation>:~/devbox/.env`; never synced by `bin/push`), run `./bin/devbox up`. Values newline-separate
 in one quoted pair - compose passes them intact:
 
 ```bash
@@ -192,9 +205,9 @@ ssh-ed25519 AAAA…a0iNF iphone"
 port publishes only on `BIND_ADDR`.
 
 **Do I need a key file on disk at all?**
-No. Every key - devbox key, both GitHub identities - is a 1Password item; `~/.ssh` holds only `.pub`
+No. Every key - devbox key, every GitHub identity - is a 1Password item; `~/.ssh` holds only `.pub`
 halves. Reason for a file key: herdr's background connection failing while 1Password is locked (step 1) -
-serving those two blocks only.
+serving the workstation and devbox blocks only.
 
 **`up` failed with an empty `BIND_ADDR`. Is that a bug?**
 No - the preflight is working as intended. Run `./bin/devbox env` (Tailscale up first), or set the address

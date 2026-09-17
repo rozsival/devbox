@@ -19,19 +19,27 @@ usage() {
 Usage: ./bin/push [host] [--up] [--force]
 
 Arguments:
-  host     SSH host to deploy to (default: $DEVBOX_HOST, then 'workstation')
+  host     SSH host to deploy to (default: $DEVBOX_HOST, or DEVBOX_HOST in .push.env)
 
 Options:
   --up     Run './bin/devbox up' on the host after syncing
   --force  Pass --force to that 'up': recreate even with live SSH sessions
 
 Environment:
-  DEVBOX_HOST         default SSH host
+  DEVBOX_HOST         default SSH host; may also be set in .push.env beside this
+                      repo (gitignored), since the alias is per-laptop
   DEVBOX_REMOTE_PATH  remote repo path (default: ~/devbox)
 USAGE
 }
 
-host="${DEVBOX_HOST:-workstation}"
+# No default host in the repo: the workstation's SSH alias is per-laptop, and a
+# literal here would be one machine's name shipped to everyone else. .push.env
+# is gitignored precisely so it can hold it.
+if [[ -f "${REPO_ROOT}/.push.env" ]]; then
+  # shellcheck source=/dev/null # per-laptop, not repo content
+  . "${REPO_ROOT}/.push.env"
+fi
+host="${DEVBOX_HOST:-}"
 remote_path="${DEVBOX_REMOTE_PATH:-~/devbox}"
 run_up=0
 force=''
@@ -48,6 +56,8 @@ for arg in "$@"; do
   *) host="${arg}" ;;
   esac
 done
+[[ -n "${host}" ]] ||
+  log_error "No host: pass one as an argument, export DEVBOX_HOST, or put DEVBOX_HOST=<ssh-alias> in ${REPO_ROOT}/.push.env"
 
 command -v rsync >/dev/null 2>&1 || log_error 'rsync is missing locally - run: brew install rsync'
 ssh "${host}" 'command -v rsync >/dev/null 2>&1' ||

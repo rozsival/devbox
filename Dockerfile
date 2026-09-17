@@ -27,8 +27,8 @@ ARG DOCKER_BUILDX_VERSION=0.37.1
 ENV DEBIAN_FRONTEND=noninteractive
 
 # `apt-get` only, never `apt`: `apt` has no stable CLI interface and warns on
-# every scripted call. `starship` comes from the Ubuntu archive, exactly as
-# workstation's `setup shell` step does.
+# every scripted call. `starship` comes from the Ubuntu archive, the same source
+# the workstation's own shell setup uses.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     build-essential \

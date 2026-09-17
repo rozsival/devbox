@@ -5,7 +5,7 @@ Day-to-day ops: redeploy, restart, persistence, backup, and the failure modes wo
 ## Redeploy
 
 ```bash
-./bin/push workstation --up
+./bin/push <workstation> --up
 ```
 
 Repeatable, non-destructive: `.env`, `${DEVBOX_DATA_DIR}`, identity public keys, and the sshd host key
@@ -15,15 +15,16 @@ fingerprint must match before and after.
 Use `rebuild` over `up` for a cache-free image after a pinned version changes:
 
 ```bash
-ssh workstation 'cd ~/devbox && ./bin/devbox rebuild && ./bin/devbox doctor'
+ssh <workstation> 'cd ~/devbox && ./bin/devbox rebuild && ./bin/devbox doctor'
 ```
 
 ## Persistence
 
-`${DEVBOX_DATA_DIR}` bind-mounts at `/home/dev`: dotfiles, both SSH identity public keys, the sshd host
-key, `~/.config/gh`, and the whole `~/projects` tree. A bind mount (not a named volume) lets `tar` back it
-up and the host user (same UID) inspect it. Rebuilds keep everything, including the client's `known_hosts`
-entry.
+`${DEVBOX_DATA_DIR}` bind-mounts at `/home/dev`: dotfiles, every SSH identity's public keys,
+`~/.config/devbox` (`identities.conf`, `secrets.env`, the rendered agent and user gitconfigs),
+the sshd host key, `~/.config/gh`, and the whole `~/projects` tree. A bind mount (not a named volume) lets
+`tar` back it up and the host user (same UID) inspect it. Rebuilds keep everything, including the client's
+`known_hosts` entry.
 
 | Event                            | Filesystem | Running panes |
 |----------------------------------|------------|---------------|
@@ -42,10 +43,13 @@ Prune manually: `docker system prune`.
 ## Backup
 
 ```bash
-ssh -t workstation 'sudo tar -C /home --exclude=dev/.local/share/docker -czf /tmp/devbox-home.tar.gz dev'
-scp workstation:/tmp/devbox-home.tar.gz "devbox-home-$(date +%F).tar.gz"
-ssh -t workstation 'sudo rm -f /tmp/devbox-home.tar.gz'
+ssh -t <workstation> 'sudo tar -C /home --exclude=dev/.local/share/docker -czf /tmp/devbox-home.tar.gz dev'
+scp <workstation>:/tmp/devbox-home.tar.gz "devbox-home-$(date +%F).tar.gz"
+ssh -t <workstation> 'sudo rm -f /tmp/devbox-home.tar.gz'
 ```
+
+Carries `~/.config/devbox/identities.conf` and `secrets.env` along with the rest of `/home/dev`: restoring
+the tarball restores every registered identity - no re-running the manual checklist per account.
 
 `sudo` is needed - the tree belongs to the dedicated `dev` account, not your host user. The exclusion drops
 the project daemon's images, build cache **and named volumes** - all of `~/.local/share/docker`. Images
@@ -58,8 +62,8 @@ Restore: extract into place with ownership preserved (`HOST_UID:HOST_GID`, i.e. 
 ## Health
 
 ```bash
-ssh workstation 'cd ~/devbox && ./bin/devbox doctor'     # full check, non-zero on failure
-ssh workstation 'cd ~/devbox && ./bin/devbox logs -f'    # follow sshd output
+ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'     # full check, non-zero on failure
+ssh <workstation> 'cd ~/devbox && ./bin/devbox logs -f'    # follow sshd output
 ```
 
 The compose healthcheck, `ss -ltn | grep -q ":2222"` every 30s with a 20s start period, reports
@@ -91,7 +95,7 @@ sshd isn't listening. `./bin/devbox logs` - usually a failed `authorized_keys` f
 on `/home/dev/.ssh`.
 
 **`Host key verification failed`**
-Data dir was recreated, so the host key is new. `ssh-keygen -R '[workstation]:2223'`, reconnect, accept
+Data dir was recreated, so the host key is new. `ssh-keygen -R '[<workstation>]:2223'`, reconnect, accept
 once.
 
 **Permission denied writing to `/home/dev`**
@@ -149,7 +153,7 @@ distinct `DEVBOX_SSH_PORT`, `DEVBOX_DATA_DIR`, and compose project name.
 Rehearse the sync with `-n`:
 
 ```bash
-rsync -azni --delete --exclude .git --exclude .env --exclude 'data/' --exclude .DS_Store ./ workstation:devbox/
+rsync -azni --delete --exclude .git --exclude .env --exclude 'data/' --exclude .DS_Store ./ <workstation>:devbox/
 ```
 
 **Is `bootstrap` safe to run while I am working in a pane?**

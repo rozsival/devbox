@@ -76,11 +76,12 @@ if [ -r "$HOME/.config/devbox/secrets.env" ]; then
   set +a
 fi
 
-# GH_TOKEN is deliberately *not* derived here. The GitHub account belongs to the
-# working directory (~/projects/work/** is work, as in git's includeIf),
-# and an agent's cwd is a project while the shell that started it was opened in
-# $HOME - so a value fixed at shell startup would pin the wrong account for the
-# whole session. The `gh` shim in ~/.local/libexec/devbox-agent resolves
-# GH_TOKEN_PERSONAL or GH_TOKEN_WORK per invocation instead; anything else
-# that needs the token should ask the same resolver: GH_TOKEN=$(devbox-gh-token).
+# GH_TOKEN is deliberately *not* derived here. The account belongs to the
+# working directory (the `dir` prefixes in ~/.config/devbox/identities.conf, as
+# in git's includeIf), and an agent's cwd is a project while the shell that
+# started it was opened in $HOME - so a value fixed at shell startup would pin
+# the wrong account for the whole session. The `gh` shim in
+# ~/.local/libexec/devbox-agent resolves GH_TOKEN_<IDENTITY> per invocation
+# instead; anything else that needs the token should ask the same resolver:
+# GH_TOKEN=$(devbox-gh-token).
 # See docs/secrets.md.

@@ -29,7 +29,7 @@ a per-project service-account key; ADC needs only the key file) - see [Secrets](
 Check what's running - `doctor` fails on a tool's real exit code, not a blank line:
 
 ```bash
-ssh workstation 'cd ~/devbox && ./bin/devbox doctor'
+ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 ```
 
 ## Why tools live where they do
@@ -81,7 +81,7 @@ it shadows, which is why the launcher survives an update. See
 `secrets: { enabled: true }` obfuscating an API key in the environment - `~/.config/devbox/secrets.env` or
 a project `.env` - before it reaches a provider. Your edits are never overwritten.
 
-Local workstation models are opt-in: copy `harnesses/omp.yml` from the `workstation` repo into
+Local workstation-served models are opt-in: copy your model-serving repo's `harnesses/omp.yml` into
 `~/.omp/agent/models.yml`, pointing the provider `baseUrl` at the workstation's Tailscale address.
 
 Sync the laptop's preset so devbox panes share model roles, theme and feature flags:
@@ -115,7 +115,7 @@ Pairing is the one manual step: the token is per-account, belongs to the phone, 
 
 ```bash
 ssh devbox 'moshi-hook pair --token <token from Settings → Hooks in the app>'
-ssh workstation 'cd ~/devbox && ./bin/devbox hook'   # restart so it picks the pairing up
+ssh <workstation> 'cd ~/devbox && ./bin/devbox hook'   # restart so it picks the pairing up
 ```
 
 `bootstrap` flags pairing as outstanding until done; `doctor` reports it running-but-unpaired. Pairing
@@ -143,7 +143,7 @@ moshi-hook install --target omp      # rewrite the OMP extension after an update
 Optional, recommended, and not in `bootstrap` since the first run downloads a ~180 MB Chrome build:
 
 ```bash
-ssh workstation 'cd ~/devbox && ./bin/devbox skills'
+ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'
 ```
 
 `container/skills.sh` installs three skills with `--global --agent universal`, landing them only in
@@ -209,7 +209,7 @@ shell.
 2. One install block: `curl -fsSL` to a temp dir, verify the published checksum, `install -m 0755` into
    `/usr/local/bin`.
 3. Add a probe to `doctor`'s list in `bin/devbox` if the version matters.
-4. `./bin/push workstation && ssh workstation 'cd ~/devbox && ./bin/devbox rebuild'`.
+4. `./bin/push <workstation> && ssh <workstation> 'cd ~/devbox && ./bin/devbox rebuild'`.
 
 Never invent a hash: without a published checksum file (`herdr`), pinned version plus TLS is the contract.
 

@@ -1,6 +1,6 @@
 ---
 name: devbox-laptop
-description: Sets up and checks the laptop side of the devbox - private keys only in 1Password, the named public keys in ~/.ssh (id_personal, signing_personal, id_work, signing_work, devbox), ~/.ssh/config that selects them through the 1Password agent, the two gitconfigs signing through op-ssh-sign, the agent git override (./bin/install-agent: omp launcher, gh shim, credential helper), the two fine-grained PATs in ~/.config/devbox/secrets.env, the GitHub App credentials, and ./bin/laptop-doctor as the acceptance test. Use this whenever someone is onboarding a new laptop or Mac, asks where a key, token or config file lives on the laptop, wants OMP on the laptop to stop using their identity, finds a private key on disk, sees commits Unverified on GitHub, gets a 1Password or op-ssh-sign prompt or failure, asks whether the laptop matches the devbox, or runs laptop-doctor and gets a WARN.
+description: Sets up and checks the laptop side of the devbox - private keys only in 1Password, one id_<slug>.pub/signing_<slug>.pub pair per identity in ~/.ssh (plus the fixed devbox key), the identity registry at ~/.config/devbox/identities.conf, ~/.ssh/config that selects keys through the 1Password agent, gitconfigs signing through op-ssh-sign, the agent git override (./bin/install-agent - omp launcher, gh shim, credential helper, rendered agent gitconfigs), one fine-grained PAT per identity in ~/.config/devbox/secrets.env, the GitHub App credentials, and ./bin/laptop-doctor as the acceptance test. Use this whenever someone is onboarding a new laptop or Mac, asks where a key, token or config file lives on the laptop, wants OMP on the laptop to stop using their identity, finds a private key on disk, sees commits Unverified on GitHub, is adding a new account to the registry, or gets a laptop-doctor warning.
 ---
 
 # devbox laptop
@@ -14,56 +14,52 @@ Read the needed section, not retyped, so a changed default gets picked up, not r
 
 ## Phase 1 - keys: 1Password items, public halves on disk
 
-Five 1Password SSH Key items, each exported as one `.pub` file in `~/.ssh`:
+One 1Password SSH Key item per identity's authentication key and per identity's signing key, plus the
+fixed `devbox` key, each exported as one `.pub` file in `~/.ssh`. `identities.conf` names the slugs; the
+file names follow from them:
 
-| file                   | 1Password item       | used by                                                             |
-|------------------------|----------------------|---------------------------------------------------------------------|
-| `id_personal.pub`      | personal auth key    | `Host github.com`; GitHub *Authentication* key                      |
-| `signing_personal.pub` | personal signing key | `~/.gitconfig` `user.signingkey`; GitHub *Signing* key              |
-| `id_work.pub`       | work auth key     | `Host work.github.com`; work *Authentication* key             |
-| `signing_work.pub`  | work signing key  | `~/.config/work/.gitconfig`; work *Signing* key               |
-| `devbox.pub`           | Devbox Laptop        | `Host workstation`, `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS` |
+| file                     | 1Password item          | used by                                                             |
+|--------------------------|--------------------------|----------------------------------------------------------------------|
+| `id_<slug>.pub`          | that identity's auth key | `Host <slug>.<host>` (or bare `<host>` for the default identity)    |
+| `signing_<slug>.pub`     | that identity's signing key | `~/.gitconfig` `user.signingkey` (default) or `user-<slug>.gitconfig`; GitHub *Signing* key |
+| `devbox.pub`             | Devbox Laptop            | `Host <workstation>`, `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS` |
 
 Auth/signing are separate files: GitHub registers each separately, per account - signing with auth key
 verifies locally, shows *Unverified* on GitHub.
-
-Write a public half via the agent, never by generating one:
-
-```bash
-export SSH_AUTH_SOCK="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
-ssh-add -l                                   # fingerprints + item names
-ssh-add -L | grep <key-material-prefix> > ~/.ssh/<name>.pub
-```
 
 `ssh-keygen -t …` is wrong: it creates a private key on disk - exactly what this layout removes.
 `laptop-doctor` reporting `private key(s) on disk`: delete if already a 1Password item, else import
 (1Password → New item → SSH Key → import), then delete.
 
-Same four GitHub public keys go into the workstation's `.env` as `GIT_*_PUBKEY`/`GIT_*_SIGNINGKEY` - see
-`devbox-setup`, phase 5.
+The same public keys go into `~/.config/devbox/identities.conf` as `pubkey`/`signing_pubkey` on each
+identity's block - see `devbox-setup`, phase 5.
 
 ## Phase 2 - `~/.ssh/config`
 
 `Host *` names the 1Password socket as `IdentityAgent`; each host block names one `.pub` as `IdentityFile`
-with `IdentitiesOnly yes`, so ssh offers that key of six held. `Host devbox` sets `ForwardAgent no`
-- herdr never carries the agent; only explicit `ssh -A devbox` does. Blocks verbatim:
-`docs/setup.md#2-add-the-sshconfig-blocks`; GitHub blocks follow the pattern with `id_personal.pub`,
-`id_work.pub`.
+with `IdentitiesOnly yes`, so ssh offers only that key of the ones held. `Host devbox` sets
+`ForwardAgent no` - herdr never carries the agent; only explicit `ssh -A devbox` does. Blocks verbatim:
+`docs/setup.md#2-add-the-sshconfig-blocks`; GitHub blocks follow the pattern with one `id_<slug>.pub` per
+identity, the default identity's block on the bare `Host github.com`, every other identity on
+`Host <slug>.github.com`.
 
-Check: `ssh -G devbox | grep -E 'identityfile|identitiesonly|identityagent'`, then
-`ssh -T git@github.com` and `ssh -T git@work.github.com` must greet two different accounts.
+Check: `ssh -G devbox | grep -E 'identityfile|identitiesonly|identityagent'`, then `ssh -T git@github.com`
+plus one `ssh -T git@<slug>.github.com` per non-default identity - each must greet a different account.
+`laptop-doctor` also checks the `Host <workstation>` block, but the repo names no workstation hostname:
+set `DEVBOX_HOST` (environment, or `DEVBOX_HOST=<alias>` in `.push.env`, which `bin/push` reads too) or
+that one check is skipped.
 
 ## Phase 3 - gitconfigs
 
 Commits sign through 1Password (`gpg.ssh.program = op-ssh-sign`), signing key named by file so laptop and
-devbox read it alike:
+devbox read it alike. One block in `~/.gitconfig` per non-default identity, routed by `includeIf gitdir:`:
 
 ```
-~/.gitconfig                    user.signingkey = ~/.ssh/signing_personal.pub, gpg.format = ssh,
-                                commit.gpgsign = true, gpg.ssh.allowedSignersFile = ~/.ssh/allowed_signers,
-                                includeIf gitdir:~/projects/work/ → ~/.config/work/.gitconfig
+~/.gitconfig                 user.signingkey = ~/.ssh/signing_personal.pub, gpg.format = ssh,
+                              commit.gpgsign = true, gpg.ssh.allowedSignersFile = ~/.ssh/allowed_signers,
+                              includeIf gitdir:~/projects/work/ → ~/.config/work/.gitconfig
 ~/.config/work/.gitconfig    user.name/email for work, user.signingkey = ~/.ssh/signing_work.pub
-~/.ssh/allowed_signers          one line per identity: <email> <key type> <key>
+~/.ssh/allowed_signers       one line per identity: <email> <key type> <key>
 ```
 
 Check: an empty commit in a throwaway repo under each tree, `git log --show-signature -1` → `Good "git"
@@ -77,11 +73,19 @@ signature for <email>` with the *signing* key's fingerprint.
 
 Installs the devbox's bootstrap override, from `home/` templates: `omp-launcher`
 (`~/.local/bin/omp` → `~/.local/libexec/devbox-agent/omp` → `omp-launcher`, symlinks at both hops), `gh`
-shim, `devbox-git-credential`, `devbox-git-no-ssh`, `devbox-gh-token`,
-`~/.config/devbox/git/agent*.gitconfig` (directory locked to mode 500 afterwards). Every OMP session through a
-shell after gets HTTPS remotes, per-operation tokens, a bot author, no signing, a `gh` with no stored login
-- shell/IDE on same clones keep SSH remote, 1Password agent, signed commits. Re-run after `git pull`
-touches `home/`; `laptop-doctor` reports drift from templates.
+shim, `devbox-git-credential`, `devbox-git-no-ssh`, `devbox-gh-token`, and `devbox-identities` - the
+registry reader, in `~/.local/libexec` with a `~/.local/bin` symlink, since only the latter is on the PATH
+and every checklist tells you to run `devbox-identities check` (`laptop-doctor` checks that hop too).
+It never writes `~/.config/devbox/identities.conf`: when that file is absent it prints
+the `cp` command for it, because the example is valid and would otherwise become the agent's author.
+
+The agent gitconfigs are *rendered* from the registry, not copied: `~/.config/devbox/git/agent.gitconfig`
+plus one `agent-<slug>.gitconfig` per identity claiming a `dir` (all of them - an inherited author is
+written out explicitly, or a tree nested inside another identity's would keep the outer bot), directory
+locked to mode 500 afterwards. Every OMP session through a shell after gets HTTPS
+remotes, per-operation tokens, a bot author, no signing, a `gh` with no stored login - shell/IDE on same
+clones keep SSH remote, 1Password agent, signed commits. Re-run after `git pull` touches `home/` or after
+editing `identities.conf`; `laptop-doctor` reports drift from a fresh render.
 
 The launcher only covers what resolves `omp` via PATH - a herdr pane or alias naming the binary by
 absolute path (`~/.bun/bin/omp`) bypasses it; use plain `omp`. Proof: `echo $GIT_CONFIG_GLOBAL` prints
@@ -105,17 +109,18 @@ authored wrongly need `git commit --amend --reset-author` (or `rebase -x`) plus 
 
 ## Phase 5 - what the override needs
 
-- `~/.config/devbox/secrets.env` (mode 600, from `install-agent`): `GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK` -
+- `~/.config/devbox/secrets.env` (mode 600, from `install-agent`): one `GH_TOKEN_<SLUG>` per identity -
   fine-grained, `contents: write` on repos agents push to without the App, plus `actions`/`checks` read,
   `issues`/`pull-requests` write if agents should post. Used by the credential helper for App-less repos,
   by `gh` in agent sessions. Same file/variables as devbox; only PATs belong here - model keys come from
   OMP.
-- `~/.config/work/work-app/app-id`, `app.pem` (mode 600): the credential helper mints a
-  repo-scoped installation token per git op on a repo with the App, ahead of the PAT. Without them, work
-  repos push with the PAT.
+- Per identity with an `app` field in `identities.conf`: `<app-dir>/app-id`, `<app-dir>/app.pem`
+  (mode 600) - the credential helper mints a repo-scoped installation token per git op on a repo the App
+  is installed on, ahead of the PAT. Without them, that identity's repos push with the PAT.
 
-Check: `./bin/laptop-doctor` validates both tokens against GitHub, pem as a key;
-`devbox-git-credential explain <owner>/<repo>` prints `app:<installation>` or `pat:<account>` for a repo.
+Check: `./bin/laptop-doctor` validates every identity's token against GitHub, each `app.pem` as a key;
+`devbox-git-credential explain <owner>/<repo>` prints `app:<slug>:<installation>` or `pat:<slug>` for a
+repo.
 
 ## When `laptop-doctor` warns
 
@@ -124,17 +129,18 @@ Check: `./bin/laptop-doctor` validates both tokens against GitHub, pem as a key;
 | `private key(s) on disk`                          | Import to 1Password if missing, delete file (phase 1)                                                   |
 | `<name>.pub … is not held by the 1Password agent` | Wrong export, or item disabled; re-export via `ssh-add -L`                                              |
 | `1Password SSH agent not reachable`               | Agent off (1Password → Developer → SSH agent) or locked                                                 |
+| `identities.conf: …`                              | Registry does not validate (`devbox-identities check`); fix the named block, phase 1/5                 |
 | `~/.ssh/config does not parse: … line N`          | Option-name typo; ssh clients (herdr included) die before the agent, 1Password never prompts            |
 | `Host …: IdentityFile is …`                       | Names a private key path or wrong `.pub` (phase 2)                                                      |
 | `Host devbox: ForwardAgent yes`                   | Remove it; forward via `ssh -A devbox` when needed                                                      |
 | `user.signingkey is …`                            | Points at literal or auth key; use `signing_*.pub`                                                      |
 | `omp resolves to …, not the launcher`             | `./bin/install-agent`; put `~/.local/bin` first on PATH                                                 |
 | `… is not a symlink to …/omp-launcher`            | An `omp` release binary replaced a launcher symlink; `./bin/install-agent`, then `omp update` again     |
-| `differ from the repo templates`                  | `./bin/install-agent` (templates changed since last install)                                            |
+| `differ from a fresh render of the templates`     | `./bin/install-agent` (templates or `identities.conf` changed since last install)                       |
 | `the keychain holds an agent token`               | Homebrew's `osxkeychain` preempted the helper; erase via `git credential-osxkeychain erase`, reinstall  |
-| `no <account> token` / `token is rejected`        | Fill/re-issue the PAT in `secrets.env` (phase 5)                                                        |
+| `no <slug> token` / `token is rejected`           | Fill/re-issue `GH_TOKEN_<SLUG>` in `secrets.env` (phase 5)                                              |
 | `ssh devbox failed`                               | 1Password locked, or Devbox Laptop key unapproved for this app                                          |
-| `both aliases reach <login>`                      | `id_work.pub` is the personal key; re-export (phase 1)                                               |
+| `both aliases reach <login>`                      | Two identities' `id_<slug>.pub` files hold the same key; re-export the wrong one (phase 1)              |
 
 herdr's saved-machine connections are background ssh over that agent - a machine flapping between
 `connecting`/`offline` while 1Password is locked is that, not a devbox fault.

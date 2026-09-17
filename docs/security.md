@@ -27,8 +27,8 @@ an escape lands as a host user with no password, no sudo, no files outside `/hom
 Verify:
 
 ```bash
-ssh workstation 'cd ~/devbox && docker compose exec -T devbox ps -o user= -p 1'   # dev
-ssh workstation 'cd ~/devbox && ./bin/devbox logs | grep "Server listening"'      # no "must be run as root"
+ssh <workstation> 'cd ~/devbox && docker compose exec -T devbox ps -o user= -p 1'   # dev
+ssh <workstation> 'cd ~/devbox && ./bin/devbox logs | grep "Server listening"'      # no "must be run as root"
 ```
 
 ## What the container holds
@@ -49,19 +49,20 @@ credential. See [Secrets](secrets.md).
 
 ## What an agent inside the devbox can reach
 
-**Can**: the whole `/home/dev` tree - both public keys (useless without the laptop's forwarded agent),
-both `gh` tokens, the App private key, every project's `.env` and GCP key - plus the internet, the
-container's Tailnet namespace, and the rootless project Docker daemon ([Docker](docker.md)).
+**Can**: the whole `/home/dev` tree - every identity's public keys (useless without the laptop's forwarded
+agent), every identity's `gh` token, each configured App's private key, every project's `.env` and GCP
+key - plus the internet, the container's Tailnet namespace, and the rootless project Docker daemon
+([Docker](docker.md)).
 
 **Cannot**: the host filesystem outside the data dir and world-readable paths, the host's **root** Docker
 daemon, the devbox container's own lifecycle, root inside the container, any unpublished port, and any
 1Password vault.
 
 The consequence: an agent with shell access can push through the same App token or PAT `git`/`gh` already
-resolve, and read the App private key, both PATs, and every project's `.env` and GCP key directly. Your
+resolve, and read each configured App's private key, every identity's PAT, and every project's `.env` and GCP key directly. Your
 own GitHub push authority stays out of reach - no private key to steal - unless it's inside a `ssh -A
-devbox` connection you forwarded yourself (accepted limit 2). Treat a compromise as "revoke two PATs, one
-App key, one service-account key," not "rebuild a laptop."
+devbox` connection you forwarded yourself (accepted limit 2). Treat a compromise as "revoke every
+identity's PAT and App key, plus the service-account key," not "rebuild a laptop."
 
 ## Accepted limits
 
@@ -143,12 +144,13 @@ per [AGENTS.md](../AGENTS.md) rule 4; `./bin/devbox shell` still gets you in whi
 there's no lock-out risk to trade the boundary away for.
 
 **Can I give an agent a narrower key?**
-Already the default: agents commit through the work-app GitHub App, scoped to specific repositories
+Already the default: agents commit through each identity's own GitHub App where one is installed, scoped
+to specific repositories
 and permissions, and `gh` uses a fine-grained PAT rather than an account-wide OAuth token. The forwarded
 1Password agent stays broad for manual work because it's yours - see accepted limit 2.
 
 **Would per-repo deploy keys be tighter than the fine-grained PAT?**
-Yes - but the primary path is already that tight: the work-app GitHub App mints a token scoped to
+Yes - but the primary path is already that tight: an installed GitHub App mints a token scoped to
 exactly one repository for one hour. Deploy keys matter only for the fallback case - repos without the
 App installed - where the fine-grained PAT trades the same breadth as any multi-repo PAT: it pushes
 everywhere granted `contents: write`, readable by any agent, not just by you at a prompt. Install the App
@@ -159,6 +161,6 @@ The SSH keys are 1Password items, not files, so the laptop carries no key - but 
 Laptop* item from GitHub or `DEVBOX_EXTRA_AUTHORIZED_KEYS` anyway, restart the container
 (`authorized_keys` rebuilds on every start), and drop it from the workstation's own
 `~/.ssh/authorized_keys`. What the laptop **does** hold in plaintext, if `./bin/install-agent` ran there,
-is the agent's own credentials: `GH_TOKEN_PERSONAL`/`GH_TOKEN_WORK` in `~/.config/devbox/secrets.env`,
-and the App pem in `~/.config/work/work-app/`. Revoke both PATs, rotate the App private key -
-same list as a container compromise above.
+is the agent's own credentials: one `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env`, and
+each configured identity's App pem under its own `app` directory. Revoke every identity's PAT, rotate
+every App private key - same list as a container compromise above.

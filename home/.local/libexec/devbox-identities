@@ -1,0 +1,490 @@
+#!/usr/bin/env bash
+# Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
+# edit home/.local/libexec/devbox-identities in the repo.
+#
+# The one reader of ~/.config/devbox/identities.conf. Everything identity-shaped
+# on either machine is derived from that file through this script: ~/.ssh/config,
+# ~/.gitconfig's includeIf chain, allowed_signers, the agent gitconfigs, which
+# GitHub token a directory gets and which GitHub App may mint a token for it.
+# Adding an account is therefore a block in the config file and nothing else -
+# no branch here, no line in bootstrap, no variable in .env.
+#
+# Sourceable as a library (`. devbox-identities`) or run as a command:
+#
+#   devbox-identities list                      # slugs, config order
+#   devbox-identities dir-slugs                 # slugs claiming a tree, shortest dir first
+#   devbox-identities default                   # the slug with no `dir`
+#   devbox-identities get <slug> <field>        # one resolved field
+#   devbox-identities show <slug>               # every resolved field
+#   devbox-identities for [directory]           # the slug that owns a tree
+#   devbox-identities check                     # validate, non-zero on error
+#   devbox-identities render ssh-config
+#   devbox-identities render agent-gitconfig [slug]
+#   devbox-identities render user-gitconfig <slug>
+#   devbox-identities render allowed-signers
+#
+# Deliberately bash 3.2 compatible (no associative arrays, no `${x^^}`): the
+# laptop-side scripts run under whatever `/usr/bin/env bash` finds on macOS.
+set -euo pipefail
+
+DEVBOX_IDENTITIES_FILE="${DEVBOX_IDENTITIES_FILE:-${HOME}/.config/devbox/identities.conf}"
+DEVBOX_IDENTITIES_TEMPLATE_DIR="${DEVBOX_IDENTITIES_TEMPLATE_DIR:-}"
+
+readonly DI_FIELDS='dir name email pubkey signing_pubkey agent_name agent_email app host alias'
+
+di_die() {
+  printf 'devbox-identities: %s\n' "$*" >&2
+  exit 1
+}
+
+# `~` only at the start, and only the caller's own home: this file is shared
+# between two machines whose home paths happen to differ (/home/dev vs /Users/x).
+di_expand() {
+  # shellcheck disable=SC2088 # literal leading ~ from the config, stripped here
+  case "$1" in
+  '~') printf '%s' "${HOME}" ;;
+  '~/'*) printf '%s' "${HOME}/${1#\~/}" ;;
+  *) printf '%s' "$1" ;;
+  esac
+}
+
+di_upper() { printf '%s' "$1" | tr '[:lower:]' '[:upper:]'; }
+
+di_slugs() {
+  [[ -r ${DEVBOX_IDENTITIES_FILE} ]] || return 0
+  awk '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*\[/ {
+      s = $0
+      sub(/^[^[]*\[/, "", s)
+      sub(/\].*$/, "", s)
+      print s
+    }
+  ' "${DEVBOX_IDENTITIES_FILE}"
+}
+
+# The value as written, empty when absent. One awk pass per lookup rather than a
+# parsed cache: bash 3.2 has no associative arrays, and the whole config is a
+# handful of lines read a few dozen times per bootstrap.
+di_raw() {
+  [[ -r ${DEVBOX_IDENTITIES_FILE} ]] || return 0
+  awk -v want="$1" -v field="$2" '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*\[/ {
+      slug = $0
+      sub(/^[^[]*\[/, "", slug)
+      sub(/\].*$/, "", slug)
+      next
+    }
+    {
+      eq = index($0, "=")
+      if (!eq) next
+      k = substr($0, 1, eq - 1)
+      v = substr($0, eq + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      if (slug == want && k == field) { print v; exit }
+    }
+  ' "${DEVBOX_IDENTITIES_FILE}"
+}
+
+# Field names present in a block, for the typo check in di_check.
+di_keys() {
+  [[ -r ${DEVBOX_IDENTITIES_FILE} ]] || return 0
+  awk -v want="$1" '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*\[/ {
+      slug = $0
+      sub(/^[^[]*\[/, "", slug)
+      sub(/\].*$/, "", slug)
+      next
+    }
+    {
+      eq = index($0, "=")
+      if (!eq) next
+      k = substr($0, 1, eq - 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+      if (slug == want) print k
+    }
+  ' "${DEVBOX_IDENTITIES_FILE}"
+}
+
+# The identity with no `dir`: the one that owns every tree no other claims.
+di_default() {
+  local slug
+  for slug in $(di_slugs); do
+    [[ -n "$(di_raw "${slug}" dir)" ]] || {
+      printf '%s\n' "${slug}"
+      return 0
+    }
+  done
+  return 0
+}
+
+# A resolved field: the written value, or what it defaults to. `key` is not a
+# config field - the slug names the key files, always.
+di_get() {
+  local slug="$1" field="$2" value default_slug
+  case "${field}" in
+  dir)
+    value="$(di_raw "${slug}" dir)"
+    [[ -n ${value} ]] || return 0
+    value="$(di_expand "${value}")"
+    while [[ ${value} == */ && ${value} != / ]]; do value="${value%/}"; done
+    printf '%s\n' "${value}"
+    return 0
+    ;;
+  host)
+    value="$(di_raw "${slug}" host)"
+    printf '%s\n' "${value:-github.com}"
+    return 0
+    ;;
+  alias)
+    value="$(di_raw "${slug}" alias)"
+    if [[ -z ${value} ]]; then
+      if [[ ${slug} == "$(di_default)" ]]; then
+        value="$(di_get "${slug}" host)"
+      else
+        value="${slug}.$(di_get "${slug}" host)"
+      fi
+    fi
+    printf '%s\n' "${value}"
+    return 0
+    ;;
+  agent_name | agent_email)
+    value="$(di_raw "${slug}" "${field}")"
+    if [[ -z ${value} ]]; then
+      default_slug="$(di_default)"
+      [[ ${slug} == "${default_slug}" ]] || value="$(di_raw "${default_slug}" "${field}")"
+    fi
+    printf '%s\n' "${value}"
+    return 0
+    ;;
+  app)
+    value="$(di_raw "${slug}" app)"
+    [[ -n ${value} ]] || return 0
+    printf '%s\n' "$(di_expand "${value}")"
+    return 0
+    ;;
+  token_var)
+    printf 'GH_TOKEN_%s\n' "$(di_upper "${slug}")"
+    return 0
+    ;;
+  api)
+    # api.github.com for github.com, /api/v3 for GitHub Enterprise.
+    value="$(di_get "${slug}" host)"
+    if [[ ${value} == github.com ]]; then
+      printf 'https://api.github.com\n'
+    else
+      printf 'https://%s/api/v3\n' "${value}"
+    fi
+    return 0
+    ;;
+  *)
+    di_raw "${slug}" "${field}"
+    return 0
+    ;;
+  esac
+}
+
+# Both spellings of a path: as given, and with every symlink resolved. A worktree
+# that only looks like it is under a `dir` must not inherit that identity, and a
+# path that does not exist yet (one passed before the clone) keeps its literal
+# form so it can still match.
+di_spellings() {
+  local path="$1" resolved
+  printf '%s\n' "${path}"
+  resolved="$(cd "${path}" 2>/dev/null && pwd -P)" || return 0
+  [[ ${resolved} == "${path}" ]] || printf '%s\n' "${resolved}"
+}
+
+# The identity that owns a directory: longest matching `dir` prefix, else the
+# default. Longest rather than first, so ~/projects/work/client nested inside
+# ~/projects/work resolves to the inner one whatever the config order is.
+di_for() {
+  local dir="${1:-$PWD}" slug best='' best_len=0 target candidate configured len
+  for slug in $(di_slugs); do
+    configured="$(di_get "${slug}" dir)"
+    [[ -n ${configured} ]] || continue
+    while IFS= read -r candidate; do
+      while IFS= read -r target; do
+        case "${target}/" in
+        "${candidate}/"*)
+          len="${#candidate}"
+          if ((len > best_len)); then
+            best="${slug}"
+            best_len="${len}"
+          fi
+          ;;
+        esac
+      done < <(di_spellings "${dir}")
+    done < <(di_spellings "${configured}")
+  done
+  [[ -n ${best} ]] || best="$(di_default)"
+  printf '%s\n' "${best}"
+}
+
+di_show() {
+  local slug="$1" field
+  for field in ${DI_FIELDS} token_var api; do
+    printf '%-15s %s\n' "${field}" "$(di_get "${slug}" "${field}")"
+  done
+}
+
+# Every error at once: this runs from the entrypoint, where a second pass costs a
+# container restart.
+di_check() {
+  local slugs slug field other messages='' default_count=0 dir alias
+  # Collected rather than printed as they are found: a block declared twice is
+  # walked twice, and the same complaint twice reads like two problems.
+  report() { messages="${messages}${1}
+"; }
+
+  die_now() {
+    printf 'identities.conf: %s\n' "$1" >&2
+    return 1
+  }
+
+  if [[ ! -r ${DEVBOX_IDENTITIES_FILE} ]]; then
+    die_now "${DEVBOX_IDENTITIES_FILE} is missing - copy identities.conf.example and fill it in"
+    return 1
+  fi
+
+  slugs="$(di_slugs)"
+  if [[ -z ${slugs} ]]; then
+    die_now 'no [identity] block - at least one is required'
+    return 1
+  fi
+
+  for slug in ${slugs}; do
+    case "${slug}" in
+    [a-z]*) [[ ${slug} =~ ^[a-z][a-z0-9_]*$ ]] || report "[${slug}] is not a valid slug (lowercase letters, digits and _; must start with a letter)" ;;
+    *) report "[${slug}] is not a valid slug (must start with a lowercase letter)" ;;
+    esac
+
+    if (($(printf '%s\n' "${slugs}" | grep -c "^${slug}\$") > 1)); then
+      report "[${slug}] is declared more than once"
+    fi
+
+    for field in $(di_keys "${slug}"); do
+      case " ${DI_FIELDS} " in
+      *" ${field} "*) ;;
+      *) report "[${slug}] has no field '${field}' (known: ${DI_FIELDS})" ;;
+      esac
+    done
+
+    for field in name email; do
+      [[ -n "$(di_get "${slug}" "${field}")" ]] || report "[${slug}] has no ${field}"
+    done
+
+    dir="$(di_get "${slug}" dir)"
+    if [[ -z ${dir} ]]; then
+      default_count=$((default_count + 1))
+      for field in agent_name agent_email; do
+        [[ -n "$(di_get "${slug}" "${field}")" ]] ||
+          report "[${slug}] is the default identity and has no ${field} - every other identity inherits it, and git refuses to commit without an author"
+      done
+    else
+      # Rejected rather than quoted around: the path also becomes a `gitdir:`
+      # pattern in two generated config files and a key in ~/.gitconfig that
+      # bootstrap parses back out to retract stale includes. A space survives
+      # none of those cleanly, and a project tree never needs one.
+      case "${dir}" in
+      *[[:space:]]*) report "[${slug}] dir '${dir}' contains whitespace - project trees must not, since the path becomes a gitdir: pattern and a config key" ;;
+      esac
+      # Absolute, or `~`-relative which expands to absolute. Anything else has
+      # the two routers disagreeing: `di_for` compares against an absolute $PWD
+      # and never matches, while git prepends `**/` to a `gitdir:` pattern that
+      # does not start with `/`, `~/` or `./` - so `projects/work/` would fire
+      # in *every* `…/projects/work/` on disk. The identity a commit carries and
+      # the token its push uses would come from different trees.
+      [[ ${dir} == /* ]] ||
+        report "[${slug}] dir '$(di_raw "${slug}" dir)' is not absolute - write it as /path or ~/path"
+    fi
+
+    alias="$(di_get "${slug}" alias)"
+    for other in ${slugs}; do
+      [[ ${other} != "${slug}" ]] || continue
+      [[ "$(di_get "${other}" alias)" != "${alias}" ]] || report "[${slug}] and [${other}] share the SSH alias ${alias} - set a distinct 'alias' on one"
+      [[ -z ${dir} || "$(di_get "${other}" dir)" != "${dir}" ]] || report "[${slug}] and [${other}] share the directory ${dir}"
+    done
+  done
+
+  case "${default_count}" in
+  0) report "no identity without a 'dir' - exactly one must be the default that catches every other tree" ;;
+  1) ;;
+  *) report "${default_count} identities have no 'dir' - exactly one must be the default" ;;
+  esac
+
+  [[ -n ${messages} ]] || return 0
+  printf '%s' "${messages}" | sort -u | sed 's/^/identities.conf: /' >&2
+  return 1
+}
+
+# -- Renderers ----------------------------------------------------------------
+# All of these write to stdout, so the callers can install them with `install -m`
+# and compare a fresh render against what is on disk.
+
+di_render_ssh_config() {
+  local slug host alias key
+  cat <<'HEADER'
+# Generated from ~/.config/devbox/identities.conf by devbox-identities - edit the
+# config, not this file. Absolute paths only: agents run non-interactively and
+# never expand `~` through a shell.
+#
+# No private keys live here. IdentityFile names a *public* key, which with
+# IdentitiesOnly makes ssh offer exactly that key from the forwarded 1Password
+# agent (`ssh -A devbox`) - otherwise the agent would offer every key it holds
+# and the forge would accept whichever account comes first. Agent sessions never
+# reach this file: their git is rewritten to HTTPS (docs/git.md).
+HEADER
+  for slug in $(di_slugs); do
+    host="$(di_get "${slug}" host)"
+    alias="$(di_get "${slug}" alias)"
+    key="${HOME}/.ssh/id_${slug}.pub"
+    printf '\nHost %s\n' "${alias}"
+    [[ ${alias} == "${host}" ]] || printf '  HostName %s\n' "${host}"
+    printf '  User git\n  IdentityFile %s\n  IdentitiesOnly yes\n' "${key}"
+  done
+  cat <<'TAIL'
+
+Host *
+  ServerAliveInterval 30
+  AddKeysToAgent no
+TAIL
+}
+
+# The root agent gitconfig: the static template with the identity-derived blocks
+# substituted for its markers.
+di_render_agent_gitconfig() {
+  local tpl="${DEVBOX_IDENTITIES_TEMPLATE_DIR:-${HOME}/.config/devbox/git}/agent.gitconfig.tpl"
+  [[ -r ${tpl} ]] || di_die "no template at ${tpl}"
+  local line
+  while IFS= read -r line; do
+    case "${line}" in
+    '@URL_REWRITES@') di_render_url_rewrites ;;
+    '@DEFAULT_AUTHOR@') di_render_agent_author "$(di_default)" ;;
+    '@INCLUDES@') di_render_agent_includes ;;
+    *) printf '%s\n' "${line}" ;;
+    esac
+  done <"${tpl}"
+}
+
+# One [url] section per forge host, listing every alias that resolves to it, and
+# one credential-helper section per host. `useHttpPath` is what lets the helper
+# see which repository a request is for and mint a repository-scoped token.
+di_render_url_rewrites() {
+  local hosts host slug
+  hosts="$(for slug in $(di_slugs); do di_get "${slug}" host; done | sort -u)"
+  for host in ${hosts}; do
+    printf '[url "https://%s/"]\n' "${host}"
+    for slug in $(di_slugs); do
+      [[ "$(di_get "${slug}" host)" == "${host}" ]] || continue
+      printf '\tinsteadOf = git@%s:\n' "$(di_get "${slug}" alias)"
+      printf '\tinsteadOf = %s:\n' "$(di_get "${slug}" alias)"
+    done
+    printf '\tinsteadOf = ssh://git@%s/\n' "${host}"
+    # The `gh:` shorthand from ~/.gitconfig, which only makes sense for the
+    # public instance.
+    [[ ${host} != github.com ]] || printf '\tinsteadOf = gh:\n'
+    printf '\n'
+  done
+  for host in ${hosts}; do
+    printf '[credential "https://%s"]\n\thelper = !devbox-git-credential\n\tuseHttpPath = true\n' "${host}"
+  done
+}
+
+di_render_agent_author() {
+  local slug="$1"
+  printf '[user]\n\tname = %s\n\temail = %s\n' "$(di_get "${slug}" agent_name)" "$(di_get "${slug}" agent_email)"
+}
+
+# Every identity that claims a tree, shortest `dir` first. Both properties are
+# load-bearing:
+#
+#   - *every* one, not just those with their own `agent_*`: git applies every
+#     matching `includeIf`, so an identity nested inside another that had no
+#     file of its own would silently keep the outer tree's author, which is not
+#     what `devbox-identities for` reports for that directory.
+#   - shortest first, because among matching includes the last one read wins -
+#     so the longest matching prefix must come last, whatever order the config
+#     file happens to list the blocks in.
+di_dir_slugs() {
+  local slug dir
+  for slug in $(di_slugs); do
+    dir="$(di_get "${slug}" dir)"
+    [[ -n ${dir} ]] || continue
+    printf '%s %s\n' "${#dir}" "${slug}"
+  done | sort -n -k1,1 | while read -r _ slug; do printf '%s\n' "${slug}"; done
+}
+
+# `includeIf` per claimed tree; must come after the [user] block above.
+di_render_agent_includes() {
+  local slug
+  for slug in $(di_dir_slugs); do
+    printf '[includeIf "gitdir:%s/"]\n\tpath = agent-%s.gitconfig\n' "$(di_get "${slug}" dir)" "${slug}"
+  done
+}
+
+# Your own identity for a tree, included from ~/.gitconfig. Not the agent's: this
+# one signs, with the public key the forwarded 1Password agent holds.
+di_render_user_gitconfig() {
+  local slug="$1" alias host
+  alias="$(di_get "${slug}" alias)"
+  host="$(di_get "${slug}" host)"
+  printf '# Generated from ~/.config/devbox/identities.conf by devbox-identities.\n'
+  printf '# Your own git identity for %s.\n' "$(di_get "${slug}" dir)"
+  printf '[user]\n\tname = %s\n\temail = %s\n\tsigningkey = %s/.ssh/signing_%s.pub\n' \
+    "$(di_get "${slug}" name)" "$(di_get "${slug}" email)" "${HOME}" "${slug}"
+  [[ ${alias} == "${host}" ]] && return 0
+  # Points existing `git@<host>:` remotes inside this tree at the alias, so they
+  # offer this identity's key. A new clone must use the alias itself: URL
+  # rewriting from an includeIf file cannot apply before the directory exists.
+  printf '[url "git@%s:"]\n\tinsteadOf = git@%s:\n' "${alias}" "${host}"
+}
+
+# So `git log --show-signature` verifies your own commits locally. Agent commits
+# are unsigned by design.
+di_render_allowed_signers() {
+  local slug file
+  for slug in $(di_slugs); do
+    file="${HOME}/.ssh/signing_${slug}.pub"
+    [[ -f ${file} ]] || continue
+    printf '%s %s\n' "$(di_get "${slug}" email)" "$(cut -d' ' -f1,2 "${file}")"
+  done
+}
+
+# -- CLI ----------------------------------------------------------------------
+if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
+  case "${1:-}" in
+  list) di_slugs ;;
+  dir-slugs) di_dir_slugs ;;
+  default) di_default ;;
+  get)
+    [[ -n ${2:-} && -n ${3:-} ]] || di_die 'usage: devbox-identities get <slug> <field>'
+    di_get "$2" "$3"
+    ;;
+  show)
+    [[ -n ${2:-} ]] || di_die 'usage: devbox-identities show <slug>'
+    di_show "$2"
+    ;;
+  for) di_for "${2:-$PWD}" ;;
+  check) di_check ;;
+  file) printf '%s\n' "${DEVBOX_IDENTITIES_FILE}" ;;
+  render)
+    case "${2:-}" in
+    ssh-config) di_render_ssh_config ;;
+    agent-gitconfig)
+      if [[ -n ${3:-} ]]; then di_render_agent_author "$3"; else di_render_agent_gitconfig; fi
+      ;;
+    user-gitconfig)
+      [[ -n ${3:-} ]] || di_die 'usage: devbox-identities render user-gitconfig <slug>'
+      di_render_user_gitconfig "$3"
+      ;;
+    allowed-signers) di_render_allowed_signers ;;
+    *) di_die 'usage: devbox-identities render ssh-config|agent-gitconfig [slug]|user-gitconfig <slug>|allowed-signers' ;;
+    esac
+    ;;
+  *) di_die 'usage: devbox-identities list|dir-slugs|default|get|show|for|check|file|render ...' ;;
+  esac
+fi

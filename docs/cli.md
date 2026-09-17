@@ -1,7 +1,7 @@
 # ⌨️ CLI reference
 
 Two entrypoints, both hand-written bash with `set -euo pipefail`: `bin/devbox` runs **on the workstation**,
-`bin/push` on **the laptop**. Log prefixes `[INFO]`, `[OK]`, `[WARN]`, `[ERROR]` match `workstation`.
+`bin/push` on **the laptop**. Log prefixes `[INFO]`, `[OK]`, `[WARN]`, `[ERROR]` match the workstation's.
 
 ## `bin/devbox`
 
@@ -49,9 +49,11 @@ no-op `up` never asks.
   `moshi-hook status`. Non-destructive: the daemon is a child of the entrypoint; alternative is recreating
   the container, killing every SSH session. Needed after `moshi-hook pair` or a crash. See
   [Toolchain](toolchain.md#moshi-and-moshi-hook).
-- **`keys`** - prints authentication (`id_*.pub`) and signing (`signing_*.pub`) public keys per identity
-  (`not set` if `GIT_*_PUBKEY`/`GIT_*_SIGNINGKEY` empty in `.env`), plus sshd host-key fingerprint. Not a
-  paste target - your laptop's own keys, already on GitHub.
+- **`keys`** - one row per registry identity: its slug, SSH alias, and its two public keys
+  (`id_<slug>.pub`, `signing_<slug>.pub`, or `not set - <field> for [<slug>] in identities.conf` if
+  either is empty), plus the sshd host-key fingerprint. Reads from the running container when it's up,
+  else straight from `${DEVBOX_DATA_DIR}/.config/devbox/identities.conf`, naming which source it used. Not
+  a paste target - your laptop's own keys, already on GitHub.
 - **`doctor`** - runs every check below, reports each, exits non-zero if any failed.
 
 ### What `doctor` checks
@@ -65,14 +67,19 @@ no-op `up` never asks.
    `terraform`, `git`, `docker`, `docker compose`
 7. Agent git override intact: `omp` resolves through a symlink to `omp-launcher`, never a plain file an
    `omp update` could have replaced ([Git identities](git.md#omp-update))
-8. `~/.config/devbox/git/agent*.gitconfig` matching the templates, in a directory still read-only - a
-   `git config --global` in a session writes there, and once put the user's own identity on agent commits
+8. `~/.config/devbox/identities.conf` passes `devbox-identities check` - a failing registry is reported
+   here with the reader's own message, and skips every identity-derived check below rather than failing
+   them individually
+9. `~/.config/devbox/git/agent.gitconfig` plus one `agent-<slug>.gitconfig` per registry identity that
+   claims a `dir`, each matching a fresh render, in a directory still read-only - a
+   `git config --global` in a session writes there, and once put the user's own identity on agent commits;
+   an `agent-*.gitconfig` left over from a renamed or dropped identity is flagged too
    ([Git identities](git.md#agent-sessions))
-9. `moshi-hook` daemon installed and running - unpaired warns, doesn't fail
-10. Project Docker daemon reachable from the container, reporting `rootless`
-11. `host.docker.internal` resolves inside the container to the project daemon's published address (`--ip`
+10. `moshi-hook` daemon installed and running - unpaired warns, doesn't fail
+11. Project Docker daemon reachable from the container, reporting `rootless`
+12. `host.docker.internal` resolves inside the container to the project daemon's published address (`--ip`
     in `/etc/systemd/user/docker.service`) - a mismatch strands every published project port
-12. `devbox-docker-firewall` service active - without it, published project ports reach the Tailnet and LAN
+13. `devbox-docker-firewall` service active - without it, published project ports reach the Tailnet and LAN
 
 ## `bin/rootless-docker`
 
@@ -109,14 +116,21 @@ Finish with `./bin/devbox rebuild` as your own user.
 ```
 Usage: ./bin/push [host] [--up] [--force]
 
-  host     SSH host to deploy to (default: $DEVBOX_HOST, then 'workstation')
+  host     SSH host to deploy to (default: $DEVBOX_HOST, or DEVBOX_HOST in .push.env)
+
+Options:
   --up     Run './bin/devbox up' on the host after syncing
   --force  Pass --force to that 'up': recreate even with live SSH sessions
 
 Environment:
-  DEVBOX_HOST         default SSH host
+  DEVBOX_HOST         default SSH host; may also be set in .push.env beside this
+                      repo (gitignored), since the alias is per-laptop
   DEVBOX_REMOTE_PATH  remote repo path (default: ~/devbox)
 ```
+
+No default host ships in the repo - the workstation's SSH alias is per-laptop, so it comes from an
+argument, `$DEVBOX_HOST`, or `DEVBOX_HOST=<alias>` in `.push.env` beside the repo (gitignored), in that
+order; none of the three set errors out naming all three ways to fix it.
 
 Sync: `rsync -az --delete` excluding `.git`, `.env`, `data/` and `.DS_Store`. Checks for `rsync` on both
 sides first, printing the exact remedy if missing.
@@ -125,10 +139,35 @@ sides first, printing the exact remedy if missing.
 of failing the push; `--force` answers it up front.
 
 ```bash
-./bin/push workstation              # sync only
-./bin/push workstation --up         # sync, then build and start
-./bin/push workstation --up --force # ... even if SSH sessions are connected
-DEVBOX_REMOTE_PATH=~/devbox-test ./bin/push workstation
+echo 'DEVBOX_HOST=<workstation>' >.push.env   # once, so every bare ./bin/push below resolves it
+./bin/push                            # sync only
+./bin/push --up                       # sync, then build and start
+./bin/push --up --force               # ... even if SSH sessions are connected
+DEVBOX_REMOTE_PATH=~/devbox-test ./bin/push <workstation>
+```
+
+## `bin/sync-identities`
+
+```
+Usage: ./bin/sync-identities [ssh-host]
+
+  ssh-host    devbox SSH host from ~/.ssh/config (default: $DEVBOX_SSH_HOST, then 'devbox')
+
+Environment:
+  DEVBOX_SSH_HOST      default SSH host
+  DEVBOX_IDENTITIES    source file (default: ~/.config/devbox/identities.conf)
+```
+
+Copies this laptop's identity registry into the devbox: validates it locally with `devbox-identities check`
+first (a registry that does not validate must not be the one the devbox boots from), backs up the remote
+copy as `identities.conf.bak`, `rsync`s the file over, then re-runs `./bin/devbox bootstrap` there so
+`~/.ssh/config`, `~/.gitconfig`'s includes, `allowed_signers` and the agent gitconfigs catch up with
+whatever just landed. Same host resolution as `bin/sync-omp` - `Host devbox`, port 2223, not the
+workstation's.
+
+```bash
+./bin/sync-identities              # laptop → devbox:~/.config/devbox/identities.conf
+./bin/sync-identities devbox-2     # a different ~/.ssh/config host
 ```
 
 ## `bin/sync-omp`
@@ -157,10 +196,15 @@ Laptop-side, idempotent: installs the same agent git override the devbox bootstr
 shim, credential helper (`devbox-git-credential`), SSH fence (`devbox-git-no-ssh`) in
 `~/.local/libexec/devbox-agent`; `devbox-gh-token` in `~/.local/bin`; `omp` symlinks in both directories
 pointing at the launcher; `~/.config/devbox/git/agent*.gitconfig`, whose directory is left read-only (mode
-500, files 444) so a `git config --global` in a session cannot rewrite the agent identity. All regenerated
-every run; nothing else of yours is touched, except `~/.config/devbox/secrets.env` - created from the
-template if absent, else left with mode reset to 600. Reports whether `omp` resolves to the launcher, plus
-remaining manual steps (PATs, App credentials). See [Git identities](git.md#laptop-install).
+500, files 444) so a `git config --global` in a session cannot rewrite the agent identity; the
+`devbox-identities` reader in `~/.local/libexec`, symlinked into `~/.local/bin` so it answers by name. All regenerated every run; nothing else of yours is
+touched. `~/.config/devbox/identities.conf` is *not* created for you - the example is a valid file, so
+seeding it would render agent gitconfigs authoring as `your-agent`; a missing registry fails the check and
+the run prints the `cp` command instead. `~/.config/devbox/secrets.env` is created from its template if
+absent, then left
+alone. Reports whether `omp` resolves to the launcher, plus the remaining manual steps per registry
+identity: a `GH_TOKEN_<SLUG>` line in `secrets.env`, and - for any identity with an `app` directory set -
+its `{app-id,app.pem}` (mode 600) there. See [Git identities](git.md#laptop-install).
 
 ## `bin/laptop-doctor`
 
@@ -168,28 +212,66 @@ remaining manual steps (PATs, App credentials). See [Git identities](git.md#lapt
 Usage: ./bin/laptop-doctor
 ```
 
-Laptop-side, read-only counterpart of `devbox doctor`: no private key on disk, all five named `.pub` files
-held by the 1Password agent; every `Host` block selecting one via that agent with `IdentitiesOnly`; both
-gitconfigs signing through `op-ssh-sign` with `signing_*.pub` keys and an `allowed_signers` file; `omp`
+Laptop-side, read-only counterpart of `devbox doctor`: gates on `~/.config/devbox/identities.conf`
+existing and passing `devbox-identities check` first, then loops the registry for the rest - no private
+key on disk, every identity's `.pub` files (plus `devbox.pub`) held by the 1Password agent; every `Host`
+block selecting one via that agent with `IdentitiesOnly`; every identity's gitconfig signing through
+`op-ssh-sign` with its own `signing_*.pub` key and an `allowed_signers` file covering all of them; `omp`
 resolving to the launcher through symlinks at both hops (a plain file is what an `omp update` takes over),
+`~/.local/bin/devbox-identities` still a symlink onto the libexec reader - the hop that makes the name
+resolve at all, since only `~/.local/bin` is on the PATH,
 every installed agent file matching the repo template, `~/.config/devbox/git/` still read-only and no
 login shell writing a git identity into it, no agent token (`x-access-token`) in the macOS keychain - a
-sign a system credential helper preempted
-`devbox-git-credential`; `secrets.env` at mode 600, both PATs accepted by `gh`, the App pem readable as a
-key; and all four connections (`git@github.com`, `git@work.github.com`, `workstation`, `devbox`)
-authenticating - the two GitHub aliases mapping two accounts. Reports every check, exits non-zero on
+sign a system credential helper preempted `devbox-git-credential`; `secrets.env` at mode 600, every
+identity's `GH_TOKEN_<SLUG>` accepted by `gh`, each configured App's pem readable as a key; and every
+configured connection (one GitHub alias per registry identity, `devbox`, and the workstation if
+`DEVBOX_HOST` (in the environment or in `.push.env`, the same value `bin/push` reads) names its
+`~/.ssh/config` alias - unset just logs that the check is opt-in)
+authenticating, each GitHub alias mapping to a distinct account. Reports every check, exits non-zero on
 failure. Safe inside an agent session: drops the launcher's exports and PATH entry first, auditing your own
 config. The `devbox-laptop` skill walks the fixes.
 
+## `devbox-identities`
+
+```
+Usage: devbox-identities list|default|get|show|for|check|file|render ...
+
+  list                                    Slugs, in config order
+  default                                 The slug with no 'dir' (the default identity)
+  get <slug> <field>                      One resolved field (see identities.conf.example for the list)
+  show <slug>                             Every resolved field for one identity
+  for [directory]                         The slug that owns a tree (default: $PWD)
+  check                                   Validate the registry; non-zero and a message per problem on error
+  file                                    Path to the registry in effect ($DEVBOX_IDENTITIES_FILE)
+  render ssh-config                       ~/.ssh/config's identity Host blocks
+  render agent-gitconfig [slug]           The root agent.gitconfig, or one identity's [user] block
+  render user-gitconfig <slug>            One identity's own gitconfig (devbox-side, signing key included)
+  render allowed-signers                  ~/.ssh/allowed_signers, one line per identity with a signing key
+```
+
+Installed at `~/.local/libexec/devbox-identities` by `container/bootstrap.sh` and `bin/install-agent`; also
+sourceable as a library (`. devbox-identities`) by scripts that need `di_slugs`, `di_default`, `di_get`,
+`di_for` or the renderers directly, which is how `bootstrap.sh`, `bin/devbox keys` and `bin/laptop-doctor`
+read the registry. `DEVBOX_IDENTITIES_FILE` overrides the config path (used by `bin/sync-identities` to
+validate the laptop's copy before syncing it); `DEVBOX_IDENTITIES_TEMPLATE_DIR` points `render
+agent-gitconfig` at `agent.gitconfig.tpl` when it isn't at the default `~/.config/devbox/git`.
+
+```bash
+devbox-identities list                    # one slug per line, e.g. personal, work
+devbox-identities get work dir             # ~/projects/work
+devbox-identities for ~/projects/work/app  # work (longest matching dir prefix wins)
+devbox-identities check || echo 'fix identities.conf before bootstrapping'
+```
+
 ## ❓ FAQ
 
-**Why plain bash instead of bashly, like `workstation`?**
+**Why plain bash instead of bashly?**
 Ten commands, no code-generation step needed - `bin/src` plus `pnpm run build:cli` would be pure overhead.
 Keep it hand-written.
 
 **Can I run `bin/devbox` from the laptop?**
-No - it drives the local Docker daemon. Use `ssh workstation 'cd ~/devbox && ./bin/devbox <cmd>'`, or
-`./bin/push workstation --up` for the common case.
+No - it drives the local Docker daemon. Use `ssh <workstation> 'cd ~/devbox && ./bin/devbox <cmd>'`, or
+`./bin/push --up` for the common case.
 
 **Is `--delete` dangerous?**
 Only applies to synced paths - `.env`, `data/` and `.git` are excluded. Files added to a *tracked*
@@ -201,8 +283,8 @@ cache-free image, e.g. after bumping a pinned version.
 
 **Does `bootstrap` overwrite my dotfiles?**
 Only the three generated ones - `~/.bashrc.d/devbox.sh`, `~/.bash_profile` and `~/.ssh/config` - rewritten
-from templates every run. `~/.gitconfig`, both `secrets*.env` files, and the OMP config: created if absent,
-then left alone; derived Git identity values re-apply via `git config --global` each run.
+from templates every run. `~/.gitconfig`, `secrets.env`, `identities.conf` and the OMP config: created if
+absent, then left alone; derived identity-registry values re-apply via `git config --global` each run.
 
 **`doctor` says `BIND_ADDR is X but Tailscale reports Y`.**
 The node's Tailscale address changed. `./bin/devbox env && ./bin/devbox up`.

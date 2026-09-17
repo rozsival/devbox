@@ -15,18 +15,15 @@ services:
     restart: unless-stopped
     user: '${HOST_UID}:${HOST_GID}'
     hostname: devbox
+    # No identity here: who this box is lives in
+    # ~/.config/devbox/identities.conf on the bind mount, read by
+    # devbox-identities (docs/git.md). An enumeration of per-account variables
+    # is what that file replaced - a new account used to need a line here, one
+    # in .env and a branch in bootstrap.
     environment:
       TZ: '${TZ}'
       DEVBOX_GITHUB_USER: '${DEVBOX_GITHUB_USER}'
       DEVBOX_EXTRA_AUTHORIZED_KEYS: '${DEVBOX_EXTRA_AUTHORIZED_KEYS}'
-      GIT_PERSONAL_NAME: '${GIT_PERSONAL_NAME}'
-      GIT_PERSONAL_EMAIL: '${GIT_PERSONAL_EMAIL}'
-      GIT_WORK_NAME: '${GIT_WORK_NAME}'
-      GIT_WORK_EMAIL: '${GIT_WORK_EMAIL}'
-      GIT_PERSONAL_PUBKEY: '${GIT_PERSONAL_PUBKEY}'
-      GIT_PERSONAL_SIGNINGKEY: '${GIT_PERSONAL_SIGNINGKEY}'
-      GIT_WORK_PUBKEY: '${GIT_WORK_PUBKEY}'
-      GIT_WORK_SIGNINGKEY: '${GIT_WORK_SIGNINGKEY}'
     ports:
       - '${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222'
       - '127.0.0.1:${DEVBOX_SSH_PORT}:2222'

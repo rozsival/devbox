@@ -16,13 +16,16 @@ readonly HOST_KEY="${SSH_DIR}/host/ssh_host_ed25519_key"
 readonly AUTHORIZED_KEYS="${SSH_DIR}/authorized_keys"
 
 # -- 1. Home skeleton ---------------------------------------------------------
+# Only the tree root: the per-identity subdirectories are the registry's
+# business, and bootstrap creates one per identity that declares a `dir`
+# (container/bootstrap.sh §7). A name hard-coded here would outlive the account
+# it was named for.
 mkdir -p \
   "${SSH_DIR}/host" \
   "${HOME_DIR}/.local/bin" \
   "${HOME_DIR}/.config" \
   "${HOME_DIR}/.bashrc.d" \
-  "${HOME_DIR}/projects/rozsival" \
-  "${HOME_DIR}/projects/work"
+  "${HOME_DIR}/projects"
 chmod 700 "${SSH_DIR}"
 # StrictModes rejects a group- or world-writable home.
 chmod go-w "${HOME_DIR}"

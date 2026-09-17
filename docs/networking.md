@@ -11,7 +11,7 @@ One published port, bound to one address. Everything else goes through SSH.
 | Result    | Reachable from the Tailnet, invisible from the public internet                              |
 
 ```
-laptop ──Tailnet──▶ workstation  BIND_ADDR:2223 ──DNAT──▶ container :2222 (sshd as dev)
+laptop ──Tailnet──▶ <workstation>  BIND_ADDR:2223 ──DNAT──▶ container :2222 (sshd as dev)
                                    127.0.0.1:2223 ──DNAT──▶ container :2222
 ```
 
@@ -42,7 +42,7 @@ applies - a netfilter table, not the publish address, is the boundary. See [Dock
 ## Verifying exposure
 
 ```bash
-ssh workstation 'ss -ltnp | grep 2223'
+ssh <workstation> 'ss -ltnp | grep 2223'
 ```
 
 Expect two lines: `<tailscale-ip>:2223` and `127.0.0.1:2223` - a `0.0.0.0:2223` line means the devbox is

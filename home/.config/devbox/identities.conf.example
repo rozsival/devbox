@@ -1,0 +1,83 @@
+# Identity registry: who this machine is, per directory tree.
+#
+# Installed as ~/.config/devbox/identities.conf by container/bootstrap.sh (devbox)
+# and bin/install-agent (laptop), then never overwritten - it is yours to edit.
+# Both machines need it and both must hold the same file: the devbox derives
+# ~/.ssh/config, ~/.gitconfig, the agent gitconfigs, allowed_signers and the
+# per-account token routing from it, while the laptop's agent override and
+# ./bin/laptop-doctor read it to check the same wiring. ./bin/sync-identities
+# copies the laptop's copy over. Not a secret - no token and no private key
+# belongs here; those live in secrets.env and in 1Password respectively.
+#
+# One `[slug]` block per identity, any number of them. The slug is lowercase
+# `[a-z][a-z0-9_]*` and names everything derived from the identity:
+#
+#   ~/.ssh/id_<slug>.pub, ~/.ssh/signing_<slug>.pub   the laptop keys it selects
+#   <slug>.<host>                                     its SSH host alias
+#   GH_TOKEN_<SLUG> in secrets.env                    its fine-grained PAT
+#   agent-<slug>.gitconfig, user-<slug>.gitconfig     its generated git config
+#
+# Fields, all `key = value`, `#` comments on their own line:
+#
+#   dir             Directory prefix that selects this identity. Absolute or
+#                   starting `~/`, and free of whitespace: the path also becomes
+#                   a `gitdir:` pattern and a config key, and a relative one
+#                   would mean one thing to git and another to the token
+#                   resolver, so `devbox-identities check` rejects both.
+#                   Omit it on exactly one block - that identity is the default
+#                   and catches every tree no other `dir` matches. The longest
+#                   matching prefix wins, so nesting one inside another works.
+#   name, email     Your git identity in those trees. Required.
+#   pubkey          The laptop's *public* authentication key, one line, as in
+#                   `~/.ssh/id_<slug>.pub`. Devbox only: it holds no private key,
+#                   and this is what makes `ssh -A devbox` offer the right key
+#                   out of the forwarded 1Password agent. Empty is allowed; git
+#                   over SSH as yourself then does not work for those trees.
+#   signing_pubkey  The matching *public* signing key. GitHub registers
+#                   authentication and signing keys separately, and signing with
+#                   the auth key shows Unverified.
+#   agent_name,
+#   agent_email     Author of agent commits in those trees. Defaults to the
+#                   default identity's, so a bot per account is optional.
+#   app             Directory holding a GitHub App's `app-id` and `app.pem`
+#                   (mode 600). When the App is installed on the repository an
+#                   agent touches, the credential helper mints a
+#                   repository-scoped installation token instead of using the
+#                   PAT, and `agent_*` should then be the App's bot user.
+#   host            Forge host; default `github.com`. Set it to a GitHub
+#                   Enterprise host to put that identity on that instance - the
+#                   SSH alias, the HTTPS rewrite and the API the credential
+#                   helper calls all follow.
+#   alias           SSH host alias; default `<slug>.<host>`, and plain `<host>`
+#                   for the default identity. Only set it to keep an existing
+#                   alias working.
+
+[personal]
+name = Your Name
+email = you@example.com
+pubkey =
+signing_pubkey =
+agent_name = your-agent
+agent_email = your-agent@users.noreply.github.com
+
+# A second account, selected by the tree a repository is cloned into. Clone with
+# the alias so the right key is offered: git clone git@work.github.com:org/repo
+# ~/projects/work/repo
+#[work]
+#dir = ~/projects/work
+#name = Your Name
+#email = you@work.example.com
+#pubkey =
+#signing_pubkey =
+#agent_name = your-app[bot]
+#agent_email = 00000000+your-app[bot]@users.noreply.github.com
+#app = ~/.config/work/your-app
+
+# A GitHub Enterprise account. Everything derived from it moves to that host.
+#[enterprise]
+#dir = ~/projects/enterprise
+#host = github.example.com
+#name = Your Name
+#email = you@enterprise.example.com
+#pubkey =
+#signing_pubkey =

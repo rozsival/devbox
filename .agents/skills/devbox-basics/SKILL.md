@@ -1,11 +1,11 @@
 ---
 name: devbox-basics
-description: Explains how the devbox works - the container-as-sandbox model, the Tailnet-only exposure boundary, the four ways in, which machine owns which files, and where the two Git identities apply. Use this whenever someone asks what the devbox is, how it is isolated, "where do I actually work", why a repo or tool is missing from the laptop, whether the devbox is reachable from the internet, or is reading this repo for the first time. Also use it before answering any devbox question from memory, so the answer matches what the repo actually does.
+description: Explains how the devbox works - the container-as-sandbox model, the Tailnet-only exposure boundary, the four ways in, which machine owns which files, and how the identity registry routes Git identities by directory. Use this whenever someone asks what the devbox is, how it is isolated, "where do I actually work", why a repo or tool is missing from the laptop, whether the devbox is reachable from the internet, or is reading this repo for the first time. Also use it before answering any devbox question from memory, so the answer matches what the repo actually does.
 ---
 
 # devbox basics
 
-`devbox` provisions one Docker container on `workstation`: its own unprivileged `sshd`, published only on
+`devbox` provisions one Docker container on `<workstation>`: its own unprivileged `sshd`, published only on
 its Tailscale address. A [herdr](https://herdr.dev) laptop client attaches to it as a saved machine, running
 OMP agents inside.
 
@@ -15,7 +15,7 @@ rootless project Docker daemon - never the host filesystem or its root Docker da
 ## The mental model
 
 ```
-laptop                    workstation (host)              container "devbox"
+laptop                    <workstation> (host)              container "devbox"
 herdr client   --ssh-->   BIND_ADDR:2223  --DNAT-->          :2222  sshd running as dev
 ./bin/push     --rsync->  ~/devbox (the repo)                /home/dev  <- bind mount of
                           ${DEVBOX_DATA_DIR}                 ${DEVBOX_DATA_DIR}
@@ -60,17 +60,22 @@ it the phone gets a terminal but no notifications or approvals. Its phone key be
 
 Dev servers are never published. Forward them: `ssh -N -L 5173:localhost:5173 devbox`.
 
-## Two Git identities, two modes
+## Identity registry: any number of accounts, one file
 
-- `~/projects/rozsival/` - personal identity, clone with `git@github.com:…`
-- `~/projects/work/` - work identity via `includeIf gitdir:`, clone with
+`~/.config/devbox/identities.conf` is the single source of identity truth, held on both machines
+(`./bin/sync-identities` copies the laptop's copy to the devbox). One `[slug]` block per account, routed by
+directory prefix - the longest match wins, and exactly one block with no `dir` is the default that catches
+every tree no other block claims:
+
+- Everywhere else - the identity with no `dir`, the default; clone with `git@github.com:…`
+- `~/projects/work/` - the `work` identity, via `includeIf gitdir:`; clone with
   `git@work.github.com:<org>/<repo>`
 
-New clones need the alias: `includeIf` rewriting can't apply before the repo directory exists, so first
-clone into `~/projects/work/` needs `git@work.github.com:` explicitly; `insteadOf` rewrites existing
-`git@github.com:` remotes in that tree.
+New clones need the alias: `includeIf` rewriting can't apply before the repo directory exists, so a first
+clone into a non-default tree needs `git@<slug>.<host>:` explicitly; `insteadOf` rewrites existing
+`git@<host>:` remotes in that tree afterward.
 
-The devbox holds no private key for either identity: manual git (pane push, signed commit) borrows the
+The devbox holds no private key for any identity: manual git (pane push, signed commit) borrows the
 laptop's 1Password agent, forwarded per connection with `ssh -A devbox`; agent sessions never touch it - the
 `omp` launcher rewrites their git to HTTPS with a per-operation token (GitHub App installation token or
 fine-grained PAT) and bot author, unsigned. Full mechanism: `docs/git.md`.
@@ -87,13 +92,14 @@ runs during bootstrap; both are idempotent.
 Authority is enumerated, never ambient: **no 1Password account** (`op` not installed), **no GitHub private
 key**, **no Google user credential** (`gcloud` not installed). Three layers:
 
-- **Identity** - public keys only, from `.env` (`GIT_*_PUBKEY` auth, `GIT_*_SIGNINGKEY` signing - GitHub
-  registers them separately); no private key at rest - same borrow/token split as above.
+- **Identity** - public keys only, from `~/.config/devbox/identities.conf` (`pubkey` for authentication,
+  `signing_pubkey` for signing - GitHub registers them separately); no private key at rest - same
+  borrow/token split as above.
 - **Box-wide tool credentials** - `~/.config/devbox/secrets.env`, plain `KEY=value` mode 600, sourced by
   every shell including non-interactive `ssh devbox <cmd>`; holds model API keys, one fine-grained GitHub
-  token per account (`GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK`). Nothing exports `GH_TOKEN` - the `gh` shim in
-  `~/.local/libexec/devbox-agent` resolves it per invocation from the working directory, same rule as git
-  identity (`devbox-gh-token --account` reports it)
+  token per identity (`GH_TOKEN_<SLUG>`, e.g. `GH_TOKEN_PERSONAL`). Nothing exports `GH_TOKEN` - the `gh`
+  shim in `~/.local/libexec/devbox-agent` resolves it per invocation from the working directory, same rule
+  as git identity (`devbox-gh-token --account` reports it)
 - **Per project** - that project's `.env`, rendered on the laptop, copied in, so a leak stays scoped there;
   GCP keys are per-project too, via `GOOGLE_APPLICATION_CREDENTIALS`
 
