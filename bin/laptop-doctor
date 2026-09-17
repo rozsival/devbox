@@ -198,12 +198,15 @@ fi
 # that here, and every login bash a session started re-stamped the author.
 # ~/.gitconfig already carries the identity, so such a line is redundant even
 # for your own shell. Probe with a throwaway file: a login shell that writes
-# nothing leaves it empty.
+# nothing leaves it empty. Interactive *and* login (`-ilc`), because ~/.bashrc
+# and ~/.zshrc are read only when interactive, and a herdr pane or
+# `./bin/devbox shell` inside the fence is exactly an interactive login shell;
+# stdin from /dev/null so no prompt framework can block the doctor.
 shell_writes=()
 for shell in bash zsh; do
   command -v "${shell}" >/dev/null 2>&1 || continue
   probe="$(mktemp)"
-  GIT_CONFIG_GLOBAL="${probe}" "${shell}" -lc true >/dev/null 2>&1 || true
+  GIT_CONFIG_GLOBAL="${probe}" "${shell}" -ilc true </dev/null >/dev/null 2>&1 || true
   if [[ -s ${probe} ]]; then
     shell_writes+=("${shell} ($(git config --file "${probe}" --list 2>/dev/null | tr '\n' ' '))")
   fi

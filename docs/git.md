@@ -293,11 +293,12 @@ same call fails with `could not lock config file`; repair a drifted copy with `.
 and check the mode. Commits already made are only fixable by rewriting history, and `--reset-author` is
 the wrong tool: it takes the author from the shell doing the rewrite, so from your own terminal it stamps
 you again. Name the author instead, per commit to rewrite, and leave your own commits alone:
-`git rebase -i <base>` with
-`exec git commit --amend --no-edit --author='rozsival-agent <rozsival-agent@users.noreply.github.com>'`
-after each offending pick. Any rebase re-creates the commits it touches, so your own signatures in that
-range are lost and need re-signing from your terminal; then force-push, after checking nobody else has
-pulled the branch.
+`git rebase -i <base>` from your own terminal with
+`exec git commit --amend --no-edit --no-gpg-sign --author='rozsival-agent
+<rozsival-agent@users.noreply.github.com>'` after each offending pick. `--no-gpg-sign` matters: your
+`commit.gpgsign = true` would otherwise sign the bot-authored commits with *your* key. Commits of yours
+that the rebase re-creates are re-signed automatically (1Password prompts per commit). Then force-push,
+after checking nobody else has pulled the branch.
 
 **`bootstrap` tells me to repoint a stale `github-work:` remote.**
 The alias used to be `github-work`; it is `work.github.com` now, on the laptop and the devbox alike.
