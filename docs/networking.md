@@ -5,7 +5,7 @@ One published port, bound to one address. Everything else goes through SSH.
 ## Exposure model
 
 | Layer     | Behavior                                                                                    |
-|-----------|-----------------------------------------------------------------------------------------------|
+|-----------|---------------------------------------------------------------------------------------------|
 | Docker    | Publishes `2223` on `127.0.0.1` and `BIND_ADDR` (the node's Tailscale IP) - never `0.0.0.0` |
 | Tailscale | The only route to `BIND_ADDR`                                                               |
 | Result    | Reachable from the Tailnet, invisible from the public internet                              |
@@ -26,8 +26,8 @@ ports:
 ## Why UFW cannot help
 
 Docker publishes via `nat/PREROUTING` DNAT: packets reaching the container are *forwarded*, bypassing
-`INPUT`, so `ufw deny 2223` can't block a published port
-([moby/moby#17496](https://github.com/moby/moby/issues/17496)). The DNAT rule itself enforces the address
+`INPUT`, so `ufw deny 2223` can't block a published port ([moby/moby#17496](https://github.com/moby/moby/issues/17496)).
+The DNAT rule itself enforces the address
 scope, so `BIND_ADDR` - not a firewall rule - is the control. That is why it's mandatory: left unset,
 `./bin/devbox up` refuses to start rather than fall back to `0.0.0.0`.
 
@@ -87,8 +87,8 @@ block and the key.
 `./bin/devbox env` and `up`; `doctor` flags the mismatch.
 
 **Can I publish a dev server properly instead of tunnelling?**
-Possible, not recommended: needs a second address-scoped `ports` entry and a container recreate
-(`./bin/devbox up`) - a new boundary to audit each time. SSH forwarding needs no configuration and
+Possible, not recommended: needs a second address-scoped `ports` entry and a container recreate (`./bin/devbox up`) - a
+new boundary to audit each time. SSH forwarding needs no configuration and
 inherits existing auth.
 
 **Does the container get its own IP on the Tailnet?**

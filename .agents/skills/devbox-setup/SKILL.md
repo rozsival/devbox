@@ -109,7 +109,8 @@ register on GitHub - already your normal, registered laptop keys.
 
 1. Create `~/.config/devbox/identities.conf` - `cp /opt/devbox/home/.config/devbox/identities.conf.example
    ~/.config/devbox/identities.conf` (bootstrap never writes it for you: the example validates, so seeding
-   it would give agent commits the placeholder author) - then fill it in: one `[slug]` block per account, `pubkey`/`signing_pubkey` set to
+   it would give agent commits the placeholder author) - then fill it in: one `[slug]` block per account, `pubkey`/
+   `signing_pubkey` set to
    the public keys `git config user.signingkey` prints for that account on the laptop, then
    `./bin/devbox up` - until then, manual git over a forwarded agent (`ssh -A devbox`) can't pick a key,
    commits sign with nothing. A prior bootstrap's private key is deleted this run, fingerprint printed to
@@ -152,16 +153,16 @@ idempotent; details: `docs/toolchain.md#agent-skills-and-browser-automation`.
 
 ## When setup does not work
 
-| Symptom                                 | Cause and fix                                                                                                                                                                  |
-|-----------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `up` aborts on empty `BIND_ADDR`        | Preflight by design - Tailscale up, then `env`                                                                                                                                |
-| `Too many authentication failures`      | Missing `IdentitiesOnly yes` in `Host devbox` block                                                                                                                           |
-| `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS` or on GitHub; restart                                                                                                               |
+| Symptom                                 | Cause and fix                                                                                                                                                                    |
+|-----------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `up` aborts on empty `BIND_ADDR`        | Preflight by design - Tailscale up, then `env`                                                                                                                                   |
+| `Too many authentication failures`      | Missing `IdentitiesOnly yes` in `Host devbox` block                                                                                                                              |
+| `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS` or on GitHub; restart                                                                                                                  |
 | herdr machine stuck `offline`           | `~/.ssh/config` no longer parses (`ssh -G devbox` names the line; herdr's system `ssh -o BatchMode=yes` logs only `connection was lost`), or 1Password locked / key not approved |
-| `Host key verification failed`          | Data dir was wiped; `ssh-keygen -R '[<workstation>]:2223'`                                                                                                                    |
-| `Permission denied` writing `/home/dev` | `${DEVBOX_DATA_DIR}` not owned by `HOST_UID:HOST_GID`                                                                                                                         |
-| SSH itself is the broken thing          | `./bin/devbox shell` on host bypasses container's sshd                                                                                                                        |
-| `git push` hangs on a host-key prompt   | Key seeding failed; `ssh-keyscan github.com >> ~/.ssh/known_hosts`                                                                                                            |
+| `Host key verification failed`          | Data dir was wiped; `ssh-keygen -R '[<workstation>]:2223'`                                                                                                                       |
+| `Permission denied` writing `/home/dev` | `${DEVBOX_DATA_DIR}` not owned by `HOST_UID:HOST_GID`                                                                                                                            |
+| SSH itself is the broken thing          | `./bin/devbox shell` on host bypasses container's sshd                                                                                                                           |
+| `git push` hangs on a host-key prompt   | Key seeding failed; `ssh-keyscan github.com >> ~/.ssh/known_hosts`                                                                                                               |
 
 `authorized_keys` is rebuilt on every container start from `https://github.com/<DEVBOX_GITHUB_USER>.keys` plus
 `DEVBOX_EXTRA_AUTHORIZED_KEYS`, so key changes take a restart, not a manual edit.

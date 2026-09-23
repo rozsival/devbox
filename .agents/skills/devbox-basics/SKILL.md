@@ -43,12 +43,12 @@ Four facts:
 
 ## The four ways in
 
-| Route                | Run from    | Use it for                                                  |
-|----------------------|-------------|-------------------------------------------------------------|
-| `herdr`              | Laptop      | Normal work; panes survive client exit, network loss        |
-| `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git`          |
-| Moshi                | Phone       | Watching, steering an agent away from the desk               |
-| `./bin/devbox shell` | Workstation | Recovery when SSH, `authorized_keys`, or Tailscale broken    |
+| Route                | Run from    | Use it for                                                |
+|----------------------|-------------|-----------------------------------------------------------|
+| `herdr`              | Laptop      | Normal work; panes survive client exit, network loss      |
+| `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git`        |
+| Moshi                | Phone       | Watching, steering an agent away from the desk            |
+| `./bin/devbox shell` | Workstation | Recovery when SSH, `authorized_keys`, or Tailscale broken |
 
 All four land as `dev` in `/home/dev`. `devbox` is an **SSH config alias**, not a shell alias: a
 `Host devbox` block (`Port 2223`, `User dev`, `IdentityFile ~/.ssh/devbox.pub`) that anything reading
@@ -112,7 +112,7 @@ Answer from these files, not memory - each ends with an FAQ of real failures.
 
 | Question                                             | File                 |
 |------------------------------------------------------|----------------------|
-| First deploy, `.env`, laptop key, SSH cfg           | `docs/setup.md`      |
+| First deploy, `.env`, laptop key, SSH cfg            | `docs/setup.md`      |
 | Getting a shell, cloning, port forwarding            | `docs/connecting.md` |
 | Identity split, signing, verification                | `docs/git.md`        |
 | Installed tools, pinned versions, agent skills       | `docs/toolchain.md`  |

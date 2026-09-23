@@ -101,11 +101,11 @@ the new preset.
 for a terminal and herdr panes only - not push notifications, lock-screen approvals or Chat View, which
 need `moshi-hook`, a companion daemon `bootstrap` installs into `~/.local/bin` and the entrypoint starts.
 
-| Piece                       | Where it lives                             | What breaks without it          |
-|-----------------------------|--------------------------------------------|----------------------------------|
-| `moshi-hook` binary         | `~/.local/bin` (bind mount, self-updating) | Everything below                |
-| OMP extension               | `~/.omp/agent/extensions/moshi-hooks.ts`   | No lifecycle events emitted     |
-| Daemon (`moshi-hook serve`) | Started by `container/entrypoint.sh`       | Events go nowhere; socket silence |
+| Piece                       | Where it lives                             | What breaks without it                |
+|-----------------------------|--------------------------------------------|---------------------------------------|
+| `moshi-hook` binary         | `~/.local/bin` (bind mount, self-updating) | Everything below                      |
+| OMP extension               | `~/.omp/agent/extensions/moshi-hooks.ts`   | No lifecycle events emitted           |
+| Daemon (`moshi-hook serve`) | Started by `container/entrypoint.sh`       | Events go nowhere; socket silence     |
 | Pairing                     | One manual `moshi-hook pair --token`       | Daemon runs, sends nothing to a phone |
 
 OMP is a Tier A Moshi agent: pairing brings the inbox, approvals and native transcript view, not just
@@ -150,7 +150,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'
 `~/.agents/skills` - the directory every agent here reads:
 
 | Skill           | Source                      | What it is for                                       |
-|-----------------|------------------------------|-------------------------------------------------------|
+|-----------------|-----------------------------|------------------------------------------------------|
 | `agent-browser` | `vercel-labs/agent-browser` | Browser automation: navigate, fill, screenshot, test |
 | `skill-creator` | `anthropics/skills`         | Authoring, editing and evaluating skills             |
 | `find-skills`   | `vercel-labs/skills`        | Discovering and installing more skills mid-task      |
@@ -228,8 +228,8 @@ socket stays unmounted; nesting is impossible: rootless docker needs setuid help
 `newuidmap`/`newgidmap`, ruled out by `cap_drop: [ALL]` and `no-new-privileges`.
 
 **Does `rebuild` destroy my data?**
-No - the image rebuilds from scratch; `/home/dev` is a host bind mount, untouched. Only things installed
-*into the image* disappear.
+No - the image rebuilds from scratch; `/home/dev` is a host bind mount, untouched. Only things installed *into the
+image* disappear.
 
 **Why are `omp` and `moshi-hook` not pinned in the image?**
 So updates work without a rebuild: `bootstrap` installs both into `~/.local/bin` only if `command -v`

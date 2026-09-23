@@ -53,8 +53,8 @@ the tarball restores every registered identity - no re-running the manual checkl
 
 `sudo` is needed - the tree belongs to the dedicated `dev` account, not your host user. The exclusion drops
 the project daemon's images, build cache **and named volumes** - all of `~/.local/share/docker`. Images
-rebuild from a `Dockerfile`; a named volume worth keeping should be dumped instead
-(`docker compose exec db pg_dump …`), which is the portable copy anyway.
+rebuild from a `Dockerfile`; a named volume worth keeping should be dumped instead (`docker compose exec db pg_dump …`),
+which is the portable copy anyway.
 
 Restore: extract into place with ownership preserved (`HOST_UID:HOST_GID`, i.e. `dev:devbox`), then
 `./bin/devbox up`. Copy the host's `.env` separately - it's in neither the repo nor the data dir.

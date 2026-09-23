@@ -49,8 +49,8 @@ no-op `up` never asks.
   `moshi-hook status`. Non-destructive: the daemon is a child of the entrypoint; alternative is recreating
   the container, killing every SSH session. Needed after `moshi-hook pair` or a crash. See
   [Toolchain](toolchain.md#moshi-and-moshi-hook).
-- **`keys`** - one row per registry identity: its slug, SSH alias, and its two public keys
-  (`id_<slug>.pub`, `signing_<slug>.pub`, or `not set - <field> for [<slug>] in identities.conf` if
+- **`keys`** - one row per registry identity: its slug, SSH alias, and its two public keys (`id_<slug>.pub`,
+  `signing_<slug>.pub`, or `not set - <field> for [<slug>] in identities.conf` if
   either is empty), plus the sshd host-key fingerprint. Reads from the running container when it's up,
   else straight from `${DEVBOX_DATA_DIR}/.config/devbox/identities.conf`, naming which source it used. Not
   a paste target - your laptop's own keys, already on GitHub.
@@ -197,7 +197,8 @@ shim, credential helper (`devbox-git-credential`), SSH fence (`devbox-git-no-ssh
 `~/.local/libexec/devbox-agent`; `devbox-gh-token` in `~/.local/bin`; `omp` symlinks in both directories
 pointing at the launcher; `~/.config/devbox/git/agent*.gitconfig`, whose directory is left read-only (mode
 500, files 444) so a `git config --global` in a session cannot rewrite the agent identity; the
-`devbox-identities` reader in `~/.local/libexec`, symlinked into `~/.local/bin` so it answers by name. All regenerated every run; nothing else of yours is
+`devbox-identities` reader in `~/.local/libexec`, symlinked into `~/.local/bin` so it answers by name. All regenerated
+every run; nothing else of yours is
 touched. `~/.config/devbox/identities.conf` is *not* created for you - the example is a valid file, so
 seeding it would render agent gitconfigs authoring as `your-agent`; a missing registry fails the check and
 the run prints the `cp` command instead. `~/.config/devbox/secrets.env` is created from its template if
@@ -227,7 +228,8 @@ identity's `GH_TOKEN_<SLUG>` accepted by `gh`, each configured App's pem readabl
 configured connection (one GitHub alias per registry identity, `devbox`, and the workstation if
 `DEVBOX_HOST` (in the environment or in `.push.env`, the same value `bin/push` reads) names its
 `~/.ssh/config` alias - unset just logs that the check is opt-in)
-authenticating, each GitHub alias mapping to a distinct account. Reports every check, exits non-zero on
+authenticating, each GitHub alias mapping to a distinct account unless two blocks share one `pubkey` on
+purpose ([Git identities](git.md#-faq)). Reports every check, exits non-zero on
 failure. Safe inside an agent session: drops the launcher's exports and PATH entry first, auditing your own
 config. The `devbox-laptop` skill walks the fixes.
 

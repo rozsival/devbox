@@ -403,12 +403,14 @@ fi
 log_info 'connections'
 # Which login answers is only informative; the check is that every alias
 # authenticates and that two identities on the same forge reach two *different*
-# accounts, which is what their separate IdentityFile selections exist for.
+# accounts, which is what their separate IdentityFile selections exist for -
+# unless the registry gives both the same pubkey, which declares one account
+# deliberately split by directory (e.g. a private org needing its own PAT).
 github_login() {
   ssh -o BatchMode=yes -o ConnectTimeout=10 -T "git@$1" 2>&1 | sed -n 's/^Hi \([^!]*\)!.*/\1/p' || true
 }
 if ((identities_ok)); then
-  conn_slugs=() conn_aliases=() conn_hosts=() conn_logins=()
+  conn_slugs=() conn_aliases=() conn_hosts=() conn_logins=() conn_pubkeys=()
   for slug in ${slugs}; do
     alias_name="$(di_get "${slug}" alias)"
     host="$(di_get "${slug}" host)"
@@ -417,6 +419,7 @@ if ((identities_ok)); then
     conn_aliases+=("${alias_name}")
     conn_hosts+=("${host}")
     conn_logins+=("${login}")
+    conn_pubkeys+=("$(di_get "${slug}" pubkey)")
     if [[ -n ${login} ]]; then
       log_success "git@${alias_name} → ${login}"
     else
@@ -428,6 +431,7 @@ if ((identities_ok)); then
     for ((j = i + 1; j < conn_count; j++)); do
       [[ ${conn_hosts[i]} == "${conn_hosts[j]}" ]] || continue
       [[ -n ${conn_logins[i]} && ${conn_logins[i]} == "${conn_logins[j]}" ]] || continue
+      [[ -z ${conn_pubkeys[i]} || ${conn_pubkeys[i]} != "${conn_pubkeys[j]}" ]] || continue
       fail "[${conn_slugs[i]}] and [${conn_slugs[j]}] both reach ${conn_logins[i]} on ${conn_hosts[i]} - one of their id_<slug>.pub files selects the wrong key"
     done
   done

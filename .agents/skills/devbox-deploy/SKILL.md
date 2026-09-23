@@ -5,10 +5,10 @@ description: Pushes repo changes out to the devbox and applies them - ./bin/push
 
 # devbox deploy
 
-Deploying is two easily-conflated steps: **sync the repo** to the workstation (`bin/push`, laptop side),
-**apply it** to the running container (`bin/devbox`, workstation side) - picking the wrong one is usually
-why a change seems to do nothing. Syncing the *identity registry* is a separate, third step
-(`bin/sync-identities`): it never travels with `bin/push`, since `identities.conf` is gitignored, hand-held
+Deploying is two easily-conflated steps: **sync the repo** to the workstation (`bin/push`, laptop side), **apply it** to
+the running container (`bin/devbox`, workstation side) - picking the wrong one is usually
+why a change seems to do nothing. Syncing the *identity registry* is a separate, third step (`bin/sync-identities`): it
+never travels with `bin/push`, since `identities.conf` is gitignored, hand-held
 state, not repo content.
 
 Full reference: `docs/cli.md` (flags), `docs/operations.md` (restart, backup, troubleshooting).

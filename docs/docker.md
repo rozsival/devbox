@@ -28,7 +28,7 @@ sudo ./bin/rootless-docker      # then, as your own user:
 ## Why not the two obvious options
 
 | Option                              | What it actually grants                                                       |
-|--------------------------------------|--------------------------------------------------------------------------------|
+|-------------------------------------|-------------------------------------------------------------------------------|
 | Mount `/var/run/docker.sock`        | Host root. The API can start a container that bind-mounts `/` and adds caps   |
 | Nested daemon in the devbox         | Needs setuid `newuidmap`, which `cap_drop: ALL` + `no-new-privileges` prevent |
 | Privileged sidecar `dind`           | Same as the first row, one indirection later                                  |
@@ -97,8 +97,8 @@ table inet devbox {
 }
 ```
 
-The conntrack rule isn't decoration. `dockerd-rootless.sh` passes `--detach-netns`: the daemon runs in the
-*host* namespace and only its containers get the detached one, so image-pull and DNS replies also arrive on
+The conntrack rule isn't decoration. `dockerd-rootless.sh` passes `--detach-netns`: the daemon runs in the *host*
+namespace and only its containers get the detached one, so image-pull and DNS replies also arrive on
 a socket in that slice. Without `ct state established` the daemon would have no outbound connectivity. An
 inbound connection is `ct state new`, so it still meets the drop.
 
@@ -137,8 +137,9 @@ against the host's own version of that path.
 Ownership follows suit: the rootless daemon maps container `root` to uid 1001 (`dev` inside the
 container), so files a container writes into a bind mount are yours. A container dropping to its own
 unprivileged user (postgres runs as uid 999) writes files owned by a subordinate id, unreadable by `dev`
+
 - normal rootless behaviour. Keep database data directories in **named volumes**, inside the daemon's
-own storage, avoiding this.
+  own storage, avoiding this.
 
 ## Reaching a service
 
@@ -148,8 +149,8 @@ Three ways, in order of preference:
    a laptop; `postgres:5432` resolves.
 2. **Via `host.docker.internal`, from a devbox shell** - every port published *on the gateway* (a
    `ports:` entry with no explicit host address) is reachable there: the name resolves to the devbox
-   bridge gateway, the boundary table's one admitted interface. An entry naming `127.0.0.1` isn't - see
-   *A compose file that binds 127.0.0.1* below.
+   bridge gateway, the boundary table's one admitted interface. An entry naming `127.0.0.1` isn't - see *A compose file
+   that binds 127.0.0.1* below.
 3. **Via `localhost`, from a devbox shell** - run `devbox-ports`, forwarding `127.0.0.1:<port>` to
    `host.docker.internal:<port>` for every gateway-published port, one `socat` per port. A loopback-bound
    publish is skipped with a warning naming the container, since a forward there relays to nothing:
@@ -219,11 +220,11 @@ rebuilds and counting against host disk like any project file.
 
 ## Versions
 
-| Piece          | Pin                                   | Where                      |
-|----------------|-----------------------------------------|----------------------------|
-| Docker CLI     | `DOCKER_CLI_VERSION` (static tarball) | `Dockerfile`               |
-| Compose plugin | `DOCKER_COMPOSE_VERSION` (+ checksum) | `Dockerfile`               |
-| Buildx plugin  | `DOCKER_BUILDX_VERSION` (+ checksum)  | `Dockerfile`               |
+| Piece          | Pin                                   | Where                        |
+|----------------|---------------------------------------|------------------------------|
+| Docker CLI     | `DOCKER_CLI_VERSION` (static tarball) | `Dockerfile`                 |
+| Compose plugin | `DOCKER_COMPOSE_VERSION` (+ checksum) | `Dockerfile`                 |
+| Buildx plugin  | `DOCKER_BUILDX_VERSION` (+ checksum)  | `Dockerfile`                 |
 | Daemon         | The host's `docker-ce`                | `apt-get` on the workstation |
 
 Keep `DOCKER_CLI_VERSION` equal to the host daemon's (`docker version` on the host). An older CLI is fine;
@@ -249,8 +250,8 @@ No - it runs on the host's root daemon, unreachable from the container. It can s
 containers - that's the point.
 
 **Do project ports end up on the Tailnet?**
-No, by two independent mechanisms: the daemon publishes on the bridge gateway by default
-(`--default-network-opt`, so `docker ps` shows `172.17.0.1:5432`), and `devbox-docker-firewall` drops
+No, by two independent mechanisms: the daemon publishes on the bridge gateway by default (`--default-network-opt`, so
+`docker ps` shows `172.17.0.1:5432`), and `devbox-docker-firewall` drops
 input to those sockets outside loopback and the bridge, even when a port spec overrides the default.
 `./bin/devbox doctor` fails if the boundary service is inactive or the address drifted.
 

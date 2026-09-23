@@ -6,14 +6,14 @@ the devbox.
 
 ## Boundaries
 
-| Boundary                   | Enforced by                                                                                                                                                |
-|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| No host filesystem access  | Only `${DEVBOX_DATA_DIR}` mounted, at `/home/dev` (see limit 5)                                                                                            |
-| No host root Docker daemon | `/var/run/docker.sock` not mounted; reachable daemon is rootless                                                                                           |
-| No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true`                                                                               |
-| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` - Tailnet address only                                                                                              |
-| No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`                                                                                       |
-| No private keys at rest    | Devbox holds no SSH private key; `AllowAgentForwarding yes` only lets `ssh -A devbox` borrow the laptop's forwarded 1Password agent for one connection    |
+| Boundary                   | Enforced by                                                                                                                                            |
+|----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| No host filesystem access  | Only `${DEVBOX_DATA_DIR}` mounted, at `/home/dev` (see limit 5)                                                                                        |
+| No host root Docker daemon | `/var/run/docker.sock` not mounted; reachable daemon is rootless                                                                                       |
+| No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true`                                                                           |
+| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` - Tailnet address only                                                                                          |
+| No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`                                                                                   |
+| No private keys at rest    | Devbox holds no SSH private key; `AllowAgentForwarding yes` only lets `ssh -A devbox` borrow the laptop's forwarded 1Password agent for one connection |
 
 ## No root process at runtime
 
@@ -37,7 +37,7 @@ Authority is enumerated, not ambient: each credential is scoped, separately revo
 attributable:
 
 | Purpose                               | Credential                                                               | Reach                                                      |
-|-----------------------------------------|----------------------------------------------------------------------------|--------------------------------------------------------------|
+|---------------------------------------|--------------------------------------------------------------------------|------------------------------------------------------------|
 | Agent git (clone, pull, push, commit) | per-repository GitHub App installation token, else a fine-grained PAT    | App: one repo, 1h. PAT: its named repos, `contents: write` |
 | Manual git, incl. signing (you)       | the laptop's 1Password agent, forwarded per connection (`ssh -A devbox`) | same as your laptop; the container stores no private key   |
 | Dashboards, CI, issues                | one fine-grained PAT per GitHub account                                  | named repos, scoped per token                              |
@@ -59,7 +59,8 @@ daemon, the devbox container's own lifecycle, root inside the container, any unp
 1Password vault.
 
 The consequence: an agent with shell access can push through the same App token or PAT `git`/`gh` already
-resolve, and read each configured App's private key, every identity's PAT, and every project's `.env` and GCP key directly. Your
+resolve, and read each configured App's private key, every identity's PAT, and every project's `.env` and GCP key
+directly. Your
 own GitHub push authority stays out of reach - no private key to steal - unless it's inside a `ssh -A
 devbox` connection you forwarded yourself (accepted limit 2). Treat a compromise as "revoke every
 identity's PAT and App key, plus the service-account key," not "rebuild a laptop."
@@ -158,8 +159,8 @@ on repos that matter instead of adding a deploy key.
 
 **How do I revoke access from a lost laptop?**
 The SSH keys are 1Password items, not files, so the laptop carries no key - but remove the *Devbox
-Laptop* item from GitHub or `DEVBOX_EXTRA_AUTHORIZED_KEYS` anyway, restart the container
-(`authorized_keys` rebuilds on every start), and drop it from the workstation's own
+Laptop* item from GitHub or `DEVBOX_EXTRA_AUTHORIZED_KEYS` anyway, restart the container (`authorized_keys` rebuilds on
+every start), and drop it from the workstation's own
 `~/.ssh/authorized_keys`. What the laptop **does** hold in plaintext, if `./bin/install-agent` ran there,
 is the agent's own credentials: one `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env`, and
 each configured identity's App pem under its own `app` directory. Revoke every identity's PAT, rotate

@@ -3,12 +3,12 @@
 Four ways into the container, landing as `dev` in the same bind-mounted `/home/dev` - laptop and
 workstation `~/projects` differ.
 
-| Route                | From        | Use it for                                                    |
-|----------------------|-------------|----------------------------------------------------------------|
-| `herdr`              | Laptop      | Normal work: survives client exit, network loss              |
-| `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git`           |
-| Moshi                | Phone       | Watching, steering an agent away from the desk               |
-| `./bin/devbox shell` | Workstation | Recovery when SSH or the network is broken                   |
+| Route                | From        | Use it for                                         |
+|----------------------|-------------|----------------------------------------------------|
+| `herdr`              | Laptop      | Normal work: survives client exit, network loss    |
+| `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git` |
+| Moshi                | Phone       | Watching, steering an agent away from the desk     |
+| `./bin/devbox shell` | Workstation | Recovery when SSH or the network is broken         |
 
 ## herdr panes
 

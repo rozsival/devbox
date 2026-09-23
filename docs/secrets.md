@@ -10,23 +10,23 @@ in not worth its blast radius. See [Security](security.md).
 
 ## Three layers
 
-| Layer                  | Holds                                             | Scope of a leak                                          |
-|------------------------|-----------------------------------------------------|--------------------------------------------------------------|
-| Identity (public keys) | `~/.ssh/id_<slug>.pub`, one per identity            | none alone - selects the forwarded key GitHub sees |
-| Box-wide tools         | `~/.config/devbox/secrets.env`                    | the tools' credentials                                   |
-| Per project            | that project's `.env`                             | one project                                              |
+| Layer                  | Holds                                    | Scope of a leak                                    |
+|------------------------|------------------------------------------|----------------------------------------------------|
+| Identity (public keys) | `~/.ssh/id_<slug>.pub`, one per identity | none alone - selects the forwarded key GitHub sees |
+| Box-wide tools         | `~/.config/devbox/secrets.env`           | the tools' credentials                             |
+| Per project            | that project's `.env`                    | one project                                        |
 
 Everything lives on the `/home/dev` bind mount, so it survives container/image rebuilds, established once
 per host.
 
-| Secret                                        | Lives in                                                             | Established by                                                                                                           |
-|-------------------------------------------------|------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
-| SSH identity public keys (one pair per identity) | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `pubkey`/`signing_pubkey` in `~/.config/devbox/identities.conf` - no private key present       |
-| `gh` tokens, one per identity                    | `~/.config/devbox/secrets.env`                                       | you, one fine-grained GitHub PAT per identity                                                                            |
-| Model API keys for OMP                           | `~/.config/devbox/secrets.env`                                       | you, plain values                                                                                                        |
-| GitHub App credentials (per identity, optional)  | the directory that identity's `app` field names                      | you, `app-id` + `app.pem` at mode 600 ([Git identities](git.md#devbox-git-credential))                                  |
-| Per-project secrets                              | `<project>/.env`                                                     | you, rendered on the laptop                                                                                              |
-| GCP service-account key                          | `~/.config/gcloud/<gcp-project>-*.json`                              | you, one per project, mode 600                                                                                           |
+| Secret                                           | Lives in                                                             | Established by                                                                                             |
+|--------------------------------------------------|----------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
+| SSH identity public keys (one pair per identity) | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `pubkey`/`signing_pubkey` in `~/.config/devbox/identities.conf` - no private key present |
+| `gh` tokens, one per identity                    | `~/.config/devbox/secrets.env`                                       | you, one fine-grained GitHub PAT per identity                                                              |
+| Model API keys for OMP                           | `~/.config/devbox/secrets.env`                                       | you, plain values                                                                                          |
+| GitHub App credentials (per identity, optional)  | the directory that identity's `app` field names                      | you, `app-id` + `app.pem` at mode 600 ([Git identities](git.md#devbox-git-credential))                     |
+| Per-project secrets                              | `<project>/.env`                                                     | you, rendered on the laptop                                                                                |
+| GCP service-account key                          | `~/.config/gcloud/<gcp-project>-*.json`                              | you, one per project, mode 600                                                                             |
 
 ## Manual checklist
 
@@ -70,16 +70,16 @@ concern.
 rule that picks a git identity, one mental model for both. With the example registry from
 `identities.conf.example`:
 
-| Working directory     | Variable            | Identity          |
-|-------------------------|----------------------|--------------------|
-| everywhere else         | `GH_TOKEN_PERSONAL` | personal (default) |
-| `~/projects/work/**`   | `GH_TOKEN_WORK`      | work               |
+| Working directory    | Variable            | Identity           |
+|----------------------|---------------------|--------------------|
+| everywhere else      | `GH_TOKEN_PERSONAL` | personal (default) |
+| `~/projects/work/**` | `GH_TOKEN_WORK`     | work               |
 
 Every identity gets its own `GH_TOKEN_<SLUG>` - `<SLUG>` is its slug upper-cased
 (`devbox-identities get <slug> token_var`).
 
-Minimum useful permissions: `contents: write` on repos agents push to without the GitHub App installed
-(agent git falls back to this PAT - see [Git identities](git.md#agent-sessions)), plus `actions`/`checks`
+Minimum useful permissions: `contents: write` on repos agents push to without the GitHub App installed (agent git falls
+back to this PAT - see [Git identities](git.md#agent-sessions)), plus `actions`/`checks`
 **read**; add issues/pull-requests **write** only if agents should post.
 
 ```bash

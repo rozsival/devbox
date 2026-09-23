@@ -150,8 +150,8 @@ Agents run on the laptop too, same launcher, same mechanism:
 
 Installs `omp-launcher`, `gh` shim, credential helper, fence in `~/.local/libexec/devbox-agent`;
 `devbox-gh-token` in `~/.local/bin`; `omp` symlinked to the launcher in both directories;
-`~/.config/devbox/git/agent*.gitconfig` (directory left read-only); the identity registry reader
-(`devbox-identities`); `~/.config/devbox/secrets.env` from template if missing. `identities.conf` is never
+`~/.config/devbox/git/agent*.gitconfig` (directory left read-only); the identity registry reader (`devbox-identities`);
+`~/.config/devbox/secrets.env` from template if missing. `identities.conf` is never
 created for you - it prints the `cp` command instead, so placeholder values can never become your agent's
 author. Idempotent: regenerates generated files, keeps
 `secrets.env` and `identities.conf`, touches nothing else. Reports whether `omp` resolves to the launcher,
@@ -166,16 +166,16 @@ token accepted, and all connections authenticating. Details: [CLI reference](cli
 
 ## `.env` reference
 
-| Variable                       | Default                 | Purpose                                                                         |
-|---------------------------------|-------------------------|----------------------------------------------------------------------------------|
-| `BIND_ADDR`                    | *(empty)*               | Publish address; empty = `up` refuses                                          |
-| `DEVBOX_SSH_PORT`              | `2223`                  | Host port (container always uses `2222`)                                       |
-| `DEVBOX_DATA_DIR`              | `/home/dev`             | Host path; must equal container home (path identity)                           |
-| `HOST_UID` / `HOST_GID`        | `1001`                  | Dedicated `dev` host user; owns the data dir and project daemon                |
-| `DEVBOX_DOCKER_SOCKET_DIR`     | `/run/devbox`           | Project daemon socket dir, bind-mounted into the container                     |
-| `TZ`                           | `Europe/Prague`         | Container timezone                                                             |
-| `DEVBOX_GITHUB_USER`           | `your-github-username`  | Seeds keys from `github.com/<user>.keys`                                       |
-| `DEVBOX_EXTRA_AUTHORIZED_KEYS` | *(empty)*               | Extra keys, newline-separated                                                  |
+| Variable                       | Default                | Purpose                                                         |
+|--------------------------------|------------------------|-----------------------------------------------------------------|
+| `BIND_ADDR`                    | *(empty)*              | Publish address; empty = `up` refuses                           |
+| `DEVBOX_SSH_PORT`              | `2223`                 | Host port (container always uses `2222`)                        |
+| `DEVBOX_DATA_DIR`              | `/home/dev`            | Host path; must equal container home (path identity)            |
+| `HOST_UID` / `HOST_GID`        | `1001`                 | Dedicated `dev` host user; owns the data dir and project daemon |
+| `DEVBOX_DOCKER_SOCKET_DIR`     | `/run/devbox`          | Project daemon socket dir, bind-mounted into the container      |
+| `TZ`                           | `Europe/Prague`        | Container timezone                                              |
+| `DEVBOX_GITHUB_USER`           | `your-github-username` | Seeds keys from `github.com/<user>.keys`                        |
+| `DEVBOX_EXTRA_AUTHORIZED_KEYS` | *(empty)*              | Extra keys, newline-separated                                   |
 
 `.env` carries no git identity: who this box is, per account and per directory tree, lives in
 `~/.config/devbox/identities.conf` (see step 3 above), never in `.env` or `docker-compose.yml`.

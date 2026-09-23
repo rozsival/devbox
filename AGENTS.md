@@ -81,7 +81,8 @@ the host's root Docker daemon.
   `~/.local/bin`, since `devbox.sh` puts only the latter on the PATH and every checklist tells people to
   run `devbox-identities check`, then `di_check`s
   `~/.config/devbox/identities.conf` - which it deliberately does *not* seed from the example, because the
-  example is valid and would silently become the box's git identity - a broken registry skips every section derived from it as
+  example is valid and would silently become the box's git identity - a broken registry skips every section derived from
+  it as
   one block, so it costs configuration, never SSH access); 3 SSH identity **public keys** per identity (no
   private key - installed from `identities.conf`, deletes any earlier devbox-generated private key and
   prints its fingerprint to revoke); 4 `~/.ssh/config` (rendered from the registry); 5 `known_hosts`

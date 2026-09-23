@@ -40,8 +40,8 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'                # optional
 ./bin/sync-omp                                                        # optional: this laptop's OMP preset → devbox
 ```
 
-Not optional: the **Devbox Laptop key in 1Password** (only `~/.ssh/devbox.pub` on disk), the two
-**`~/.ssh/config` blocks**, and a non-empty **`BIND_ADDR`**. All three are in [Setup](docs/setup.md).
+Not optional: the **Devbox Laptop key in 1Password** (only `~/.ssh/devbox.pub` on disk), the two **`~/.ssh/config`
+blocks**, and a non-empty **`BIND_ADDR`**. All three are in [Setup](docs/setup.md).
 
 ## 💻 Laptop setup
 
@@ -66,18 +66,18 @@ connection. Two scripts make the laptop match:
 
 ## 📚 Documentation
 
-| Doc                                | Read it when                                                                                     |
-|------------------------------------|--------------------------------------------------------------------------------------------------|
-| [Setup](docs/setup.md)             | First deploy, `.env` reference, laptop key, `~/.ssh/config`, laptop agent install                |
-| [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, Moshi, `devbox shell`                                |
-| [Git identities](docs/git.md)      | Cloning repos, the identity registry, manual vs agent git, signing, laptop install               |
-| [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Moshi hooks, agent skills                                      |
-| [Secrets](docs/secrets.md)         | Box-wide vs per-project, per-identity `gh` tokens, GCP ADC, App creds                            |
+| Doc                                | Read it when                                                                                                            |
+|------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| [Setup](docs/setup.md)             | First deploy, `.env` reference, laptop key, `~/.ssh/config`, laptop agent install                                       |
+| [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, Moshi, `devbox shell`                                                       |
+| [Git identities](docs/git.md)      | Cloning repos, the identity registry, manual vs agent git, signing, laptop install                                      |
+| [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Moshi hooks, agent skills                                                             |
+| [Secrets](docs/secrets.md)         | Box-wide vs per-project, per-identity `gh` tokens, GCP ADC, App creds                                                   |
 | [CLI reference](docs/cli.md)       | Every `bin/devbox`, `bin/push`, `bin/sync-omp`, `bin/sync-identities`, `bin/install-agent` and `bin/laptop-doctor` flag |
-| [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding                                             |
-| [Docker](docs/docker.md)           | Project containers, the rootless daemon, `devbox-ports`                                          |
-| [Operations](docs/operations.md)   | Redeploy, restart, backup, `doctor`, troubleshooting                                             |
-| [Security model](docs/security.md) | Boundaries, trust assumptions, what an escaped agent reaches                                     |
+| [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding                                                                    |
+| [Docker](docs/docker.md)           | Project containers, the rootless daemon, `devbox-ports`                                                                 |
+| [Operations](docs/operations.md)   | Redeploy, restart, backup, `doctor`, troubleshooting                                                                    |
+| [Security model](docs/security.md) | Boundaries, trust assumptions, what an escaped agent reaches                                                            |
 
 ## ⚡ Cheat sheet
 

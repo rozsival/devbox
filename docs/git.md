@@ -5,18 +5,18 @@ Any number of identities, chosen by directory. Each is a `[slug]` block in
 everything below. The devbox holds no private key for any of them; you and an agent session use them
 differently.
 
-|                                             | Default identity (everywhere)                                                                                | A second identity (`~/projects/work/**`)                                                                          |
-|---------------------------------------------|-----------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
-| **You** (manual, `ssh -A devbox` or laptop) | SSH `git@github.com:`, forwarded `id_personal.pub`, author `Your Name <you@example.com>`, signed               | SSH `git@work.github.com:`, forwarded `id_work.pub`, author `Your Name <you@work.example.com>`, signed           |
-| **Agent session** (`omp` launcher)          | HTTPS, token from `devbox-git-credential`, author `your-agent <your-agent@users.noreply.github.com>`, unsigned | HTTPS, same helper, author `your-app[bot] <00000000+your-app[bot]@users.noreply.github.com>`, unsigned           |
+|                                             | Default identity (everywhere)                                                                                  | A second identity (`~/projects/work/**`)                                                               |
+|---------------------------------------------|----------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------|
+| **You** (manual, `ssh -A devbox` or laptop) | SSH `git@github.com:`, forwarded `id_personal.pub`, author `Your Name <you@example.com>`, signed               | SSH `git@work.github.com:`, forwarded `id_work.pub`, author `Your Name <you@work.example.com>`, signed |
+| **Agent session** (`omp` launcher)          | HTTPS, token from `devbox-git-credential`, author `your-agent <your-agent@users.noreply.github.com>`, unsigned | HTTPS, same helper, author `your-app[bot] <00000000+your-app[bot]@users.noreply.github.com>`, unsigned |
 
 A `dir` in `identities.conf` picks the identity both ways: `includeIf gitdir:` in your own `~/.gitconfig`,
 the same prefix in `agent.gitconfig`'s `includeIf` for an agent. Exactly one block omits `dir` - that one is
 the default, catching every tree no other block claims; the rest match by longest prefix, so one tree can
 nest inside another.
 
-Nesting works because of two things the generators do, not because git does it for you. git applies
-*every* matching `includeIf` and the last one read wins, so every identity with a `dir` gets a file of its
+Nesting works because of two things the generators do, not because git does it for you. git applies *every* matching
+`includeIf` and the last one read wins, so every identity with a `dir` gets a file of its
 own - even one that only inherits the default author, which is then written out explicitly - and the
 includes are emitted shortest `dir` first, whatever order the blocks appear in the config. A tree inside
 another identity's tree therefore ends on its own name, email, signing key and agent author.
@@ -36,16 +36,16 @@ the devbox and re-runs bootstrap so everything derived from it catches up (see
 
 One `[slug]` block per identity, `slug` lowercase `[a-z][a-z0-9_]*`:
 
-| Field                        | Meaning                                                                                                                                                             | Default                                              |
-|-------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------|
-| `dir`                          | Directory prefix that selects this identity. Must be absolute or start `~/`, and contain no whitespace - it also becomes a `gitdir:` pattern and a config key, and a relative path resolves differently for git than for the token resolver, so `check` rejects both. Omit on exactly one block - that one is the default, catching every tree no other `dir` matches. Longest matching prefix wins. | none on the default block                             |
-| `name`, `email`                | Your git identity in that tree. Required.                                                                                                                          | -                                                       |
-| `pubkey`                       | The laptop's *public* authentication key, one line, as in `~/.ssh/id_<slug>.pub`. Devbox only: it holds no private key. Empty disables SSH-as-you for that tree.  | empty                                                   |
-| `signing_pubkey`               | The matching *public* signing key. GitHub registers authentication and signing keys separately; signing with the auth key shows *Unverified*.                    | empty                                                   |
-| `agent_name`, `agent_email`    | Author of agent commits in that tree.                                                                                                                              | the default identity's                                  |
-| `app`                          | Directory holding a GitHub App's `app-id` + `app.pem` (mode 600) - see [`devbox-git-credential`](#devbox-git-credential).                                         | none - the PAT is used instead                          |
-| `host`                         | Forge host. A GitHub Enterprise host moves the SSH alias, HTTPS rewrite and API this identity's credentials use onto that instance.                               | `github.com`                                            |
-| `alias`                        | SSH host alias.                                                                                                                                                    | `<slug>.<host>`, or bare `<host>` for the default identity |
+| Field                       | Meaning                                                                                                                                                                                                                                                                                                                                                                                              | Default                                                    |
+|-----------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------|
+| `dir`                       | Directory prefix that selects this identity. Must be absolute or start `~/`, and contain no whitespace - it also becomes a `gitdir:` pattern and a config key, and a relative path resolves differently for git than for the token resolver, so `check` rejects both. Omit on exactly one block - that one is the default, catching every tree no other `dir` matches. Longest matching prefix wins. | none on the default block                                  |
+| `name`, `email`             | Your git identity in that tree. Required.                                                                                                                                                                                                                                                                                                                                                            | -                                                          |
+| `pubkey`                    | The laptop's *public* authentication key, one line, as in `~/.ssh/id_<slug>.pub`. Devbox only: it holds no private key. Empty disables SSH-as-you for that tree.                                                                                                                                                                                                                                     | empty                                                      |
+| `signing_pubkey`            | The matching *public* signing key. GitHub registers authentication and signing keys separately; signing with the auth key shows *Unverified*.                                                                                                                                                                                                                                                        | empty                                                      |
+| `agent_name`, `agent_email` | Author of agent commits in that tree.                                                                                                                                                                                                                                                                                                                                                                | the default identity's                                     |
+| `app`                       | Directory holding a GitHub App's `app-id` + `app.pem` (mode 600) - see [`devbox-git-credential`](#devbox-git-credential).                                                                                                                                                                                                                                                                            | none - the PAT is used instead                             |
+| `host`                      | Forge host. A GitHub Enterprise host moves the SSH alias, HTTPS rewrite and API this identity's credentials use onto that instance.                                                                                                                                                                                                                                                                  | `github.com`                                               |
+| `alias`                     | SSH host alias.                                                                                                                                                                                                                                                                                                                                                                                      | `<slug>.<host>`, or bare `<host>` for the default identity |
 
 Everything else is derived from the slug alone: `~/.ssh/id_<slug>.pub` / `~/.ssh/signing_<slug>.pub` (the
 key files below), `<slug>.<host>` (the SSH alias, [Cloning](#cloning)), `GH_TOKEN_<SLUG>` in
@@ -75,8 +75,8 @@ git clone git@work.github.com:<org>/<repo> ~/projects/work/<repo>               
 
 `work.github.com` is the `work` identity's `alias` (default `<slug>.<host>`) - a `Host` block in
 `~/.ssh/config`, rendered from `identities.conf` by `devbox-identities render ssh-config`: `github.com` with
-`IdentityFile ~/.ssh/id_work.pub` and `IdentitiesOnly yes`, picking the work key from the agent's offer.
-**Not skippable at clone time**: its `url."git@work.github.com:".insteadOf=git@github.com:` rewrite lives in
+`IdentityFile ~/.ssh/id_work.pub` and `IdentitiesOnly yes`, picking the work key from the agent's offer. **Not skippable
+at clone time**: its `url."git@work.github.com:".insteadOf=git@github.com:` rewrite lives in
 `user-work.gitconfig`, loaded only once the repo exists via that identity's `includeIf gitdir:` - a
 `git@github.com:` URL would go out over the default key. Repos under `~/projects/work/` get remotes
 rewritten after.
@@ -96,16 +96,16 @@ git remote -v
 
 ## Manual work on the devbox - the escape hatch
 
-The devbox generates and holds no private GitHub key. A push, signed commit, or cloning a private repo as
-*you* borrows the laptop's running 1Password agent, forwarded for one connection:
+The devbox generates and holds no private GitHub key. A push, signed commit, or cloning a private repo as *you* borrows
+the laptop's running 1Password agent, forwarded for one connection:
 
 ```bash
 ssh -A devbox
 ```
 
 `container/sshd_config` sets `AllowAgentForwarding yes` for this. The devbox's `~/.ssh/config` (`bootstrap`,
-rendered from `identities.conf` by `devbox-identities render ssh-config`) picks: each `Host` block names a
-*public* key with `IdentityFile` and `IdentitiesOnly yes`, so `ssh` offers only that key - otherwise GitHub
+rendered from `identities.conf` by `devbox-identities render ssh-config`) picks: each `Host` block names a *public* key
+with `IdentityFile` and `IdentitiesOnly yes`, so `ssh` offers only that key - otherwise GitHub
 takes whichever agent key comes first.
 
 Without `-A`, a manual `git push` or signed commit fails on purpose - no key to answer. Ordinary `herdr`
@@ -123,13 +123,13 @@ Every agent session - an `omp`-launched process and everything it shells out to 
 itself) - runs under five exports the `omp` launcher (`~/.local/libexec/devbox-agent/omp-launcher`, reached
 as `omp` through a symlink) sets for its process tree, before `exec`-ing real `omp`:
 
-| Export                | Value                              | What it does                                         |
-|-----------------------|-------------------------------------|-------------------------------------------------------|
+| Export                | Value                                  | What it does                            |
+|-----------------------|----------------------------------------|-----------------------------------------|
 | `GIT_CONFIG_GLOBAL`   | `~/.config/devbox/git/agent.gitconfig` | replaces `~/.gitconfig`, not merged     |
-| `GIT_SSH_COMMAND`     | `…/devbox-git-no-ssh`              | refuses every SSH remote, exit 255      |
-| `GIT_TERMINAL_PROMPT` | `0`                                | missing credential errors, never hangs  |
-| `GH_CONFIG_DIR`       | `~/.config/devbox/gh`              | `gh` sees no login: shim token, or none |
-| `PATH`                | launcher's directory prepended     | puts `gh` shim ahead of real `gh`       |
+| `GIT_SSH_COMMAND`     | `…/devbox-git-no-ssh`                  | refuses every SSH remote, exit 255      |
+| `GIT_TERMINAL_PROMPT` | `0`                                    | missing credential errors, never hangs  |
+| `GH_CONFIG_DIR`       | `~/.config/devbox/gh`                  | `gh` sees no login: shim token, or none |
+| `PATH`                | launcher's directory prepended         | puts `gh` shim ahead of real `gh`       |
 
 Nothing outside that process tree sees any of it - a clone opened in a pane or IDE keeps its SSH remote,
 forwarded agent, signed commits.
@@ -214,9 +214,9 @@ cached, nothing stored**, tried against the identities that could serve the requ
 owning the working directory first, then the rest in config order, so two accounts with two Apps on the
 same host stay apart:
 
-1. For each candidate identity with `app` credentials (`app-id` + `app.pem`) at that path: sign a JWT
-   (RS256, `openssl`), call `GET /repos/{owner}/{repo}/installation` against that identity's API
-   (`https://api.github.com`, or `https://<host>/api/v3` for a GitHub Enterprise `host`). `200` → mint an
+1. For each candidate identity with `app` credentials (`app-id` + `app.pem`) at that path: sign a JWT (RS256,
+   `openssl`), call `GET /repos/{owner}/{repo}/installation` against that identity's API (`https://api.github.com`, or
+   `https://<host>/api/v3` for a GitHub Enterprise `host`). `200` → mint an
    installation token (`POST /app/installations/{id}/access_tokens`, `repositories:[repo]`, one hour) and
    use it. `404` → try the next candidate identity; any other status → hard failure, never a silent PAT
    downgrade.
@@ -281,7 +281,8 @@ It installs `omp-launcher`, the `gh` shim, `devbox-git-credential`, and `devbox-
 `~/.local/libexec/devbox-agent`; `devbox-gh-token` into `~/.local/bin` and `devbox-identities` into
 `~/.local/libexec`; symlinks `~/.local/bin/omp` → `~/.local/libexec/devbox-agent/omp` → `omp-launcher`;
 names the `cp` command for `~/.config/devbox/identities.conf` when it is absent, and never writes that
-file itself (the example validates, so seeding it would author agent commits as `your-agent`); and renders `~/.config/devbox/git/agent*.gitconfig` from the registry, regenerating every file
+file itself (the example validates, so seeding it would author agent commits as `your-agent`); and renders
+`~/.config/devbox/git/agent*.gitconfig` from the registry, regenerating every file
 each run and locking their directory read-only afterwards. `~/.config/devbox/secrets.env` is created from
 the example if absent and never overwritten either. The installer reads or edits nothing of yours in either
 file.
@@ -420,6 +421,13 @@ One `[slug]` block in `~/.config/devbox/identities.conf`, a `GH_TOKEN_<SLUG>` in
 `~/.config/devbox/secrets.env`, and the identity's two public keys, already on GitHub. Apply with
 `./bin/sync-identities` from the laptop, or `./bin/devbox bootstrap` on the devbox alone - no code change,
 nowhere. See [The identity registry](#the-identity-registry).
+
+**Can two identities be the same GitHub account?**
+Yes - the way to give an organization of your own its own token, since a fine-grained PAT has exactly one
+resource owner (your user *or* one org). Copy the default block under a new slug with its own `dir`, the
+same `pubkey`/`signing_pubkey`, and copy `id_<default>.pub`/`signing_<default>.pub` to the new slug's names
+on the laptop. `laptop-doctor` normally fails two aliases greeting one login as a wrong key; identical
+`pubkey` lines in the registry declare it deliberate, so that check skips the pair.
 
 **Both machines hold `identities.conf` - which one wins?**
 Neither is authoritative by itself; they're expected to agree. `./bin/sync-identities` always copies

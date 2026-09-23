@@ -33,6 +33,8 @@
 #                   and this is what makes `ssh -A devbox` offer the right key
 #                   out of the forwarded 1Password agent. Empty is allowed; git
 #                   over SSH as yourself then does not work for those trees.
+#                   Two blocks may share one pubkey: one account split by
+#                   directory, e.g. a private org that needs its own PAT.
 #   signing_pubkey  The matching *public* signing key. GitHub registers
 #                   authentication and signing keys separately, and signing with
 #                   the auth key shows Unverified.

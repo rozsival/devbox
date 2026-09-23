@@ -81,7 +81,6 @@ fi
 if ${identities_ok}; then
   slugs="$(di_slugs)"
 
-
   # -- 3. SSH identities: public keys only ------------------------------------
   # The devbox generates no keys and holds no private key for any forge. Manual
   # git work as yourself runs over the laptop's forwarded 1Password agent; the
