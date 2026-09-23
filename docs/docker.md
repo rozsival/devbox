@@ -111,6 +111,11 @@ host sockets, so `INPUT` genuinely applies.
 It lives in its own `inet` table at lower priority than ufw's chains, so neither touches the other's
 rules; ufw still needs its allow rule, since a packet accepted in one table isn't exempt from later ones.
 
+nft resolves that cgroup path to an id **when the table loads**, so the slice must already exist and the
+id goes stale if it's ever recreated. The unit is therefore pulled in by, ordered after and `PartOf=`
+`user@1001.service` - the lingering user manager that owns the slice - rather than merely after ufw, which
+at boot lost the race and left the boundary down.
+
 The devbox deliberately sits on the *default* bridge (`network_mode: bridge`): `docker0` exists whenever
 the host daemon does, while a compose-managed bridge is removed by `./bin/devbox down` and recreated with
 a new address - both the publish address and the boundary table's interface are keyed to it.
@@ -248,6 +253,11 @@ No, by two independent mechanisms: the daemon publishes on the bridge gateway by
 (`--default-network-opt`, so `docker ps` shows `172.17.0.1:5432`), and `devbox-docker-firewall` drops
 input to those sockets outside loopback and the bridge, even when a port spec overrides the default.
 `./bin/devbox doctor` fails if the boundary service is inactive or the address drifted.
+
+**`doctor` says `devbox-docker-firewall is inactive` after a reboot.**
+`systemctl status devbox-docker-firewall` showing `cgroupv2 path fails: No such file or directory` is the
+unit loading before `user-1001.slice` existed - a unit written by an older `bin/rootless-docker`. Re-run
+`sudo ./bin/rootless-docker`: it rewrites the unit with the ordering above and restarts it.
 
 **`docker pull` hangs, then fails with an i/o timeout.**
 Almost certainly the boundary table dropping the daemon's *reply* traffic - check

@@ -355,7 +355,9 @@ NFT_BODY
 [Unit]
 Description=Netfilter boundary for devbox project docker ports
 Documentation=file://${NFT_CONF}
-After=ufw.service nftables.service
+After=ufw.service nftables.service user@${DEV_UID}.service
+Wants=user@${DEV_UID}.service
+PartOf=user@${DEV_UID}.service
 
 [Service]
 Type=oneshot
@@ -364,10 +366,18 @@ ExecStart=/usr/sbin/nft -f ${NFT_CONF}
 ExecStop=/usr/sbin/nft delete table inet devbox
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=multi-user.target user@${DEV_UID}.service
 UNIT_BODY
   )"
 
+  # nft resolves the `socket cgroupv2` path to a cgroup *id* when the table
+  # loads, so the slice has to exist by then and the id goes stale if it is ever
+  # recreated. Ordered only after ufw, the unit raced the lingering user manager
+  # at boot and lost - 'cgroupv2 path fails: No such file or directory', leaving
+  # every project port on the Tailnet until someone ran doctor. So: pulled in by
+  # and ordered after user@<uid>.service, whose slice is the one matched, and
+  # PartOf it, so a restarted user manager (new slice, new id) reloads the table.
+  #
   # The unit runs `nft -f` once, so a rewritten ruleset is inert until the
   # service is restarted: both files have to be part of the condition, or an
   # updated table sits on disk while the kernel keeps serving the old one.
@@ -384,8 +394,10 @@ UNIT_BODY
   printf '%s\n' "${want_unit}" >"${NFT_UNIT}"
   chmod 644 "${NFT_UNIT}"
   systemctl daemon-reload
-  # restart, not start: a running instance holds the previous table.
-  systemctl enable --quiet "${NFT_SERVICE}"
+  # reenable, not enable: it recreates the [Install] links, so a unit that gained
+  # a WantedBy= also gains its symlink. restart, not start: a running instance
+  # holds the previous table.
+  systemctl reenable --quiet "${NFT_SERVICE}"
   systemctl restart "${NFT_SERVICE}"
   nft list table inet devbox >/dev/null ||
     log_error "the ${NFT_SERVICE} table did not load - check: systemctl status ${NFT_SERVICE}"
