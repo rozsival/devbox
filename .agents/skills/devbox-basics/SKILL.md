@@ -77,8 +77,9 @@ clone into a non-default tree needs `git@<slug>.<host>:` explicitly; `insteadOf`
 
 The devbox holds no private key for any identity: manual git (pane push, signed commit) borrows the
 laptop's 1Password agent, forwarded per connection with `ssh -A devbox`; agent sessions never touch it - the
-`omp` launcher rewrites their git to HTTPS with a per-operation token (GitHub App installation token or
-fine-grained PAT) and bot author, unsigned. Full mechanism: `docs/git.md`.
+`omp` launcher rewrites their git to HTTPS with a repo-scoped token (GitHub App installation token or
+fine-grained PAT) and bot author, unsigned; their `gh` on a repo the App covers uses the same App token, so
+PRs carry the bot author too. Full mechanism: `docs/git.md`.
 
 ## Two optional extras, not installed by default
 

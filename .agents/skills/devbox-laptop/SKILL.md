@@ -116,8 +116,10 @@ authored wrongly need `git commit --amend --reset-author` (or `rebase -x`) plus 
   by `gh` in agent sessions. Same file/variables as devbox; only PATs belong here - model keys come from
   OMP.
 - Per identity with an `app` field in `identities.conf`: `<app-dir>/app-id`, `<app-dir>/app.pem`
-  (mode 600) - the credential helper mints a repo-scoped installation token per git op on a repo the App
-  is installed on, ahead of the PAT. Without them, that identity's repos push with the PAT.
+  (mode 600) - the credential helper mints a repo-scoped installation token (cached ≤30 min on tmpfs) for
+  agent git on a repo the App is installed on, ahead of the PAT, and the `gh` shim uses the same token for
+  an agent's `pr`/`issue`/`run`/... on that repo, so its PRs carry the bot author. Without them, that
+  identity's repos push, and its PRs open, with the PAT - as you.
 
 Check: `./bin/laptop-doctor` validates every identity's token against GitHub, each `app.pem` as a key;
 `devbox-git-credential explain <owner>/<repo>` prints `app:<slug>:<installation>` or `pat:<slug>` for a

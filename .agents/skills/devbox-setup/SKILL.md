@@ -127,8 +127,8 @@ register on GitHub - already your normal, registered laptop keys.
    those go in that project's `.env`.
 4. Place each identity's GitHub App credentials in *that identity's own* `app` directory from
    `identities.conf` (`app-id`, `app.pem`, mode 600) if it needs one. Bootstrap creates the directory,
-   never fetches secrets; once present, the credential helper mints a repo-scoped installation token per
-   agent git op for that identity, ahead of the PAT.
+   never fetches secrets; once present, the credential helper mints a repo-scoped installation token for
+   that identity's agent git, ahead of the PAT, and agent `gh` on that repo (PRs, issues) uses it too.
 
 No `op` step: the container holds no 1Password account or `op` binary. Project secrets render on the
 laptop (`op inject -i .env.tpl -o .env`), copy in; Google APIs need a per-project service-account key, never

@@ -209,8 +209,8 @@ checks both hops are still symlinks.
 
 ### `devbox-git-credential`
 
-Configured with `useHttpPath`: requests name the repository. A token is minted **per git operation, never
-cached, nothing stored**, tried against the identities that could serve the request's host - the one
+Configured with `useHttpPath`: requests name the repository. Each request is answered from the identities
+that could serve the request's host - the one
 owning the working directory first, then the rest in config order, so two accounts with two Apps on the
 same host stay apart:
 
@@ -223,9 +223,19 @@ same host stay apart:
 2. Otherwise, the fine-grained PAT of the identity the working directory belongs to - `devbox-gh-token`, the
    same rule `gh` and git's `includeIf` use.
 
-`store` and `erase` are accepted and ignored - nothing to keep. `devbox-git-credential explain owner/repo
+`store` and `erase` are accepted and ignored. `devbox-git-credential explain owner/repo
 [dir]` prints which path a request would take - `app:<slug>:<installation-id>` or `pat:<slug>` - without
-minting anything.
+minting anything. `devbox-git-credential token owner/repo [dir]` prints just the App token, or nothing
+when no App covers the repository: the `gh` shim's way to act as the same bot in an agent session
+([Secrets](secrets.md#agent-sessions-the-app-for-one-repositorys-commands)).
+
+Minting takes two API round trips (~0.75 s), so the App answer is cached per repository and per working
+directory's identity: a token for 30 of its 60 minutes (whoever receives it keeps at least half an hour -
+`gh run watch` included), "no App installed" for 5 minutes, so installing the App on a repository takes
+effect within that. The cache is `devbox-agent-<uid>/` under `$XDG_RUNTIME_DIR`, else `/dev/shm` (the
+container's tmpfs), else `$TMPDIR` (the laptop) - mode 700, files 600, never under `$HOME`, which is the
+bind mount and gets backed up; a directory not owned by you there disables caching rather than trusting
+it. Delete it to force a fresh mint. The PAT path was never slow and is not cached.
 
 An App is scoped per repository by its installation - no allowlist; installing it is all the configuration.
 A repo without the App gets the PAT, needing `contents: write` there, not read-only - see
@@ -415,6 +425,12 @@ invocation from the directory (`devbox-gh-token --account` reports which). See [
 **Can an agent push to a repo the App is not installed on?**
 Yes, with the fine-grained PAT for that identity - why it needs `contents: write` on repos pushed without
 the App, not read-only. Install the App to scope pushes to one hour and one repo instead.
+
+**Why are an agent's PRs opened by the App's bot and not by me?**
+In an agent session, `gh` commands about one repository the identity's App is installed on use that App's
+installation token - the one its git pushes with - so PRs, issues and comments carry the same author as the
+commits. Your own `gh`, and account-wide agent commands (`gh repo list`, `gh api user`), keep the PAT. See
+[Secrets](secrets.md#agent-sessions-the-app-for-one-repositorys-commands).
 
 **How do I add a third account?**
 One `[slug]` block in `~/.config/devbox/identities.conf`, a `GH_TOKEN_<SLUG>` in

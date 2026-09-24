@@ -122,20 +122,27 @@ the host's root Docker daemon.
   missed argv shape to the updater's shebang refusal. Beside it, the `gh` shim that deliberately shadows
   the real `gh` on the PATH: with `devbox-gh-token` it resolves `GH_TOKEN_<SLUG>` per invocation from the
   working directory, on the same `dir` prefixes in `identities.conf` that git's `includeIf` uses, because
-  an agent's cwd is a project while its shell was opened in `$HOME`. Nothing exports `GH_TOKEN`; `gh auth
+  an agent's cwd is a project while its shell was opened in `$HOME`. In an agent session (`GIT_CONFIG_GLOBAL`
+  is `agent.gitconfig`), a command about one repository - `pr`, `issue`, `run`, ..., `api repos/<o>/<r>/...`,
+  `api graphql` inside a checkout
+  - takes that repository's App installation token from `devbox-git-credential token` instead, so agent PRs
+    carry the bot author their commits do; account-wide commands and every non-agent `gh` keep the PAT, and a
+    failed App lookup is an error, never a PAT fallback. The helper caches App answers per repository on tmpfs
+    (`devbox-agent-<uid>/`, never under `$HOME`) because a mint is two API round trips. Nothing exports
+    `GH_TOKEN`; `gh auth
   login` is rejected by design (`docs/secrets.md`). `home/.config/devbox/git/agent.gitconfig.tpl` is the
-  template `devbox-identities render agent-gitconfig` fills in with the registry's hosts, aliases and URL
-  rewrites - edit it here, never the rendered `~/.config/devbox/git/agent.gitconfig` or the one
-  `agent-<slug>.gitconfig` per identity claiming a `dir` that it produces. Sets the bot author,
-  unsigned commits, and the HTTPS credential-helper rewrite for agent git (`docs/git.md`); both installers
-  leave that directory at mode 500 with 444 files, because `GIT_CONFIG_GLOBAL` points into it and a `git
+    template `devbox-identities render agent-gitconfig` fills in with the registry's hosts, aliases and URL
+    rewrites - edit it here, never the rendered `~/.config/devbox/git/agent.gitconfig` or the one
+    `agent-<slug>.gitconfig` per identity claiming a `dir` that it produces. Sets the bot author,
+    unsigned commits, and the HTTPS credential-helper rewrite for agent git (`docs/git.md`); both installers
+    leave that directory at mode 500 with 444 files, because `GIT_CONFIG_GLOBAL` points into it and a `git
   config --global` inside a session therefore rewrites the agent's own identity - `~/.extra` did exactly
-  that from every login bash, putting the user's name and email on five agent commits, and git's lock file
-  makes the directory mode the only thing that stops such a write. `home/.bash_profile` exists only to
-  reassert the `PATH` order for login shells: bash prefers it over `~/.profile`, which it sources first,
-  because the distro's file prepends `~/.local/bin` *after* `~/.bashrc` and so put the real `omp` ahead of
-  the launcher in every interactive `ssh devbox`, herdr pane and `./bin/devbox shell`; `devbox.sh`
-  therefore asserts the order (move to front) instead of prepending only when absent
+    that from every login bash, putting the user's name and email on five agent commits, and git's lock file
+    makes the directory mode the only thing that stops such a write. `home/.bash_profile` exists only to
+    reassert the `PATH` order for login shells: bash prefers it over `~/.profile`, which it sources first,
+    because the distro's file prepends `~/.local/bin` *after* `~/.bashrc` and so put the real `omp` ahead of
+    the launcher in every interactive `ssh devbox`, herdr pane and `./bin/devbox shell`; `devbox.sh`
+    therefore asserts the order (move to front) instead of prepending only when absent
 - `container/devbox-ports` - symlinked to `/usr/local/bin` by the `Dockerfile`, so a host edit is live
   without a rebuild; mirrors published project ports onto the container's own `127.0.0.1`
 - `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`,

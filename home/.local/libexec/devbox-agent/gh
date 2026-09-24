@@ -14,6 +14,11 @@
 # value exported at shell startup would pin one account for the whole session.
 # Resolving per invocation is the only way the choice can follow the tree, the
 # same way git's `includeIf` does. See docs/secrets.md.
+#
+# In an agent session, a command about one repository whose identity's GitHub
+# App is installed there runs on the App's installation token instead - the
+# token agent git pushes with - so the PR an agent opens has the same author as
+# its commits. See repo_scoped below for which commands those are.
 set -euo pipefail
 
 self="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -32,6 +37,93 @@ if [[ -z ${real} ]]; then
   exit 127
 fi
 
+# An agent session is one the omp launcher started: it, and only it, points git
+# at agent.gitconfig - the file that makes the App's bot the commit author.
+agent_session() {
+  [[ ${GIT_CONFIG_GLOBAL:-} == "${HOME}/.config/devbox/git/agent.gitconfig" ]]
+}
+
+# owner/repo out of `owner/repo`, `HOST/owner/repo`, an HTTPS URL or an SSH
+# remote (`git@alias:owner/repo.git`); nothing for anything else.
+owner_repo() {
+  local spec="${1%/}" name rest owner
+  spec="${spec%.git}"
+  name="${spec##*/}"
+  rest="${spec%/*}"
+  [[ ${rest} != "${spec}" ]] || return 0
+  owner="${rest##*[/:]}"
+  [[ ${owner} =~ ^[A-Za-z0-9._-]+$ && ${name} =~ ^[A-Za-z0-9._-]+$ ]] || return 0
+  printf '%s/%s\n' "${owner}" "${name}"
+}
+
+# The repository gh itself would target: -R/--repo, then GH_REPO, then origin.
+current_repo() {
+  local arg next=false
+  for arg in "$@"; do
+    if [[ ${next} == true ]]; then
+      owner_repo "${arg}"
+      return 0
+    fi
+    case "${arg}" in
+    -R | --repo) next=true ;;
+    --repo=*) owner_repo "${arg#--repo=}" && return 0 ;;
+    -R?*) owner_repo "${arg#-R}" && return 0 ;;
+    esac
+  done
+  if [[ -n ${GH_REPO:-} ]]; then
+    owner_repo "${GH_REPO}"
+    return 0
+  fi
+  owner_repo "$(git remote get-url origin 2>/dev/null || true)"
+}
+
+# Prints owner/repo when the command acts on exactly one repository, which is
+# all an installation token can: the repository subcommands, and `gh api` on a
+# `repos/{owner}/{repo}/...` endpoint. Everything else - `repo list`, `search`,
+# `api user`, `api graphql` - keeps the PAT, since an installation token has no
+# user behind it.
+repo_scoped() {
+  local command="${1:-}" arg skip=false endpoint=''
+  case "${command}" in
+  pr | issue | run | workflow | release | label | cache | ruleset)
+    current_repo "${@:2}"
+    ;;
+  api)
+    for arg in "${@:2}"; do
+      if [[ ${skip} == true ]]; then
+        skip=false
+        continue
+      fi
+      case "${arg}" in
+      -X | --method | -H | --header | -f | --raw-field | -F | --field | --input | -q | --jq | -t | --template | \
+        --hostname | --cache | -p | --preview) skip=true ;;
+      -*) ;;
+      *)
+        endpoint="${arg#/}"
+        break
+        ;;
+      esac
+    done
+    # GraphQL is how review threads are resolved; inside a repository it runs
+    # as the bot like the REST calls around it. Outside one there is nothing to
+    # scope a token to, so it stays on the PAT.
+    if [[ ${endpoint} == graphql ]]; then
+      current_repo
+      return 0
+    fi
+    [[ ${endpoint} == repos/* ]] || return 0
+    endpoint="${endpoint#repos/}"
+    if [[ ${endpoint} == '{owner}/{repo}'* ]]; then
+      current_repo
+      return 0
+    fi
+    endpoint="${endpoint%%\?*}"
+    [[ ${endpoint} == */* ]] || return 0
+    owner_repo "${endpoint%%/*}/$(cut -d/ -f2 <<<"${endpoint}")"
+    ;;
+  esac
+}
+
 # An explicit GH_TOKEN in the environment wins, even an empty one: gh gives the
 # variable top precedence itself, and a caller that set it chose its principal
 # deliberately - a team launcher that starts an unattended shell exports
@@ -42,8 +134,19 @@ fi
 # that through and still run gh, which then acts unauthenticated and fails on
 # its own terms rather than silently using the other account's token.
 if [[ -z ${GH_TOKEN+set} ]]; then
-  resolver="$(command -v devbox-gh-token || printf '%s' "${HOME}/.local/bin/devbox-gh-token")"
-  token="$("${resolver}")" || token=''
+  token=''
+  if agent_session; then
+    repo="$(repo_scoped "$@")"
+    # A failed lookup (broken pem, API outage) stops here rather than falling
+    # back to the PAT and acting as a different principal - the helper's rule.
+    if [[ -n ${repo} ]]; then
+      token="$("${self%/*}/devbox-git-credential" token "${repo}")" || exit 1
+    fi
+  fi
+  if [[ -z ${token} ]]; then
+    resolver="$(command -v devbox-gh-token || printf '%s' "${HOME}/.local/bin/devbox-gh-token")"
+    token="$("${resolver}")" || token=''
+  fi
   if [[ -n ${token} ]]; then
     export GH_TOKEN="${token}"
   fi

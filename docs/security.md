@@ -36,13 +36,14 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox logs | grep "Server listening"'  
 Authority is enumerated, not ambient: each credential is scoped, separately revocable, separately
 attributable:
 
-| Purpose                               | Credential                                                               | Reach                                                      |
-|---------------------------------------|--------------------------------------------------------------------------|------------------------------------------------------------|
-| Agent git (clone, pull, push, commit) | per-repository GitHub App installation token, else a fine-grained PAT    | App: one repo, 1h. PAT: its named repos, `contents: write` |
-| Manual git, incl. signing (you)       | the laptop's 1Password agent, forwarded per connection (`ssh -A devbox`) | same as your laptop; the container stores no private key   |
-| Dashboards, CI, issues                | one fine-grained PAT per GitHub account                                  | named repos, scoped per token                              |
-| LLM inference                         | per-project GCP service-account key                                      | one dev project, predict-only                              |
-| Project secrets                       | that project's `.env`                                                    | one project                                                |
+| Purpose                                          | Credential                                                               | Reach                                                      |
+|--------------------------------------------------|--------------------------------------------------------------------------|------------------------------------------------------------|
+| Agent git (clone, pull, push, commit)            | per-repository GitHub App installation token, else a fine-grained PAT    | App: one repo, 1h. PAT: its named repos, `contents: write` |
+| Manual git, incl. signing (you)                  | the laptop's 1Password agent, forwarded per connection (`ssh -A devbox`) | same as your laptop; the container stores no private key   |
+| Agent `gh` on one repository (PRs, issues, runs) | that repository's GitHub App installation token, else the PAT below      | App: one repo, 1h (cached ≤30 min on tmpfs)                |
+| Dashboards, CI, issues, account-wide `gh`        | one fine-grained PAT per GitHub account                                  | named repos, scoped per token                              |
+| LLM inference                                    | per-project GCP service-account key                                      | one dev project, predict-only                              |
+| Project secrets                                  | that project's `.env`                                                    | one project                                                |
 
 Notably absent: any 1Password account (`op` isn't installed), any GitHub private key, any Google user
 credential. See [Secrets](secrets.md).

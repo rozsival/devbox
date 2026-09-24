@@ -80,7 +80,9 @@ Every identity gets its own `GH_TOKEN_<SLUG>` - `<SLUG>` is its slug upper-cased
 
 Minimum useful permissions: `contents: write` on repos agents push to without the GitHub App installed (agent git falls
 back to this PAT - see [Git identities](git.md#agent-sessions)), plus `actions`/`checks`
-**read**; add issues/pull-requests **write** only if agents should post.
+**read**; add issues/pull-requests **write** only if agents should post. Where the identity's App is
+installed, agent `gh` about that repository uses the App instead (next section), so the PAT then serves only
+your own `gh`, account-wide commands and repos without the App.
 
 ```bash
 cd ~/projects/work/<repo>
@@ -117,6 +119,29 @@ Three consequences:
 - A missing token errors rather than falls back: `devbox-gh-token` exits non-zero naming the unset
   variable, while `gh` runs unauthenticated (`--version`/`config set` keep working) - falling back would
   pick the wrong identity.
+
+#### Agent sessions: the App for one repository's commands
+
+In an agent session - the shim recognises one by `GIT_CONFIG_GLOBAL` pointing at `agent.gitconfig`, which
+only the `omp` launcher sets - a command about **one repository** first asks
+`devbox-git-credential token <owner>/<repo>` for that repository's App installation token, the same token
+agent git pushes with. A PR, issue or comment an agent makes is then authored by the App's bot, like its
+commits; without it the PAT made it *you*. Those commands are `pr`, `issue`, `run`, `workflow`, `release`,
+`label`, `cache`, `ruleset`, `gh api` on a `repos/<owner>/<repo>/...` (or `repos/{owner}/{repo}/...`)
+endpoint, and `gh api graphql` inside a repository (how review threads are resolved - `viewer` is then the
+bot); the repository is `-R`/`--repo`, then `GH_REPO`, then the `origin` remote - gh's own order.
+
+Everything else keeps the PAT: an installation token has no user behind it, so `gh repo list`, `gh search`,
+`gh api user` and `gh api graphql` outside a repository would fail with one. So does a repository the App
+is not installed on, and every `gh` outside an agent session - a devbox pane stays you. An agent that needs
+the PAT inside a repository bypasses the App with `GH_TOKEN=$(devbox-gh-token) gh ...`. A failed App lookup (broken
+`app.pem`, API outage) makes `gh` exit 1 rather than fall back to the PAT and act as someone else,
+the helper's rule.
+The App needs the permissions those commands use - `pull_requests`/`issues` **write** to post, `checks` and
+`statuses` **read** for `gh pr checks`.
+
+Minting costs ~0.75 s (two API calls), so the helper caches the answer per repository - see
+[Git identities](git.md#devbox-git-credential); a cached call costs what the PAT does.
 
 #### Why not `gh auth login`
 
