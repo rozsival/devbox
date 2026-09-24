@@ -135,9 +135,10 @@ laptop (`op inject -i .env.tpl -o .env`), copy in; Google APIs need a per-projec
 `gcloud auth application-default login`. Reasoning, commands: `docs/secrets.md`.
 
 Manual git and signing need the agent forwarded (`ssh -A devbox`, not plain `ssh devbox`, herdr, or
-`./bin/devbox shell`): `ssh -T git@github.com` → `Hi <your-github-username>!`, `ssh -T git@work.github.com`
-→ `Hi <your-work-username>!`. Agent sessions (`omp` launcher) skip this, pushing HTTPS with a token minted
-per operation. Full mechanism: `docs/git.md`.
+`./bin/devbox shell`): `ssh -T git@github.com` → `Hi <your-github-username>!`, `ssh -P work -T git@github.com`
+→ `Hi <your-work-username>!` for any identity with its own key (`devbox-identities get work tag`). Agent
+sessions (`omp` launcher) skip this, pushing HTTPS with a token minted per operation. Full mechanism:
+`docs/git.md`.
 
 ## Optional but recommended, after the phases pass
 

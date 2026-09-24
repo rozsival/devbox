@@ -84,11 +84,14 @@ the host's root Docker daemon.
   example is valid and would silently become the box's git identity - a broken registry skips every section derived from
   it as
   one block, so it costs configuration, never SSH access); 3 SSH identity **public keys** per identity (no
-  private key - installed from `identities.conf`, deletes any earlier devbox-generated private key and
-  prints its fingerprint to revoke); 4 `~/.ssh/config` (rendered from the registry); 5 `known_hosts`
-  (seeded per forge host); 6 `~/.gitconfig` (the default identity's name, email and signing key); 7 your
-  identity per non-default tree (one generated `user-<slug>.gitconfig`, the include list rewritten from
-  scratch every run so a renamed or dropped identity leaves no stale `includeIf`); 8 `allowed_signers`; 9
+  prints its fingerprint to revoke); 4 `~/.ssh/config` (rendered from the registry: one plain `Host <host>`
+  block per forge, plus a `Match host <host> tagged <slug>` block per identity whose key differs from the
+  plain one); 5 `known_hosts` (seeded per forge host); 6 `~/.gitconfig` (the default identity's name, email
+  and signing key); 7 your identity per tree and per GitHub owner (`user-<slug>.gitconfig` via `includeIf
+  gitdir:` for every identity claiming a `dir`, `org-<slug>.gitconfig` via `includeIf
+  hasconfig:remote.*.url:` for every identity claiming `orgs` - written after the `gitdir:` includes so the
+  owner wins over the tree - both include lists rewritten from scratch every run so a renamed or dropped
+  identity leaves no stale `includeIf`); 8 `allowed_signers`; 9
   GitHub App credential directories per identity (created, never fetched - only placed by hand); 10 shell;
   11 the box-wide `secrets.env`; 12 `gh` (the `~/.local/libexec/devbox-agent` shim plus the per-identity
   token checklist); 13 the agent git override (the launcher plus its `omp` symlink, credential helper,
@@ -131,7 +134,7 @@ the host's root Docker daemon.
     (`devbox-agent-<uid>/`, never under `$HOME`) because a mint is two API round trips. Nothing exports
     `GH_TOKEN`; `gh auth
   login` is rejected by design (`docs/secrets.md`). `home/.config/devbox/git/agent.gitconfig.tpl` is the
-    template `devbox-identities render agent-gitconfig` fills in with the registry's hosts, aliases and URL
+    template `devbox-identities render agent-gitconfig` fills in with the registry's hosts and URL
     rewrites - edit it here, never the rendered `~/.config/devbox/git/agent.gitconfig` or the one
     `agent-<slug>.gitconfig` per identity claiming a `dir` that it produces. Sets the bot author,
     unsigned commits, and the HTTPS credential-helper rewrite for agent git (`docs/git.md`); both installers
@@ -174,7 +177,9 @@ the host's root Docker daemon.
   the remaining manual steps (PATs, App credentials)
 - `bin/laptop-doctor` - laptop-side, read-only counterpart of `devbox doctor`: no private key on disk, one
   `id_<slug>.pub`/`signing_<slug>.pub` pair per identity (plus `devbox.pub`) held by the 1Password agent,
-  every `Host` block selecting one `.pub` through it, the registry itself (`devbox-identities check`),
+  each forge host's plain key and one `.pub` per identity's ssh tag selecting through it, `~/.gitconfig`'s
+  org includes probed with a `hasconfig:` remote per pattern (email, signing key, `core.sshCommand`), no
+  clone left on a stale SSH-alias remote, the registry itself (`devbox-identities check`),
   every gitconfig signing via `op-ssh-sign` with the right `signing_*.pub`, the agent override installed -
   the static files byte-identical to `home/`'s templates, the agent gitconfigs byte-identical to a fresh
   `devbox-identities render agent-gitconfig` - with both `omp` hops still symlinks (a plain file is an

@@ -71,16 +71,17 @@ and the entrypoint starts. One pairing step activates it - [Toolchain](toolchain
 
 ## Cloning a repo
 
-Clone inside the container, agent forwarded, target directory picking the identity:
+Clone inside the container, agent forwarded, target directory picking the identity - the remote is the
+same plain GitHub URL either way:
 
 ```bash
 ssh -A devbox
 git clone git@github.com:<your-github-username>/<repo> ~/projects/<repo>       # default identity
-git clone git@work.github.com:<org>/<repo> ~/projects/work/<repo>              # non-default, alias required
+git clone git@github.com:<org>/<repo> ~/projects/work/<repo>                   # non-default, org in its `orgs`
 ```
 
-Full rules - why a non-default identity's alias can't be skipped, how agent sessions authenticate without
-it - in
+Full rules - how the ssh tag and the `hasconfig:` org include pick a non-default identity's key and author,
+how agent sessions authenticate without either - in
 [Git identities](git.md).
 
 ## Reaching a dev server

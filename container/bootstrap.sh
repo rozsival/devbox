@@ -120,8 +120,9 @@ if ${identities_ok}; then
   done
 
   # -- 4. ~/.ssh/config -------------------------------------------------------
-  # Rendered every run: it is generated, not hand-edited. One Host block per
-  # identity, the default one owning the bare forge host and the rest an alias.
+  # Rendered every run: it is generated, not hand-edited. One block per forge
+  # host; the key comes from the ssh tag git passes for an identity's orgs
+  # (`ssh -P <slug>`, §7), else the host's plain key - no alias hosts.
   rendered="$(mktemp)"
   di_render_ssh_config >"${rendered}"
   install -m 600 "${rendered}" "${SSH_DIR}/config"
@@ -179,23 +180,28 @@ if ${identities_ok}; then
   git config --global push.default simple
   git config --global push.followTags true
 
-  # -- 7. Your identity per tree ----------------------------------------------
-  # One generated file per identity that claims a tree, included from
-  # ~/.gitconfig for its own `dir`. The include list is rewritten every run: an
-  # identity that was renamed or dropped leaves a `gitdir:` entry behind
-  # otherwise, and git would keep applying a stale name, email or signing key.
+  # -- 7. Your identity per tree and per GitHub owner -------------------------
+  # Two kinds of generated file, both included from ~/.gitconfig:
+  #   user-<slug>.gitconfig  author + signing key, by `gitdir:` for its `dir`
+  #   org-<slug>.gitconfig   the same plus `core.sshCommand = ssh -P <slug>`,
+  #                          by `hasconfig:remote.*.url:` for its `orgs` - which
+  #                          holds during a first `git clone`, so remotes stay
+  #                          plain `git@<host>:<org>/<repo>`
+  # The include lists are rewritten every run: an identity that was renamed or
+  # dropped leaves an entry behind otherwise, and git would keep applying a
+  # stale name, email, signing key or ssh tag.
   # Read-only from §13 on; lifted back here because this run regenerates it.
   install -d -m 700 "${git_config_dir}"
   chmod 700 "${git_config_dir}"
-  rm -f "${git_config_dir}"/user-*.gitconfig
+  rm -f "${git_config_dir}"/user-*.gitconfig "${git_config_dir}"/org-*.gitconfig
   # Only entries pointing at a file this script generates. ~/.gitconfig is
   # "template once, hand edits kept", so an includeIf the user added for
   # something of their own must survive every start - sweeping the whole
-  # `includeIf.gitdir:` namespace would delete it on the next boot.
+  # `includeIf.*` namespace would delete it on the next boot.
   while IFS= read -r entry; do
-    [[ ${entry} == *"${git_config_dir}/user-"*.gitconfig ]] || continue
+    [[ ${entry} == *"${git_config_dir}/user-"*.gitconfig || ${entry} == *"${git_config_dir}/org-"*.gitconfig ]] || continue
     git config --global --unset-all "${entry%% *}" 2>/dev/null || true
-  done < <(git config --global --get-regexp '^includeIf\.gitdir:.*\.path$' 2>/dev/null || true)
+  done < <(git config --global --get-regexp '^includeif\.(gitdir|hasconfig):.*\.path$' 2>/dev/null || true)
   # Shortest `dir` first: git applies every matching include and the last one
   # read wins, so a nested tree's identity has to be written last.
   for slug in $(di_dir_slugs); do
@@ -209,6 +215,23 @@ if ${identities_ok}; then
     rm -f "${rendered}"
     git config --global "includeIf.gitdir:$(di_get "${slug}" dir)/.path" "${git_config_dir}/user-${slug}.gitconfig"
   done
+  # After every `gitdir:` include, so the owner wins over the tree: a personal
+  # repository cloned into a work tree still pushes with your personal key.
+  for slug in ${slugs}; do
+    [[ -n "$(di_get "${slug}" orgs)" ]] || continue
+    rendered="$(mktemp)"
+    di_render_org_gitconfig "${slug}" >"${rendered}"
+    install -m 444 "${rendered}" "${git_config_dir}/org-${slug}.gitconfig"
+    rm -f "${rendered}"
+    while IFS= read -r url; do
+      git config --global "includeIf.hasconfig:remote.*.url:${url}.path" "${git_config_dir}/org-${slug}.gitconfig"
+    done < <(di_org_urls "${slug}")
+  done
+  # Clones from the SSH-alias era: nothing resolves `git@<slug>.<host>:` now.
+  # Named, not rewritten - a project's remotes are the user's.
+  stale_remotes="$(di_alias_remotes | awk '{printf "%sgit -C %s remote set-url %s %s", sep, $1, $2, $3; sep = "; "}')"
+  [[ -z ${stale_remotes} ]] ||
+    register_action "Point clones still on an SSH alias at the plain host (aliases are gone; orgs select the key): ${stale_remotes}"
 
   # -- 8. allowed_signers -----------------------------------------------------
   # So `git log --show-signature` verifies your own commits locally; agent
@@ -386,7 +409,7 @@ ln -sfn "${agent_dir}/omp-launcher" "${agent_dir}/omp"
 # reinstalling is why both modes are lifted here first.
 #
 # Rendered, not copied: the root file comes from agent.gitconfig.tpl with the
-# registry's hosts, aliases and trees substituted in, and one
+# registry's hosts and trees substituted in, and one
 # agent-<slug>.gitconfig per identity that claims a tree - every one of them,
 # including those inheriting the default author, because git applies every
 # matching include and a nested tree would otherwise keep the outer author.
@@ -501,7 +524,7 @@ echo '== devbox identities =====================================================
 if ${identities_ok}; then
   for slug in ${slugs}; do
     dir="$(di_get "${slug}" dir)"
-    printf '%-12s %-24s %s\n' "${slug}" "$(di_get "${slug}" alias)" "${dir:-(default - every other tree)}"
+    printf '%-14s %-12s %-22s %s\n' "${slug}" "$(di_get "${slug}" host)" "$(di_get "${slug}" orgs | tr '\n' ' ' | sed 's/ $//')" "${dir:-(default - every other tree)}"
     if [[ -f "${SSH_DIR}/id_${slug}.pub" ]]; then
       printf '%-12s %s\n' '' "$(cat "${SSH_DIR}/id_${slug}.pub")"
     else

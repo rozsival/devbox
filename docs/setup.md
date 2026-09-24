@@ -69,9 +69,9 @@ Host devbox
 ```
 
 `ForwardAgent no` states the default: manual git needs explicit `ssh -A devbox` ([Git identities](git.md)),
-never herdr's connection. GitHub `Host` blocks match one per identity in `~/.config/devbox/identities.conf`:
-`IdentityFile ~/.ssh/id_<slug>.pub` for the default identity's bare host, the same pattern for
-`<slug>.<host>` on every other account - see [Git identities](git.md#laptop-install).
+never herdr's connection. GitHub `Host`/`Match` blocks come from `~/.config/devbox/identities.conf`: one
+plain `Host github.com` block naming the key most identities on it share, plus a `Match host github.com
+tagged <slug>` block per identity whose key differs - see [Git identities](git.md#laptop-install).
 
 `IdentitiesOnly yes` is load-bearing: without it the agent offers every key, and the server rejects with
 `Too many authentication failures` first.

@@ -18,10 +18,11 @@
 # rewrites, so a directory without write permission turns that into an
 # immediate "could not lock config file" instead of silent drift.
 #
-# Self-contained on purpose. ~/.gitconfig carries `url.<ssh-alias>.insteadOf`
-# rewrites for the same prefixes as below, and when two rewrites tie on length
-# git keeps the first one it read - so including that file would let an SSH
-# rewrite win over the HTTPS one.
+# Self-contained on purpose. ~/.gitconfig carries SSH `insteadOf` rewrites for
+# the same prefixes as below (`gh:`), and when two rewrites tie on length git
+# keeps the first one it read - so including that file would let an SSH rewrite
+# win over the HTTPS one. Its per-tree and per-org includes would also hand an
+# agent your own author, signing key and ssh tag.
 
 # The author of every agent commit, outside the trees the includes at the end
 # claim. Not an account: the pusher is a fine-grained PAT or an App installation

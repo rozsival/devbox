@@ -95,7 +95,7 @@ fi
 # is why they must be chmod'ed back first.
 #
 # Rendered, not copied: the root file comes from agent.gitconfig.tpl with the
-# registry's hosts, aliases and trees substituted in, and one
+# registry's hosts and trees substituted in, and one
 # agent-<slug>.gitconfig per identity that has its own bot author. Stale files
 # from a renamed or dropped identity are deleted rather than left for
 # GIT_CONFIG_GLOBAL to keep including.

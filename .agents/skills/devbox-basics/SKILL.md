@@ -68,12 +68,13 @@ directory prefix - the longest match wins, and exactly one block with no `dir` i
 every tree no other block claims:
 
 - Everywhere else - the identity with no `dir`, the default; clone with `git@github.com:…`
-- `~/projects/work/` - the `work` identity, via `includeIf gitdir:`; clone with
-  `git@work.github.com:<org>/<repo>`
+- `~/projects/work/` - the `work` identity, via `includeIf gitdir:` for author/signing key; clone with the
+  same plain `git@github.com:<org>/<repo>` - `<org>` in its `orgs`
 
-New clones need the alias: `includeIf` rewriting can't apply before the repo directory exists, so a first
-clone into a non-default tree needs `git@<slug>.<host>:` explicitly; `insteadOf` rewrites existing
-`git@<host>:` remotes in that tree afterward.
+No alias host: an `includeIf "hasconfig:remote.*.url:…"` matches the remote's own URL text (case-sensitive,
+per `orgs`) and already applies on the very first `git clone`, since clone writes the remote before it
+fetches - unlike `includeIf gitdir:`, which needs the directory to exist first. It also sets the ssh tag
+(`core.sshCommand = ssh -P <slug>`) that picks the identity's key in `~/.ssh/config`.
 
 The devbox holds no private key for any identity: manual git (pane push, signed commit) borrows the
 laptop's 1Password agent, forwarded per connection with `ssh -A devbox`; agent sessions never touch it - the

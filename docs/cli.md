@@ -49,7 +49,7 @@ no-op `up` never asks.
   `moshi-hook status`. Non-destructive: the daemon is a child of the entrypoint; alternative is recreating
   the container, killing every SSH session. Needed after `moshi-hook pair` or a crash. See
   [Toolchain](toolchain.md#moshi-and-moshi-hook).
-- **`keys`** - one row per registry identity: its slug, SSH alias, and its two public keys (`id_<slug>.pub`,
+- **`keys`** - one row per registry identity: its slug, ssh tag, orgs, and its two public keys (`id_<slug>.pub`,
   `signing_<slug>.pub`, or `not set - <field> for [<slug>] in identities.conf` if
   either is empty), plus the sshd host-key fingerprint. Reads from the running container when it's up,
   else straight from `${DEVBOX_DATA_DIR}/.config/devbox/identities.conf`, naming which source it used. Not
@@ -215,9 +215,13 @@ Usage: ./bin/laptop-doctor
 
 Laptop-side, read-only counterpart of `devbox doctor`: gates on `~/.config/devbox/identities.conf`
 existing and passing `devbox-identities check` first, then loops the registry for the rest - no private
-key on disk, every identity's `.pub` files (plus `devbox.pub`) held by the 1Password agent; every `Host`
-block selecting one via that agent with `IdentitiesOnly`; every identity's gitconfig signing through
-`op-ssh-sign` with its own `signing_*.pub` key and an `allowed_signers` file covering all of them; `omp`
+key on disk, every identity's `.pub` files (plus `devbox.pub`) held by the 1Password agent; per forge host,
+the plain connection selecting the host's default key and each identity's tagged connection (`ssh -P <slug>`) selecting
+its own, with no leftover SSH-alias `Host` block; every identity's gitconfig
+signing through `op-ssh-sign` with its own `signing_*.pub` key and an `allowed_signers` file covering all of
+them; each `orgs` pattern probed as a `hasconfig:` remote from `/` - email, signing key and
+`core.sshCommand` matching what `org-<slug>.gitconfig` should set, and no `gitdir:` include left rewriting
+URLs; no clone still pointed at a stale SSH-alias remote (`devbox-identities alias-remotes`); `omp`
 resolving to the launcher through symlinks at both hops (a plain file is what an `omp update` takes over),
 `~/.local/bin/devbox-identities` still a symlink onto the libexec reader - the hop that makes the name
 resolve at all, since only `~/.local/bin` is on the PATH,
@@ -225,29 +229,34 @@ every installed agent file matching the repo template, `~/.config/devbox/git/` s
 login shell writing a git identity into it, no agent token (`x-access-token`) in the macOS keychain - a
 sign a system credential helper preempted `devbox-git-credential`; `secrets.env` at mode 600, every
 identity's `GH_TOKEN_<SLUG>` accepted by `gh`, each configured App's pem readable as a key; and every
-configured connection (one GitHub alias per registry identity, `devbox`, and the workstation if
-`DEVBOX_HOST` (in the environment or in `.push.env`, the same value `bin/push` reads) names its
-`~/.ssh/config` alias - unset just logs that the check is opt-in)
-authenticating, each GitHub alias mapping to a distinct account unless two blocks share one `pubkey` on
-purpose ([Git identities](git.md#-faq)). Reports every check, exits non-zero on
+configured connection (each registry identity - tagged where it has one, plain otherwise - `devbox`, and
+the workstation if `DEVBOX_HOST` (in the environment or in `.push.env`, the same value `bin/push` reads)
+names its `~/.ssh/config` alias - unset just logs that the check is opt-in) authenticating, two identities'
+connections mapping to a distinct account unless two blocks share one `pubkey` on purpose
+([Git identities](git.md#-faq)). Reports every check, exits non-zero on
 failure. Safe inside an agent session: drops the launcher's exports and PATH entry first, auditing your own
 config. The `devbox-laptop` skill walks the fixes.
 
 ## `devbox-identities`
 
 ```
-Usage: devbox-identities list|default|get|show|for|check|file|render ...
+Usage: devbox-identities list|dir-slugs|default|get|show|for|check|file|org-urls|alias-remotes|render ...
 
   list                                    Slugs, in config order
+  dir-slugs                               Slugs claiming a tree, shortest dir first
   default                                 The slug with no 'dir' (the default identity)
-  get <slug> <field>                      One resolved field (see identities.conf.example for the list)
+  get <slug> <field>                      One resolved field (see identities.conf.example for the list);
+                                           'tag' is the ssh tag (empty when the plain key already matches)
   show <slug>                             Every resolved field for one identity
   for [directory]                         The slug that owns a tree (default: $PWD)
   check                                   Validate the registry; non-zero and a message per problem on error
   file                                    Path to the registry in effect ($DEVBOX_IDENTITIES_FILE)
-  render ssh-config                       ~/.ssh/config's identity Host blocks
+  org-urls <slug>                         hasconfig: URL patterns its 'orgs' match
+  alias-remotes                           Clones still on a git@<slug>.<host>: remote from the SSH-alias era
+  render ssh-config                       ~/.ssh/config's per-host and per-tag blocks
   render agent-gitconfig [slug]           The root agent.gitconfig, or one identity's [user] block
-  render user-gitconfig <slug>            One identity's own gitconfig (devbox-side, signing key included)
+  render user-gitconfig <slug>            One identity's own gitconfig for its tree ([user] only)
+  render org-gitconfig <slug>             One identity's own gitconfig for its orgs ([user] + ssh tag)
   render allowed-signers                  ~/.ssh/allowed_signers, one line per identity with a signing key
 ```
 
@@ -261,6 +270,7 @@ agent-gitconfig` at `agent.gitconfig.tpl` when it isn't at the default `~/.confi
 ```bash
 devbox-identities list                    # one slug per line, e.g. personal, work
 devbox-identities get work dir             # ~/projects/work
+devbox-identities get work tag             # work, or empty if it shares the host's plain key
 devbox-identities for ~/projects/work/app  # work (longest matching dir prefix wins)
 devbox-identities check || echo 'fix identities.conf before bootstrapping'
 ```

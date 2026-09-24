@@ -4,8 +4,9 @@
 #
 # The one reader of ~/.config/devbox/identities.conf. Everything identity-shaped
 # on either machine is derived from that file through this script: ~/.ssh/config,
-# ~/.gitconfig's includeIf chain, allowed_signers, the agent gitconfigs, which
-# GitHub token a directory gets and which GitHub App may mint a token for it.
+# ~/.gitconfig's includeIf chains (by tree and by GitHub owner), allowed_signers,
+# the agent gitconfigs, which GitHub token a directory gets and which GitHub App
+# may mint a token for it.
 # Adding an account is therefore a block in the config file and nothing else -
 # no branch here, no line in bootstrap, no variable in .env.
 #
@@ -21,6 +22,9 @@
 #   devbox-identities render ssh-config
 #   devbox-identities render agent-gitconfig [slug]
 #   devbox-identities render user-gitconfig <slug>
+#   devbox-identities render org-gitconfig <slug>
+#   devbox-identities org-urls <slug>           # URL patterns its orgs match
+#   devbox-identities alias-remotes             # clones still on an old SSH alias
 #   devbox-identities render allowed-signers
 #
 # Deliberately bash 3.2 compatible (no associative arrays, no `${x^^}`): the
@@ -30,7 +34,7 @@ set -euo pipefail
 DEVBOX_IDENTITIES_FILE="${DEVBOX_IDENTITIES_FILE:-${HOME}/.config/devbox/identities.conf}"
 DEVBOX_IDENTITIES_TEMPLATE_DIR="${DEVBOX_IDENTITIES_TEMPLATE_DIR:-}"
 
-readonly DI_FIELDS='dir name email pubkey signing_pubkey agent_name agent_email app host alias'
+readonly DI_FIELDS='dir name email pubkey signing_pubkey agent_name agent_email app host orgs'
 
 di_die() {
   printf 'devbox-identities: %s\n' "$*" >&2
@@ -139,16 +143,20 @@ di_get() {
     printf '%s\n' "${value:-github.com}"
     return 0
     ;;
-  alias)
-    value="$(di_raw "${slug}" alias)"
-    if [[ -z ${value} ]]; then
-      if [[ ${slug} == "$(di_default)" ]]; then
-        value="$(di_get "${slug}" host)"
-      else
-        value="${slug}.$(di_get "${slug}" host)"
-      fi
-    fi
-    printf '%s\n' "${value}"
+  orgs)
+    # Space- or comma-separated as written, one per line here.
+    di_raw "${slug}" orgs | tr ', ' '\n\n' | sed '/^$/d'
+    return 0
+    ;;
+  tag)
+    # The ssh tag (`ssh -P <tag>`) that selects this identity's key: the slug,
+    # when its key differs from the one a plain connection to its host gets.
+    # Empty otherwise - no tag needed, and none rendered.
+    value="$(di_raw "${slug}" pubkey)"
+    [[ -n ${value} ]] || return 0
+    default_slug="$(di_host_default "$(di_get "${slug}" host)")"
+    [[ ${slug} == "${default_slug}" || ${value} == "$(di_raw "${default_slug}" pubkey)" ]] ||
+      printf '%s\n' "${slug}"
     return 0
     ;;
   agent_name | agent_email)
@@ -185,6 +193,36 @@ di_get() {
     return 0
     ;;
   esac
+}
+
+# The identity whose key a plain `ssh git@<host>` offers: the default identity
+# when it lives on that host, else the first one in config order that does.
+di_host_default() {
+  local host="$1" slug default_slug
+  default_slug="$(di_default)"
+  if [[ -n ${default_slug} && "$(di_get "${default_slug}" host)" == "${host}" ]]; then
+    printf '%s\n' "${default_slug}"
+    return 0
+  fi
+  for slug in $(di_slugs); do
+    if [[ "$(di_get "${slug}" host)" == "${host}" ]]; then
+      printf '%s\n' "${slug}"
+      return 0
+    fi
+  done
+}
+
+# Every remote URL an identity's orgs claim, as `hasconfig:remote.*.url:`
+# patterns. Matched as text and case-sensitively, so one per form git accepts
+# for a GitHub remote, spelled as GitHub spells the owner (docs/git.md).
+di_org_urls() {
+  local slug="$1" host org
+  host="$(di_get "${slug}" host)"
+  for org in $(di_get "${slug}" orgs); do
+    printf 'git@%s:%s/**\n' "${host}" "${org}"
+    printf 'ssh://git@%s/%s/**\n' "${host}" "${org}"
+    printf 'https://%s/%s/**\n' "${host}" "${org}"
+  done
 }
 
 # Both spellings of a path: as given, and with every symlink resolved. A worktree
@@ -226,15 +264,15 @@ di_for() {
 
 di_show() {
   local slug="$1" field
-  for field in ${DI_FIELDS} token_var api; do
-    printf '%-15s %s\n' "${field}" "$(di_get "${slug}" "${field}")"
+  for field in ${DI_FIELDS} tag token_var api; do
+    printf '%-15s %s\n' "${field}" "$(di_get "${slug}" "${field}" | tr '\n' ' ' | sed 's/ $//')"
   done
 }
 
 # Every error at once: this runs from the entrypoint, where a second pass costs a
 # container restart.
 di_check() {
-  local slugs slug field other messages='' default_count=0 dir alias
+  local slugs slug field other messages='' default_count=0 dir orgs org
   # Collected rather than printed as they are found: a block declared twice is
   # walked twice, and the same complaint twice reads like two problems.
   report() { messages="${messages}${1}
@@ -269,7 +307,13 @@ di_check() {
     for field in $(di_keys "${slug}"); do
       case " ${DI_FIELDS} " in
       *" ${field} "*) ;;
-      *) report "[${slug}] has no field '${field}' (known: ${DI_FIELDS})" ;;
+      *)
+        if [[ ${field} == alias ]]; then
+          report "[${slug}] has an 'alias' field - SSH aliases are gone; list the GitHub owners whose repositories belong to this identity in 'orgs' instead (docs/git.md)"
+        else
+          report "[${slug}] has no field '${field}' (known: ${DI_FIELDS})"
+        fi
+        ;;
       esac
     done
 
@@ -302,11 +346,29 @@ di_check() {
         report "[${slug}] dir '$(di_raw "${slug}" dir)' is not absolute - write it as /path or ~/path"
     fi
 
-    alias="$(di_get "${slug}" alias)"
+    # An org is how a `git@<host>:<org>/...` remote finds this identity's key
+    # and author; one claimed twice would get whichever include git reads last.
+    orgs="$(di_get "${slug}" orgs)"
+    for org in ${orgs}; do
+      [[ ${org} =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] ||
+        report "[${slug}] orgs entry '${org}' is not a GitHub owner name (letters, digits and -)"
+    done
+    # A key of its own with no orgs has nothing to select it: every `git@<host>:`
+    # remote would offer the default key and reach the default account.
+    [[ -z "$(di_get "${slug}" tag)" || -n ${orgs} ]] ||
+      report "[${slug}] has its own pubkey but no orgs - list the GitHub owners whose repositories it pushes to, or nothing selects its key"
     for other in ${slugs}; do
       [[ ${other} != "${slug}" ]] || continue
-      [[ "$(di_get "${other}" alias)" != "${alias}" ]] || report "[${slug}] and [${other}] share the SSH alias ${alias} - set a distinct 'alias' on one"
       [[ -z ${dir} || "$(di_get "${other}" dir)" != "${dir}" ]] || report "[${slug}] and [${other}] share the directory ${dir}"
+      [[ "$(di_get "${other}" host)" == "$(di_get "${slug}" host)" ]] || continue
+      # Once per pair, not once from each side.
+      [[ ${slug} < ${other} ]] || continue
+      for org in ${orgs}; do
+        # GitHub owner names are case-insensitive, so ApiTree and apitree clash.
+        if di_get "${other}" orgs | grep -qix -- "${org}"; then
+          report "[${slug}] and [${other}] both claim the org ${org}"
+        fi
+      done
     done
   done
 
@@ -325,8 +387,14 @@ di_check() {
 # All of these write to stdout, so the callers can install them with `install -m`
 # and compare a fresh render against what is on disk.
 
+# One block per forge host, then one `Match ... tagged <slug>` per identity
+# whose key differs from the host's plain one, and the host's plain key for
+# every connection carrying none of those tags. The tag, not the hostname, picks
+# the key: git's `core.sshCommand = ssh -P <slug>` sets it for the repositories
+# an identity's orgs own (render org-gitconfig), so remotes stay
+# `git@github.com:org/repo` - no alias host to clone from.
 di_render_ssh_config() {
-  local slug host alias key
+  local hosts host slug tags plain
   cat <<'HEADER'
 # Generated from ~/.config/devbox/identities.conf by devbox-identities - edit the
 # config, not this file. Absolute paths only: agents run non-interactively and
@@ -335,16 +403,27 @@ di_render_ssh_config() {
 # No private keys live here. IdentityFile names a *public* key, which with
 # IdentitiesOnly makes ssh offer exactly that key from the forwarded 1Password
 # agent (`ssh -A devbox`) - otherwise the agent would offer every key it holds
-# and the forge would accept whichever account comes first. Agent sessions never
-# reach this file: their git is rewritten to HTTPS (docs/git.md).
+# and the forge would accept whichever account comes first. Which key: the tag
+# git passes (`ssh -P <slug>`) for an identity's orgs, else the plain one. Agent
+# sessions never reach this file: their git is rewritten to HTTPS (docs/git.md).
 HEADER
-  for slug in $(di_slugs); do
-    host="$(di_get "${slug}" host)"
-    alias="$(di_get "${slug}" alias)"
-    key="${HOME}/.ssh/id_${slug}.pub"
-    printf '\nHost %s\n' "${alias}"
-    [[ ${alias} == "${host}" ]] || printf '  HostName %s\n' "${host}"
-    printf '  User git\n  IdentityFile %s\n  IdentitiesOnly yes\n' "${key}"
+  hosts="$(for slug in $(di_slugs); do di_get "${slug}" host; done | awk '!seen[$0]++')"
+  for host in ${hosts}; do
+    printf '\nHost %s\n  User git\n  IdentitiesOnly yes\n' "${host}"
+    tags=''
+    for slug in $(di_slugs); do
+      [[ "$(di_get "${slug}" host)" == "${host}" && -n "$(di_get "${slug}" tag)" ]] || continue
+      printf 'Match host %s tagged %s\n  IdentityFile %s/.ssh/id_%s.pub\n' "${host}" "${slug}" "${HOME}" "${slug}"
+      tags="${tags:+${tags},}${slug}"
+    done
+    plain="$(di_host_default "${host}")"
+    [[ -n "$(di_raw "${plain}" pubkey)" ]] || continue
+    if [[ -n ${tags} ]]; then
+      printf 'Match host %s !tagged %s\n' "${host}" "${tags}"
+    else
+      printf 'Match host %s\n' "${host}"
+    fi
+    printf '  IdentityFile %s/.ssh/id_%s.pub\n' "${HOME}" "${plain}"
   done
   cat <<'TAIL'
 
@@ -370,19 +449,16 @@ di_render_agent_gitconfig() {
   done <"${tpl}"
 }
 
-# One [url] section per forge host, listing every alias that resolves to it, and
-# one credential-helper section per host. `useHttpPath` is what lets the helper
-# see which repository a request is for and mint a repository-scoped token.
+# One [url] section per forge host and one credential-helper section per host.
+# `useHttpPath` is what lets the helper see which repository a request is for
+# and mint a repository-scoped token.
 di_render_url_rewrites() {
   local hosts host slug
   hosts="$(for slug in $(di_slugs); do di_get "${slug}" host; done | sort -u)"
   for host in ${hosts}; do
     printf '[url "https://%s/"]\n' "${host}"
-    for slug in $(di_slugs); do
-      [[ "$(di_get "${slug}" host)" == "${host}" ]] || continue
-      printf '\tinsteadOf = git@%s:\n' "$(di_get "${slug}" alias)"
-      printf '\tinsteadOf = %s:\n' "$(di_get "${slug}" alias)"
-    done
+    printf '\tinsteadOf = git@%s:\n' "${host}"
+    printf '\tinsteadOf = %s:\n' "${host}"
     printf '\tinsteadOf = ssh://git@%s/\n' "${host}"
     # The `gh:` shorthand from ~/.gitconfig, which only makes sense for the
     # public instance.
@@ -426,21 +502,59 @@ di_render_agent_includes() {
   done
 }
 
-# Your own identity for a tree, included from ~/.gitconfig. Not the agent's: this
-# one signs, with the public key the forwarded 1Password agent holds.
-di_render_user_gitconfig() {
-  local slug="$1" alias host
-  alias="$(di_get "${slug}" alias)"
-  host="$(di_get "${slug}" host)"
-  printf '# Generated from ~/.config/devbox/identities.conf by devbox-identities.\n'
-  printf '# Your own git identity for %s.\n' "$(di_get "${slug}" dir)"
+# The [user] block both includes below share: your own identity, signing with
+# the public key the forwarded 1Password agent holds. Not the agent's.
+di_render_user_block() {
+  local slug="$1"
   printf '[user]\n\tname = %s\n\temail = %s\n\tsigningkey = %s/.ssh/signing_%s.pub\n' \
     "$(di_get "${slug}" name)" "$(di_get "${slug}" email)" "${HOME}" "${slug}"
-  [[ ${alias} == "${host}" ]] && return 0
-  # Points existing `git@<host>:` remotes inside this tree at the alias, so they
-  # offer this identity's key. A new clone must use the alias itself: URL
-  # rewriting from an includeIf file cannot apply before the directory exists.
-  printf '[url "git@%s:"]\n\tinsteadOf = git@%s:\n' "${alias}" "${host}"
+}
+
+# Your own identity for a tree, included from ~/.gitconfig by `gitdir:`. Author
+# and signing key only: the SSH key follows the repository's owner (below), so
+# a personal repository cloned into a work tree still pushes as you.
+di_render_user_gitconfig() {
+  local slug="$1"
+  printf '# Generated from ~/.config/devbox/identities.conf by devbox-identities.\n'
+  printf '# Your own git identity for %s.\n' "$(di_get "${slug}" dir)"
+  di_render_user_block "${slug}"
+}
+
+# Your own identity for every repository an identity's orgs own, included from
+# ~/.gitconfig by `hasconfig:remote.*.url:` (di_org_urls) - which, unlike
+# `gitdir:`, already holds during the first `git clone`, since clone writes the
+# remote before it fetches. The ssh tag makes ssh offer this identity's key.
+# Git forbids remote URLs in a file included this way; none are set here.
+di_render_org_gitconfig() {
+  local slug="$1" tag
+  tag="$(di_get "${slug}" tag)"
+  printf '# Generated from ~/.config/devbox/identities.conf by devbox-identities.\n'
+  printf '# Your own git identity for repositories owned by %s.\n' "$(di_get "${slug}" orgs | tr '\n' ' ' | sed 's/ $//')"
+  di_render_user_block "${slug}"
+  [[ -z ${tag} ]] || printf '[core]\n\tsshCommand = ssh -P %s\n' "${tag}"
+}
+
+# Clones left from the SSH-alias era: a `git@<slug>.<host>:` remote on a known
+# host, in any repository up to two levels under an identity's tree. Prints
+# `<repo> <remote> <plain url>` per hit - the `git remote set-url` arguments.
+# Nothing resolves those alias hosts any more, and the agent rewrite to HTTPS
+# no longer covers them either.
+di_alias_remotes() {
+  local hosts slug dir gitdir repo name url
+  hosts=" $(for slug in $(di_slugs); do di_get "${slug}" host; done | sort -u | tr '\n' ' ')"
+  for slug in $(di_dir_slugs); do
+    dir="$(di_get "${slug}" dir)"
+    for gitdir in "${dir}"/*/.git "${dir}"/*/*/.git; do
+      [[ -e ${gitdir} ]] || continue
+      repo="${gitdir%/.git}"
+      while read -r name url; do
+        [[ ${url} =~ ^git@[a-z][a-z0-9_]*\.([^:]+):(.+)$ ]] || continue
+        [[ ${hosts} == *" ${BASH_REMATCH[1]} "* ]] || continue
+        printf '%s %s git@%s:%s\n' "${repo}" "${name}" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+      done < <(git -C "${repo}" config --get-regexp '^remote\..*\.url$' 2>/dev/null |
+        sed -E 's/^remote\.(.*)\.url /\1 /')
+    done
+  done
 }
 
 # So `git log --show-signature` verifies your own commits locally. Agent commits
@@ -481,10 +595,19 @@ if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
       [[ -n ${3:-} ]] || di_die 'usage: devbox-identities render user-gitconfig <slug>'
       di_render_user_gitconfig "$3"
       ;;
+    org-gitconfig)
+      [[ -n ${3:-} ]] || di_die 'usage: devbox-identities render org-gitconfig <slug>'
+      di_render_org_gitconfig "$3"
+      ;;
     allowed-signers) di_render_allowed_signers ;;
-    *) di_die 'usage: devbox-identities render ssh-config|agent-gitconfig [slug]|user-gitconfig <slug>|allowed-signers' ;;
+    *) di_die 'usage: devbox-identities render ssh-config|agent-gitconfig [slug]|user-gitconfig <slug>|org-gitconfig <slug>|allowed-signers' ;;
     esac
     ;;
-  *) di_die 'usage: devbox-identities list|dir-slugs|default|get|show|for|check|file|render ...' ;;
+  org-urls)
+    [[ -n ${2:-} ]] || di_die 'usage: devbox-identities org-urls <slug>'
+    di_org_urls "$2"
+    ;;
+  alias-remotes) di_alias_remotes ;;
+  *) di_die 'usage: devbox-identities list|dir-slugs|default|get|show|for|check|file|org-urls|alias-remotes|render ...' ;;
   esac
 fi

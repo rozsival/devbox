@@ -135,10 +135,13 @@ if ! config_err="$(ssh -G localhost 2>&1 >/dev/null)"; then
   # shellcheck disable=SC2088  # literal ~ in a message
   fail "~/.ssh/config does not parse: ${config_err//$'\n'/; }"
 fi
+# `tag` is what git passes as `ssh -P <tag>` for an identity's orgs; empty for
+# a plain connection.
 check_host() {
-  local host="$1" resolved agent_cfg only files pub
-  shift
-  resolved="$(ssh -G "${host}" 2>/dev/null)" || {
+  local host="$1" tag="$2" label resolved agent_cfg only files pub
+  shift 2
+  label="Host ${host}${tag:+ tagged ${tag}}"
+  resolved="$(ssh ${tag:+-P "${tag}"} -G "${host}" 2>/dev/null)" || {
     fail "ssh -G ${host} failed"
     return
   }
@@ -147,24 +150,38 @@ check_host() {
   files="$(sed -n 's/^identityfile //p' <<<"${resolved}")"
   files="${files//\~/${HOME}}"
   if [[ ${agent_cfg} != *1password* ]]; then
-    fail "Host ${host}: IdentityAgent is not the 1Password socket (${agent_cfg:-unset})"
+    fail "${label}: IdentityAgent is not the 1Password socket (${agent_cfg:-unset})"
     return
   elif [[ ${only} != yes ]]; then
-    fail "Host ${host}: IdentitiesOnly is not yes"
+    fail "${label}: IdentitiesOnly is not yes"
     return
   fi
   for pub in "$@"; do
     if [[ ${files} == "${SSH_DIR}/${pub}.pub" ]]; then
-      log_success "Host ${host} → ${pub}.pub via 1Password"
+      log_success "${label} → ${pub}.pub via 1Password"
       return
     fi
   done
   # shellcheck disable=SC2088  # literal ~ in a message
-  fail "Host ${host}: IdentityFile is '${files//$'\n'/, }', expected one of: $(printf '~/.ssh/%s.pub ' "$@")"
+  fail "${label}: IdentityFile is '${files//$'\n'/, }', expected exactly one of: $(printf '~/.ssh/%s.pub ' "$@")"
 }
 if ((identities_ok)); then
-  for slug in ${slugs}; do
-    check_host "$(di_get "${slug}" alias)" "id_${slug}"
+  # Per forge host: the plain connection gets the host's default key, and each
+  # tag exactly its identity's - one IdentityFile each, since ssh tries the
+  # listed keys in the agent's order, not the order they are written in.
+  for host in $(for slug in ${slugs}; do di_get "${slug}" host; done | sort -u); do
+    check_host "${host}" '' "id_$(di_host_default "${host}")"
+    for slug in ${slugs}; do
+      tag="$(di_get "${slug}" tag)"
+      [[ -n ${tag} && "$(di_get "${slug}" host)" == "${host}" ]] || continue
+      check_host "${host}" "${tag}" "id_${slug}"
+    done
+    for slug in ${slugs}; do
+      if grep -Eqi "^[[:space:]]*Host[[:space:]].*(^|[[:space:]])${slug}\.${host//./\\.}([[:space:]]|$)" "${SSH_DIR}/config" 2>/dev/null; then
+        # shellcheck disable=SC2088  # literal ~ in a message
+        fail "~/.ssh/config still has the alias Host ${slug}.${host} - aliases are gone; delete the block (the tag selects the key)"
+      fi
+    done
   done
 fi
 # Not identity-derived: no slug names the workstation, so it comes from
@@ -172,14 +189,14 @@ fi
 # meant to go public.
 if [[ -n ${workstation_host} ]]; then
   if ((identities_ok)); then
-    check_host "${workstation_host}" devbox "id_${default_slug}"
+    check_host "${workstation_host}" '' devbox "id_${default_slug}"
   else
-    check_host "${workstation_host}" devbox
+    check_host "${workstation_host}" '' devbox
   fi
 else
   log_info 'DEVBOX_HOST not set (env or .push.env) - skipping the Host <workstation> ssh config check'
 fi
-check_host devbox devbox
+check_host devbox '' devbox
 if [[ "$(ssh -G devbox 2>/dev/null | sed -n 's/^forwardagent //p')" == yes ]]; then
   fail 'Host devbox: ForwardAgent yes - herdr would carry your agent into every session; forward explicitly with ssh -A instead'
 fi
@@ -211,9 +228,34 @@ if ((identities_ok)); then
       # shellcheck disable=SC2088  # literal ~ in a message
       fail "includeIf gitdir:${dir_raw}/ is not configured in ~/.gitconfig"
     else
-      check_git "[${slug}] user.signingkey" "${SSH_DIR}/signing_${slug}.pub" "$(git config --file "${include_cfg/#\~/${HOME}}" user.signingkey || true)"
+      include_file="${include_cfg/#\~/${HOME}}"
+      check_git "[${slug}] user.signingkey" "${SSH_DIR}/signing_${slug}.pub" "$(git config --file "${include_file}" user.signingkey || true)"
+      if git config --file "${include_file}" --get-regexp '^url\..*\.insteadof$' >/dev/null 2>&1; then
+        fail "${include_file} still rewrites remote URLs (url.*.insteadOf) - aliases are gone; replace it with: devbox-identities render user-gitconfig ${slug}"
+      fi
     fi
   done
+  # Per GitHub owner: a probe remote in each URL form, evaluated from / so no
+  # `gitdir:` include interferes - exactly what a first `git clone` sees.
+  for slug in ${slugs}; do
+    tag="$(di_get "${slug}" tag)"
+    while IFS= read -r pattern; do
+      probe="${pattern%\*\*}probe.git"
+      got_email="$(git -C / -c "remote.origin.url=${probe}" config user.email || true)"
+      got_key="$(git -C / -c "remote.origin.url=${probe}" config user.signingkey || true)"
+      got_ssh="$(git -C / -c "remote.origin.url=${probe}" config core.sshCommand || true)"
+      if [[ ${got_email} == "$(di_get "${slug}" email)" && ${got_key} == "${SSH_DIR}/signing_${slug}.pub" &&
+      ${got_ssh} == "${tag:+ssh -P ${tag}}" ]]; then
+        log_success "[${slug}] ${pattern} → ${got_email}${tag:+, ssh -P ${tag}}"
+      else
+        fail "[${slug}] a ${pattern} remote gets '${got_email:-no email}', '${got_key:-no signing key}', '${got_ssh:-no sshCommand}' - add includeIf \"hasconfig:remote.*.url:${pattern}\" to ~/.gitconfig with path = a file holding: devbox-identities render org-gitconfig ${slug}"
+      fi
+    done < <(di_org_urls "${slug}")
+  done
+  stale_remotes="$(di_alias_remotes)"
+  if [[ -n ${stale_remotes} ]]; then
+    fail "clones still on an SSH alias (nothing resolves those now): $(awk '{printf "%sgit -C %s remote set-url %s %s", sep, $1, $2, $3; sep = "; "}' <<<"${stale_remotes}")"
+  fi
   signing_keys_on_disk=0
   for slug in ${slugs}; do
     [[ -f "${SSH_DIR}/signing_${slug}.pub" ]] || continue
@@ -401,29 +443,30 @@ fi
 
 # -- 6. Connections ------------------------------------------------------------
 log_info 'connections'
-# Which login answers is only informative; the check is that every alias
-# authenticates and that two identities on the same forge reach two *different*
-# accounts, which is what their separate IdentityFile selections exist for -
-# unless the registry gives both the same pubkey, which declares one account
+# Which login answers is only informative; the check is that every identity's
+# connection - `ssh -P <tag>` where it has a key of its own, plain otherwise -
+# authenticates, and that two identities on the same forge reach two
+# *different* accounts, which is what their separate keys exist for - unless
+# the registry gives both the same pubkey, which declares one account
 # deliberately split by directory (e.g. a private org needing its own PAT).
 github_login() {
-  ssh -o BatchMode=yes -o ConnectTimeout=10 -T "git@$1" 2>&1 | sed -n 's/^Hi \([^!]*\)!.*/\1/p' || true
+  ssh ${2:+-P "$2"} -o BatchMode=yes -o ConnectTimeout=10 -T "git@$1" 2>&1 | sed -n 's/^Hi \([^!]*\)!.*/\1/p' || true
 }
 if ((identities_ok)); then
-  conn_slugs=() conn_aliases=() conn_hosts=() conn_logins=() conn_pubkeys=()
+  conn_slugs=() conn_hosts=() conn_logins=() conn_pubkeys=()
   for slug in ${slugs}; do
-    alias_name="$(di_get "${slug}" alias)"
     host="$(di_get "${slug}" host)"
-    login="$(github_login "${alias_name}")"
+    tag="$(di_get "${slug}" tag)"
+    label="git@${host}${tag:+ (ssh -P ${tag})}"
+    login="$(github_login "${host}" "${tag}")"
     conn_slugs+=("${slug}")
-    conn_aliases+=("${alias_name}")
     conn_hosts+=("${host}")
     conn_logins+=("${login}")
     conn_pubkeys+=("$(di_get "${slug}" pubkey)")
     if [[ -n ${login} ]]; then
-      log_success "git@${alias_name} → ${login}"
+      log_success "[${slug}] ${label} → ${login}"
     else
-      fail "git@${alias_name} did not authenticate"
+      fail "[${slug}] ${label} did not authenticate"
     fi
   done
   conn_count=${#conn_slugs[@]}
@@ -432,7 +475,7 @@ if ((identities_ok)); then
       [[ ${conn_hosts[i]} == "${conn_hosts[j]}" ]] || continue
       [[ -n ${conn_logins[i]} && ${conn_logins[i]} == "${conn_logins[j]}" ]] || continue
       [[ -z ${conn_pubkeys[i]} || ${conn_pubkeys[i]} != "${conn_pubkeys[j]}" ]] || continue
-      fail "[${conn_slugs[i]}] and [${conn_slugs[j]}] both reach ${conn_logins[i]} on ${conn_hosts[i]} - one of their id_<slug>.pub files selects the wrong key"
+      fail "[${conn_slugs[i]}] and [${conn_slugs[j]}] both reach ${conn_logins[i]} on ${conn_hosts[i]} - the ssh config offers the wrong key for one of them (ssh -G -P <slug> ${conn_hosts[i]})"
     done
   done
 else

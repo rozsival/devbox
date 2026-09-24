@@ -44,7 +44,7 @@ agent_session() {
 }
 
 # owner/repo out of `owner/repo`, `HOST/owner/repo`, an HTTPS URL or an SSH
-# remote (`git@alias:owner/repo.git`); nothing for anything else.
+# remote (`git@host:owner/repo.git`); nothing for anything else.
 owner_repo() {
   local spec="${1%/}" name rest owner
   spec="${spec%.git}"

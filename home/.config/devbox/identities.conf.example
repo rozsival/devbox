@@ -13,9 +13,9 @@
 # `[a-z][a-z0-9_]*` and names everything derived from the identity:
 #
 #   ~/.ssh/id_<slug>.pub, ~/.ssh/signing_<slug>.pub   the laptop keys it selects
-#   <slug>.<host>                                     its SSH host alias
 #   GH_TOKEN_<SLUG> in secrets.env                    its fine-grained PAT
-#   agent-<slug>.gitconfig, user-<slug>.gitconfig     its generated git config
+#   agent-<slug>.gitconfig, user-<slug>.gitconfig,
+#   org-<slug>.gitconfig                              its generated git config
 #
 # Fields, all `key = value`, `#` comments on their own line:
 #
@@ -48,11 +48,13 @@
 #                   PAT, and `agent_*` should then be the App's bot user.
 #   host            Forge host; default `github.com`. Set it to a GitHub
 #                   Enterprise host to put that identity on that instance - the
-#                   SSH alias, the HTTPS rewrite and the API the credential
-#                   helper calls all follow.
-#   alias           SSH host alias; default `<slug>.<host>`, and plain `<host>`
-#                   for the default identity. Only set it to keep an existing
-#                   alias working.
+#                   HTTPS rewrite and the API the credential helper calls both
+#                   follow.
+#   orgs            GitHub owners (orgs or user logins) whose repositories this
+#                   identity pushes to - space- or comma-separated, spelled
+#                   exactly as GitHub spells them (matching is case-sensitive).
+#                   Required for an identity whose `pubkey` differs from the
+#                   default's, since nothing else would ever select its key.
 
 [personal]
 name = Your Name
@@ -62,8 +64,9 @@ signing_pubkey =
 agent_name = your-agent
 agent_email = your-agent@users.noreply.github.com
 
-# A second account, selected by the tree a repository is cloned into. Clone with
-# the alias so the right key is offered: git clone git@work.github.com:org/repo
+# A second account, selected by the tree a repository is cloned into. Its own
+# key needs `orgs` naming the GitHub owner(s) it pushes to, or nothing ever
+# selects that key over the default one: git clone git@github.com:your-org/repo
 # ~/projects/work/repo
 #[work]
 #dir = ~/projects/work
@@ -73,6 +76,7 @@ agent_email = your-agent@users.noreply.github.com
 #signing_pubkey =
 #agent_name = your-app[bot]
 #agent_email = 00000000+your-app[bot]@users.noreply.github.com
+#orgs = your-org
 #app = ~/.config/work/your-app
 
 # A GitHub Enterprise account. Everything derived from it moves to that host.
@@ -83,3 +87,4 @@ agent_email = your-agent@users.noreply.github.com
 #email = you@enterprise.example.com
 #pubkey =
 #signing_pubkey =
+#orgs = your-enterprise-org

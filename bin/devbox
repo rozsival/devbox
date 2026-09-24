@@ -290,7 +290,7 @@ cmd_keys() {
       set -e
       . "$HOME/.local/libexec/devbox-identities"
       for slug in $(di_slugs); do
-        printf "%-12s alias %s\n" "$slug" "$(di_get "$slug" alias)"
+        printf "%-12s ssh tag %s, orgs %s\n" "$slug" "$(di_get "$slug" tag)" "$(di_get "$slug" orgs | tr "\n" " ")"
         for kind in id signing; do
           if [[ "$kind" == signing ]]; then field=signing_pubkey; else field=pubkey; fi
           file="$HOME/.ssh/${kind}_${slug}.pub"
@@ -312,8 +312,9 @@ cmd_keys() {
     identities_file="${data_dir}/.config/devbox/identities.conf"
     log_warn "Container not reachable; reading ${identities_file} directly."
     for slug in $(DEVBOX_IDENTITIES_FILE="${identities_file}" "${reader}" list); do
-      printf '%-12s alias %s\n' "${slug}" \
-        "$(DEVBOX_IDENTITIES_FILE="${identities_file}" "${reader}" get "${slug}" alias)"
+      printf '%-12s ssh tag %s, orgs %s\n' "${slug}" \
+        "$(DEVBOX_IDENTITIES_FILE="${identities_file}" "${reader}" get "${slug}" tag)" \
+        "$(DEVBOX_IDENTITIES_FILE="${identities_file}" "${reader}" get "${slug}" orgs | tr '\n' ' ')"
       for kind in id signing; do
         if [[ "${kind}" == signing ]]; then field=signing_pubkey; else field=pubkey; fi
         file="${data_dir}/.ssh/${kind}_${slug}.pub"
