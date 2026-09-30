@@ -17,7 +17,7 @@ Usage: ./bin/devbox <command>
   shell             Open a login shell inside the container
   sessions          List the SSH sessions connected to the container
   logs [-f]         Show container logs (last 100 lines; -f follows)
-  hook              Restart the moshi-hook daemon in place and print its status
+  hook [--update]   Restart the moshi-hook daemon in place (--update upgrades it first)
   keys              Print the installed identity public keys and sshd host-key fingerprint
   doctor            Check host wiring, exposure, and the in-container toolchain
 ```
@@ -47,8 +47,9 @@ no-op `up` never asks.
 - **`logs`** - `--tail 100` by default; `-f` follows.
 - **`hook`** - stops and restarts `moshi-hook` via detached `docker compose exec`, prints
   `moshi-hook status`. Non-destructive: the daemon is a child of the entrypoint; alternative is recreating
-  the container, killing every SSH session. Needed after `moshi-hook pair` or a crash. See
-  [Toolchain](toolchain.md#moshi-and-moshi-hook).
+  the container, killing every SSH session. Needed after `moshi-hook pair` or a crash. `--update`/`-u`
+  first runs `moshi-hook update` and `moshi-hook install --target omp`; a failed update aborts before the
+  running daemon is stopped. See [Toolchain](toolchain.md#moshi-and-moshi-hook).
 - **`keys`** - one row per registry identity: its slug, ssh tag, orgs, and its two public keys (`id_<slug>.pub`,
   `signing_<slug>.pub`, or `not set - <field> for [<slug>] in identities.conf` if
   either is empty), plus the sshd host-key fingerprint. Reads from the running container when it's up,

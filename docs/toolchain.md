@@ -124,7 +124,8 @@ state survives rebuilds under the bind-mounted home like other credentials.
 No systemd means `moshi-hook service install` can't be used - `container/entrypoint.sh` starts the daemon,
 tying its lifetime to the container's. Restart a crashed/hand-killed one with `./bin/devbox hook` (a
 detached `docker compose exec`: no recreate, no dropped SSH sessions); `./bin/devbox up` alone won't revive
-it unless compose recreates the container.
+it unless compose recreates the container. A new release is `./bin/devbox hook --update`: `moshi-hook
+update`, the OMP extension rewritten, then the same restart - `update` alone leaves the old version serving.
 
 A second daemon is harmless: `serve` exits with `another moshi-hook serve is already running (pid N, lock
 …)`, and a killed daemon's lock never blocks the next start, even across PID reuse.
@@ -135,7 +136,7 @@ permitted by `AllowTcpForwarding yes` in `container/sshd_config` - so nothing ne
 ```bash
 moshi-hook status                    # pairing, multiplexers, per-agent hook state
 moshi-hook logs -f                   # ~/.local/state/moshi/hook.log
-moshi-hook install --target omp      # rewrite the OMP extension after an update
+moshi-hook install --target omp      # rewrite the OMP extension by hand (hook --update already does)
 ```
 
 ## Agent skills and browser automation

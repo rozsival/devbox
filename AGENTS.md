@@ -151,8 +151,10 @@ the host's root Docker daemon.
 - `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`,
   `logs`, `hook`, `keys`, `doctor`); `up`/`down`/`rebuild` refuse to drop live SSH sessions without
   `--force`, `hook` restarts the `moshi-hook` daemon with a detached `exec` precisely so it does not have
-  to, and `keys` prints every identity's installed public keys (or "not set") plus the sshd host-key
-  fingerprint - nothing to paste anywhere, since they are already the laptop's own keys
+  to (`--update` runs `moshi-hook update` and rewrites the OMP extension first, aborting before the old
+  daemon is stopped if the update fails), and `keys` prints every identity's installed public keys (or
+  "not set") plus the sshd host-key fingerprint - nothing to paste anywhere, since they are already the
+  laptop's own keys
 - `bin/rootless-docker` - host-side, needs `sudo`, idempotent, `--check` reports only: installs `uidmap` and
   `slirp4netns`, creates the `dev:devbox` host user with pinned uid/gid 1001, moves `DEVBOX_DATA_DIR` to
   `/home/dev` (path identity), writes `/etc/tmpfiles.d/devbox-docker.conf`, installs the nftables table plus

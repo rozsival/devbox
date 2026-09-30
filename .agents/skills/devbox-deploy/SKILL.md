@@ -54,7 +54,7 @@ itself. `up`/`down`/`rebuild` count sessions first: connected ones prompt on a t
 script - `--force` overrides, needing say-so. `./bin/devbox sessions` also shows sshd's recent
 `Accepted`/`Disconnected` lines. Only `bootstrap`, `skills`, `hook` are pane-safe: all `docker compose exec`
 into the container. `hook` restarts `moshi-hook` (after `moshi-hook pair`, or crashing) without
-costing anyone their session.
+costing anyone their session; `hook --update` upgrades it first, for a new release.
 
 `container/` and `home/` are bind-mounted `:ro` *and* `COPY`d into the image (`COPY container/` / `COPY
 home/` in the `Dockerfile`, as fallback): the mount makes new bytes visible immediately; editing also
