@@ -33,18 +33,19 @@ log_info 'Installing the Chrome build for agent-browser...'
 agent-browser install
 
 # -- 2. global agent skills ---------------------------------------------------
-# `--global --agent universal` installs to ~/.agents/skills and nothing else -
-# the directory every agent here reads, including OMP. `--agent '*'` would also
-# symlink the set into ~45 per-agent dotdirs for tools that are not installed.
-# `--yes` plus an explicit `--skill` keeps it non-interactive: without both, the
-# CLI prompts for scope and skill selection.
+# `--global --agent universal claude-code` installs to ~/.agents/skills - the
+# directory OMP reads - and symlinks each skill into ~/.claude/skills, the only
+# one Claude Code reads. `--agent '*'` would also symlink the set into ~45
+# per-agent dotdirs for tools that are not installed. `--yes` plus an explicit
+# `--skill` keeps it non-interactive: without both, the CLI prompts for scope
+# and skill selection.
 skills_add() {
   local repo="$1" skill="$2"
   log_info "Installing skill ${skill} from ${repo}..."
   npx --yes "skills@${SKILLS_CLI_VERSION}" add "${repo}" \
     --skill "${skill}" \
     --global \
-    --agent universal \
+    --agent universal claude-code \
     --yes
 }
 

@@ -4,9 +4,10 @@
 # Login shells (an interactive `ssh devbox`, a herdr pane, `./bin/devbox shell`,
 # `bash -lc`) read this file *instead of* ~/.profile. It exists for one reason:
 # the distro's ~/.profile sources ~/.bashrc - hence ~/.bashrc.d/devbox.sh and its
-# PATH - and only then prepends ~/.local/bin, which put the real omp binary ahead
-# of the agent launcher in every login shell. An agent started from such a shell
-# silently ran with ~/.gitconfig, SSH remotes and your keys (docs/git.md).
+# PATH - and only then prepends ~/.local/bin, which put the real omp and claude
+# binaries ahead of the agent launchers in every login shell. An agent started
+# from such a shell silently ran with ~/.gitconfig, SSH remotes and your keys
+# (docs/git.md).
 #
 # So: run ~/.profile as the distro intends, then let devbox.sh's own function
 # reassert the order it wants.

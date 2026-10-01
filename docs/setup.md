@@ -131,33 +131,43 @@ herdr                                    # `Devbox` appears next to `Local`
 
 ## 5. Optional but recommended
 
-Two extras outside `bootstrap`, keeping first starts fast, offline-safe:
+Extras outside `bootstrap`, keeping first starts fast, offline-safe:
 
 ```bash
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # 3 global agent skills + agent-browser + Chrome
 ./bin/sync-omp                                           # laptop OMP preset → devbox
+ssh -t devbox claude                                     # once: /login for Claude Code on the devbox
 ```
 
-Both idempotent, rerunnable anytime. Details: [Toolchain](toolchain.md#agent-skills-and-browser-automation).
+All idempotent, rerunnable anytime. Details: [Toolchain](toolchain.md#agent-skills-and-browser-automation),
+[Claude Code](toolchain.md#claude-code).
 
 ## 6. Agent git on the laptop (optional but recommended)
 
-Agents run on the laptop too, same launcher, same mechanism:
+Agents run on the laptop too - OMP and Claude Code, same launchers, same mechanism:
 
 ```bash
 ./bin/install-agent
 ```
 
-Installs `omp-launcher`, `gh` shim, credential helper, fence in `~/.local/libexec/devbox-agent`;
-`devbox-gh-token` in `~/.local/bin`; `omp` symlinked to the launcher in both directories;
+Installs `agent-launch`, `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence in
+`~/.local/libexec/devbox-agent`; `omp` and `claude` symlinks to their launchers in
+`~/.local/libexec/devbox-agent/launchers`; `devbox-gh-token` in `~/.local/bin`;
 `~/.config/devbox/git/agent*.gitconfig` (directory left read-only); the identity registry reader (`devbox-identities`);
 `~/.config/devbox/secrets.env` from template if missing. `identities.conf` is never
 created for you - it prints the `cp` command instead, so placeholder values can never become your agent's
 author. Idempotent: regenerates generated files, keeps
-`secrets.env` and `identities.conf`, touches nothing else. Reports whether `omp` resolves to the launcher,
-and prints the remaining manual steps per identity: a `GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env`,
-and - for any identity with an `app` directory set - its GitHub App credentials there. See
-[Git identities](git.md#laptop-install).
+`secrets.env` and `identities.conf`, touches nothing else - your shell rc included. One line there is yours
+to add, after anything that puts `~/.local/bin` first (Claude's native install owns `~/.local/bin/claude`,
+so the launchers cannot live there):
+
+```bash
+export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"
+```
+
+Reports whether `omp` and `claude` resolve to their launchers, and prints the remaining manual steps per
+identity: a `GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env`, and - for any identity with an `app`
+directory set - its GitHub App credentials there. See [Git identities](git.md#laptop-install).
 
 `./bin/laptop-doctor` is the laptop's acceptance test. It covers steps 1, 2 and 6 plus the GitHub `Host`
 blocks and the signing config: keys held by 1Password with none on disk, every `Host` selecting one `.pub`

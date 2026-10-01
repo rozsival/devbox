@@ -40,16 +40,18 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 - **`/opt/nvm` + `/opt/corepack`** (not `~/.nvm`) - `/home/dev`'s bind mount would shadow anything the
   image installs there; `node`, `npm`, `npx`, `corepack`, `pnpm` symlink into `/usr/local/bin` to resolve
   without a login shell.
-- **`~/.local/bin`** - OMP and `moshi-hook`, installed by `bootstrap` rather than baked in, so `omp update`
-  and `moshi-hook update` work without a rebuild. Also `devbox-gh-token`, the per-directory GitHub token resolver
-  ([Secrets](secrets.md#gh)).
-- **`~/.local/libexec/devbox-agent`** - `omp-launcher`, the `gh` shim, and two git-fencing scripts
-  (`devbox-git-credential`, `devbox-git-no-ssh`), plus an `omp` symlink to the launcher.
-  `home/.bashrc.d/devbox.sh` puts it first on every devbox shell's `PATH`, shadowing `gh` and `omp`; the
-  launcher does likewise for one process tree elsewhere, including the laptop (`./bin/install-agent`).
-  `home/.bash_profile` re-asserts that order for login shells, where the distro's `~/.profile` prepends
-  `~/.local/bin` *after* sourcing `~/.bashrc` and would otherwise put the real `omp` in front. See
-  [Git identities](git.md#agent-sessions).
+- **`~/.local/bin`** - OMP, Claude Code (`~/.local/bin/claude`, a symlink into
+  `~/.local/share/claude/versions`) and `moshi-hook`, installed by `bootstrap` rather than baked in, so
+  `omp update`, Claude's auto-update and `moshi-hook update` work without a rebuild. Also `devbox-gh-token`,
+  the per-directory GitHub token resolver ([Secrets](secrets.md#gh)).
+- **`~/.local/libexec/devbox-agent`** - the agent launchers (`omp-launcher`, `claude-launcher`, and the
+  `agent-launch` body they share), the `gh` shim, and two git-fencing scripts (`devbox-git-credential`,
+  `devbox-git-no-ssh`), plus `omp` and `claude` symlinks to the launchers. `home/.bashrc.d/devbox.sh` puts
+  it first on every devbox shell's `PATH`, shadowing `gh`, `omp` and `claude`; a launcher does likewise for
+  its own process tree on the laptop (`./bin/install-agent`, where the `omp`/`claude` symlinks sit in a
+  `launchers/` subdirectory of their own). `home/.bash_profile` re-asserts that order for login shells,
+  where the distro's `~/.profile` prepends `~/.local/bin` *after* sourcing `~/.bashrc` and would otherwise
+  put the real binaries in front. See [Git identities](git.md#agent-sessions).
 - **`/usr/local/lib/docker/cli-plugins`** - home for `docker compose`/`docker buildx` as CLI plugins; only
   the client ships in the image, the daemon is the host's rootless `dev` daemon (below).
 
@@ -75,7 +77,7 @@ omp update          # updates ~/.local/bin/omp in place; no image rebuild
 
 `omp` on the `PATH` is the agent launcher, not the binary; `omp update` passes through to the real install
 it shadows, which is why the launcher survives an update. See
-[Git identities](git.md#omp-update).
+[Git identities](git.md#updates-omp-update-claude-update).
 
 `~/.omp/agent/config.yml` seeds from `home/.omp/agent/config.yml` only if absent, with
 `secrets: { enabled: true }` obfuscating an API key in the environment - `~/.config/devbox/secrets.env` or
@@ -95,16 +97,44 @@ Only `config.yml` moves; `agent.db`, `history.db`, `sessions/`, `memories/` and 
 per-machine, untouched. The prior file is kept as `config.yml.bak`; a running session needs a restart for
 the new preset.
 
+## Claude Code
+
+```bash
+claude                  # TUI; same agent git override as omp
+claude --version
+claude update           # updates ~/.local/bin/claude; it also auto-updates in the background
+```
+
+`bootstrap` installs it with the native installer (`curl -fsSL https://claude.ai/install.sh | bash`) when
+`~/.local/bin/claude` is absent; like OMP it carries no `ARG` pin, because it updates itself on the bind
+mount. `claude` on the `PATH` is `~/.local/libexec/devbox-agent/claude` → `claude-launcher`, so every
+session commits and pushes as the identity's bot, exactly like an `omp` session
+([Git identities](git.md#agent-sessions)).
+
+One manual step: log in once, from a pane - run `claude` and follow `/login` (open the printed URL in a
+laptop browser, paste the code back). The credentials land in `~/.claude/.credentials.json` on the bind
+mount and survive rebuilds ([Secrets](secrets.md#claude-code-login)); `bootstrap` lists the login as
+outstanding until that file exists. Everything else under `~/.claude` - settings, sessions, memory - is
+Claude's own state, never synced from the laptop. An `ANTHROPIC_API_KEY` in `secrets.env` (there for OMP)
+never reaches Claude: `claude-launcher` unsets it, so Claude always runs on the `/login` subscription
+rather than billing the key ([Secrets](secrets.md#claude-code-login)).
+
+The container is the sandbox, so bypass-permission mode (`claude --dangerously-skip-permissions`) is the
+same call here as it is for `omp`: it reaches the project tree, the internet and the rootless project
+daemon, never the host.
+
 ## Moshi and `moshi-hook`
 
 [Moshi](https://getmoshi.app) connects like any SSH client (`BIND_ADDR:2223`, user `dev`, authorized key)
 for a terminal and herdr panes only - not push notifications, lock-screen approvals or Chat View, which
 need `moshi-hook`, a companion daemon `bootstrap` installs into `~/.local/bin` and the entrypoint starts.
+`bootstrap` wires it into both agents (`moshi-hook install --target omp,claude`).
 
 | Piece                       | Where it lives                             | What breaks without it                |
 |-----------------------------|--------------------------------------------|---------------------------------------|
 | `moshi-hook` binary         | `~/.local/bin` (bind mount, self-updating) | Everything below                      |
-| OMP extension               | `~/.omp/agent/extensions/moshi-hooks.ts`   | No lifecycle events emitted           |
+| OMP extension               | `~/.omp/agent/extensions/moshi-hooks.ts`   | No OMP lifecycle events emitted       |
+| Claude Code hooks           | `hooks` in `~/.claude/settings.json`       | No Claude lifecycle events emitted    |
 | Daemon (`moshi-hook serve`) | Started by `container/entrypoint.sh`       | Events go nowhere; socket silence     |
 | Pairing                     | One manual `moshi-hook pair --token`       | Daemon runs, sends nothing to a phone |
 
@@ -125,7 +155,7 @@ No systemd means `moshi-hook service install` can't be used - `container/entrypo
 tying its lifetime to the container's. Restart a crashed/hand-killed one with `./bin/devbox hook` (a
 detached `docker compose exec`: no recreate, no dropped SSH sessions); `./bin/devbox up` alone won't revive
 it unless compose recreates the container. A new release is `./bin/devbox hook --update`: `moshi-hook
-update`, the OMP extension rewritten, then the same restart - `update` alone leaves the old version serving.
+update`, the OMP extension and the Claude hooks rewritten, then the same restart - `update` alone leaves the old version serving.
 
 A second daemon is harmless: `serve` exits with `another moshi-hook serve is already running (pid N, lock
 …)`, and a killed daemon's lock never blocks the next start, even across PID reuse.
@@ -136,7 +166,7 @@ permitted by `AllowTcpForwarding yes` in `container/sshd_config` - so nothing ne
 ```bash
 moshi-hook status                    # pairing, multiplexers, per-agent hook state
 moshi-hook logs -f                   # ~/.local/state/moshi/hook.log
-moshi-hook install --target omp      # rewrite the OMP extension by hand (hook --update already does)
+moshi-hook install --target omp,claude  # rewrite the OMP extension and Claude hooks by hand (hook --update already does)
 ```
 
 ## Agent skills and browser automation
@@ -147,8 +177,9 @@ Optional, recommended, and not in `bootstrap` since the first run downloads a ~1
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'
 ```
 
-`container/skills.sh` installs three skills with `--global --agent universal`, landing them only in
-`~/.agents/skills` - the directory every agent here reads:
+`container/skills.sh` installs three skills with `--global --agent universal claude-code`: the skill itself
+lands in `~/.agents/skills`, which OMP reads, and a symlink to it in `~/.claude/skills`, the only skills
+directory Claude Code reads:
 
 | Skill           | Source                      | What it is for                                       |
 |-----------------|-----------------------------|------------------------------------------------------|

@@ -351,15 +351,15 @@ cmd_hook() {
   fi
   # The update runs before the old daemon is touched, so a failed one aborts
   # with that daemon still serving instead of restarting into nothing. The OMP
-  # extension is regenerated for the same reason bootstrap §15 does it: the
-  # binary writes it, and a stale one is the daemon's "agent hooks missing or
-  # stale" warning.
+  # extension and the Claude Code hooks are regenerated for the same reason
+  # bootstrap §15 does it: the binary writes them, and stale ones are the
+  # daemon's "agent hooks missing or stale" warning.
   if [[ "${update}" == true ]]; then
     log_info 'Updating moshi-hook...'
     compose exec -T "${SERVICE}" bash -lc 'moshi-hook update' ||
       log_error 'moshi-hook update failed; the running daemon was left untouched.'
-    compose exec -T "${SERVICE}" bash -lc 'moshi-hook install --target omp >/dev/null' ||
-      log_warn 'moshi-hook install --target omp failed; agent events may be stale.'
+    compose exec -T "${SERVICE}" bash -lc 'moshi-hook install --target omp,claude >/dev/null' ||
+      log_warn 'moshi-hook install --target omp,claude failed; agent events may be stale.'
   fi
   # A detached `exec`, never a container recreate: the daemon has to be
   # restartable after `moshi-hook pair` without taking live SSH sessions down
@@ -466,7 +466,7 @@ cmd_doctor() {
   # shellcheck disable=SC2016 # the probe list must expand inside the container
   if ! compose exec -T "${SERVICE}" bash -lc '
     status=0
-    for probe in "herdr --version" "omp --version" "node -v" "pnpm -v" "gh --version" \
+    for probe in "herdr --version" "omp --version" "claude --version" "node -v" "pnpm -v" "gh --version" \
       "lazygit --version" "wt --version" "terraform version" "git --version" \
       "docker --version" "docker compose version"; do
       # No pipe into head: a multi-line tool would take SIGPIPE (141) once head
@@ -487,24 +487,28 @@ cmd_doctor() {
     fail 'one or more toolchain probes failed'
   fi
 
-  # The agent git override: `omp` on the PATH must be the launcher, reached
-  # through a symlink. A plain file there is what `omp update` takes over in
-  # place - agent sessions then read ~/.gitconfig and reach for SSH keys.
-  local launcher_state
-  launcher_state="$(compose exec -T "${SERVICE}" bash -lc '
-    agent_dir="$HOME/.local/libexec/devbox-agent"
-    [[ -L "${agent_dir}/omp" ]] || { echo notalink; exit 0; }
-    resolved="$(command -v omp 2>/dev/null || true)"
-    [[ "$(readlink -f "${resolved}")" == "${agent_dir}/omp-launcher" ]] || { echo bypassed; exit 0; }
-    echo ok
-  ' 2>/dev/null | tr -cd 'a-z')"
-  case "${launcher_state}" in
-  ok) log_success 'agent git override: omp resolves to the launcher' ;;
-  notalink)
-    fail '~/.local/libexec/devbox-agent/omp is not a symlink to omp-launcher - an omp release binary may have replaced it; run ./bin/devbox bootstrap'
-    ;;
-  *) fail "agent git override: omp does not resolve to the launcher - run './bin/devbox bootstrap'" ;;
-  esac
+  # The agent git override: `omp` and `claude` on the PATH must be the
+  # launchers, reached through symlinks. A plain file there is what `omp
+  # update` takes over in place - agent sessions then read ~/.gitconfig and
+  # reach for SSH keys.
+  local agent launcher_state
+  for agent in omp claude; do
+    # shellcheck disable=SC2016 # the script body must expand inside the container
+    launcher_state="$(compose exec -T -e AGENT="${agent}" "${SERVICE}" bash -lc '
+      agent_dir="$HOME/.local/libexec/devbox-agent"
+      [[ -L "${agent_dir}/${AGENT}" ]] || { echo notalink; exit 0; }
+      resolved="$(command -v "${AGENT}" 2>/dev/null || true)"
+      [[ "$(readlink -f "${resolved}")" == "${agent_dir}/${AGENT}-launcher" ]] || { echo bypassed; exit 0; }
+      echo ok
+    ' 2>/dev/null | tr -cd 'a-z')"
+    case "${launcher_state}" in
+    ok) log_success "agent git override: ${agent} resolves to the launcher" ;;
+    notalink)
+      fail "~/.local/libexec/devbox-agent/${agent} is not a symlink to ${agent}-launcher - an ${agent} release binary may have replaced it; run ./bin/devbox bootstrap"
+      ;;
+    *) fail "agent git override: ${agent} does not resolve to the launcher - run './bin/devbox bootstrap'" ;;
+    esac
+  done
 
   # The identity registry itself: every identity-derived file (SSH keys and
   # config, ~/.gitconfig's per-tree includes, allowed_signers, the agent

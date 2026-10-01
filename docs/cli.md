@@ -48,7 +48,7 @@ no-op `up` never asks.
 - **`hook`** - stops and restarts `moshi-hook` via detached `docker compose exec`, prints
   `moshi-hook status`. Non-destructive: the daemon is a child of the entrypoint; alternative is recreating
   the container, killing every SSH session. Needed after `moshi-hook pair` or a crash. `--update`/`-u`
-  first runs `moshi-hook update` and `moshi-hook install --target omp`; a failed update aborts before the
+  first runs `moshi-hook update` and `moshi-hook install --target omp,claude`; a failed update aborts before the
   running daemon is stopped. See [Toolchain](toolchain.md#moshi-and-moshi-hook).
 - **`keys`** - one row per registry identity: its slug, ssh tag, orgs, and its two public keys (`id_<slug>.pub`,
   `signing_<slug>.pub`, or `not set - <field> for [<slug>] in identities.conf` if
@@ -64,10 +64,11 @@ no-op `up` never asks.
 3. Something listening on `BIND_ADDR:${DEVBOX_SSH_PORT}`, and **nothing** on `0.0.0.0`
 4. Container health status is `healthy`
 5. PID 1 runs as `dev` (no root process)
-6. Eleven toolchain probes, real exit codes: `herdr`, `omp`, `node`, `pnpm`, `gh`, `lazygit`, `wt`,
-   `terraform`, `git`, `docker`, `docker compose`
-7. Agent git override intact: `omp` resolves through a symlink to `omp-launcher`, never a plain file an
-   `omp update` could have replaced ([Git identities](git.md#omp-update))
+6. Twelve toolchain probes, real exit codes: `herdr`, `omp`, `claude`, `node`, `pnpm`, `gh`, `lazygit`,
+   `wt`, `terraform`, `git`, `docker`, `docker compose`
+7. Agent git override intact: `omp` and `claude` each resolve through a symlink to their launcher
+   (`omp-launcher`, `claude-launcher`), never a plain file an update could have replaced
+   ([Git identities](git.md#updates-omp-update-claude-update))
 8. `~/.config/devbox/identities.conf` passes `devbox-identities check` - a failing registry is reported
    here with the reader's own message, and skips every identity-derived check below rather than failing
    them individually
@@ -193,10 +194,13 @@ container's sshd (`Host devbox`, port 2223), not the workstation's, so the file 
 Usage: ./bin/install-agent
 ```
 
-Laptop-side, idempotent: installs the same agent git override the devbox bootstraps - `omp-launcher`, `gh`
-shim, credential helper (`devbox-git-credential`), SSH fence (`devbox-git-no-ssh`) in
-`~/.local/libexec/devbox-agent`; `devbox-gh-token` in `~/.local/bin`; `omp` symlinks in both directories
-pointing at the launcher; `~/.config/devbox/git/agent*.gitconfig`, whose directory is left read-only (mode
+Laptop-side, idempotent: installs the same agent git override the devbox bootstraps - `agent-launch` (the
+shared launcher body), `omp-launcher`, `claude-launcher`, `gh` shim, credential helper
+(`devbox-git-credential`), SSH fence (`devbox-git-no-ssh`) in `~/.local/libexec/devbox-agent`;
+`devbox-gh-token` in `~/.local/bin`; `omp` and `claude` symlinks to their launchers in
+`~/.local/libexec/devbox-agent/launchers` (the pre-Claude `~/.local/bin/omp` symlink is removed once `omp`
+resolves through that directory, kept until then);
+`~/.config/devbox/git/agent*.gitconfig`, whose directory is left read-only (mode
 500, files 444) so a `git config --global` in a session cannot rewrite the agent identity; the
 `devbox-identities` reader in `~/.local/libexec`, symlinked into `~/.local/bin` so it answers by name. All regenerated
 every run; nothing else of yours is
@@ -204,7 +208,8 @@ touched. `~/.config/devbox/identities.conf` is *not* created for you - the examp
 seeding it would render agent gitconfigs authoring as `your-agent`; a missing registry fails the check and
 the run prints the `cp` command instead. `~/.config/devbox/secrets.env` is created from its template if
 absent, then left
-alone. Reports whether `omp` resolves to the launcher, plus the remaining manual steps per registry
+alone. Reports whether `omp` and `claude` resolve to their launchers - printing the `PATH` line for your
+shell rc as a manual step until they do - plus the remaining manual steps per registry
 identity: a `GH_TOKEN_<SLUG>` line in `secrets.env`, and - for any identity with an `app` directory set -
 its `{app-id,app.pem}` (mode 600) there. See [Git identities](git.md#laptop-install).
 
@@ -222,8 +227,9 @@ its own, with no leftover SSH-alias `Host` block; every identity's gitconfig
 signing through `op-ssh-sign` with its own `signing_*.pub` key and an `allowed_signers` file covering all of
 them; each `orgs` pattern probed as a `hasconfig:` remote from `/` - email, signing key and
 `core.sshCommand` matching what `org-<slug>.gitconfig` should set, and no `gitdir:` include left rewriting
-URLs; no clone still pointed at a stale SSH-alias remote (`devbox-identities alias-remotes`); `omp`
-resolving to the launcher through symlinks at both hops (a plain file is what an `omp update` takes over),
+URLs; no clone still pointed at a stale SSH-alias remote (`devbox-identities alias-remotes`); `omp` and
+`claude` resolving to their launchers through symlinks in `~/.local/libexec/devbox-agent/launchers` (a plain
+file is what an `omp update` takes over),
 `~/.local/bin/devbox-identities` still a symlink onto the libexec reader - the hop that makes the name
 resolve at all, since only `~/.local/bin` is on the PATH,
 every installed agent file matching the repo template, `~/.config/devbox/git/` still read-only and no

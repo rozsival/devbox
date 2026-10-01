@@ -7,7 +7,7 @@ in this repository.
 
 `devbox` provisions a containerised remote development environment on the AI coding workstation: one
 Docker container running an unprivileged `sshd` published only on the node's Tailscale address, so a herdr
-client can attach to it as a saved machine and run OMP agents inside it. The container is the agent sandbox -
+client can attach to it as a saved machine and run OMP and Claude Code agents inside it. The container is the agent sandbox -
 it reaches the project tree, the internet and a rootless project Docker daemon, never the host filesystem or
 the host's root Docker daemon.
 
@@ -17,6 +17,8 @@ the host's root Docker daemon.
 - **Image**: `ubuntu:26.04` + pinned `herdr`, `gh`, `lazygit`, `wt` (worktrunk), `terraform`, the Docker CLI
   with the compose and buildx plugins, and Node 24 / pnpm 12 through nvm in `/opt/nvm`. No `op` and no
   `gcloud`: the container holds no vault and no Google account (see `docs/secrets.md`)
+- **Agents**: OMP and Claude Code, installed by bootstrap into `~/.local/bin` on the bind mount (unpinned,
+  like `moshi-hook`: each updates itself there), both started through the agent launchers
 - **Runtime**: `sshd` on container port 2222, published as `${BIND_ADDR}:2223` and `127.0.0.1:2223`
 - **Project Docker**: a second, rootless `dockerd` owned by the dedicated host user `dev` (uid 1001), socket
   `/run/devbox/docker.sock` bind-mounted in; provisioned once by `sudo ./bin/rootless-docker`
@@ -49,8 +51,8 @@ the host's root Docker daemon.
   - `docs/setup.md` - prerequisites, laptop key, `~/.ssh/config`, first deploy, `.env` reference
   - `docs/connecting.md` - herdr panes, `ssh devbox`, Moshi on a phone, `./bin/devbox shell`, cloning, port forwarding
   - `docs/git.md` - the identity registry, manual vs agent git, the credential helper, signing, laptop install
-  - `docs/toolchain.md` - pinned versions, install locations, OMP, Moshi/`moshi-hook`, agent skills, adding a tool
-  - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, GCP ADC, App credentials
+  - `docs/toolchain.md` - pinned versions, install locations, OMP, Claude Code, Moshi/`moshi-hook`, agent skills, adding a tool
+  - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, the Claude Code login, GCP ADC, App credentials
   - `docs/cli.md` - `bin/devbox`, `bin/rootless-docker`, `bin/push`, `bin/sync-omp`, `bin/sync-identities`,
     `bin/install-agent` and `bin/laptop-doctor` reference
   - `docs/networking.md` - exposure model, why UFW cannot block a published port, tunnels
@@ -76,7 +78,9 @@ the host's root Docker daemon.
   recreate, and both it and the hook daemon are best-effort because neither an unreachable project daemon
   nor a missing hook daemon may cost SSH access. `moshi-hook serve` is backgrounded rather than supervised
   because there is no systemd here: it becomes a child of `sshd` and is reaped by tini
-- `container/bootstrap.sh` - idempotent user setup, sixteen individually-guarded sections: 1 OMP; 2 the
+- `container/bootstrap.sh` - idempotent user setup, sixteen individually-guarded sections: 1 the agents
+  (OMP, plus Claude Code via its native installer - non-fatal, and its one-time `/login` registered as a
+  manual step until `~/.claude/.credentials.json` exists); 2 the
   identity registry (installs `devbox-identities` in `~/.local/libexec` and symlinks it into
   `~/.local/bin`, since `devbox.sh` puts only the latter on the PATH and every checklist tells people to
   run `devbox-identities check`, then `di_check`s
@@ -94,17 +98,20 @@ the host's root Docker daemon.
   identity leaves no stale `includeIf`); 8 `allowed_signers`; 9
   GitHub App credential directories per identity (created, never fetched - only placed by hand); 10 shell;
   11 the box-wide `secrets.env`; 12 `gh` (the `~/.local/libexec/devbox-agent` shim plus the per-identity
-  token checklist); 13 the agent git override (the launcher plus its `omp` symlink, credential helper,
+  token checklist); 13 the agent git override (`agent-launch` and both launchers plus their `omp`/`claude`
+  symlinks, credential helper,
   fence, the *rendered* `agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir` -
   every one of them, inherited authors included, since git applies every matching `includeIf` and a nested
   tree would otherwise keep the outer author; the includes are emitted shortest `dir` first so the longest
-  match is read last and wins); 14 OMP config; 15 `moshi-hook` plus its OMP extension; 16 the printed manual checklist
+  match is read last and wins); 14 OMP config; 15 `moshi-hook` plus its OMP extension and Claude Code hooks
+  (`--target omp,claude`); 16 the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels), `AllowAgentForwarding yes` (the `ssh -A devbox` escape hatch only - the
   container holds no private key of its own) and `MaxSessions 32` (herdr channels)
 - `container/skills.sh` - optional, explicitly invoked (`./bin/devbox skills`): pinned `agent-browser` CLI +
   Chrome build, then `agent-browser`, `skill-creator` and `find-skills` via
-  `npx skills add --global --agent universal --yes`. Chrome's shared libraries are in the `Dockerfile`
+  `npx skills add --global --agent universal claude-code --yes` - `~/.agents/skills` for OMP, a symlink per
+  skill in `~/.claude/skills` for Claude Code. Chrome's shared libraries are in the `Dockerfile`
   because `--with-deps` needs root. Global npm installs pass `--prefix "$HOME/.local"` per call so the bins
   stay on the bind mount; never export `NPM_CONFIG_PREFIX` - nvm then refuses to activate its default Node
 - `home/` - templates installed into `/home/dev` by bootstrap (and onto the laptop by `bin/install-agent`);
@@ -115,14 +122,19 @@ the host's root Docker daemon.
   reader, sourced by every script below (`di_slugs`, `di_get`, `di_for`, `di_check`, the `di_render_*`
   functions) and installed as the `devbox-identities` CLI; deliberately bash 3.2 compatible, since the
   laptop-side scripts run under whatever `/usr/bin/env bash` macOS provides.
-  `home/.local/libexec/devbox-agent/` holds `omp-launcher` (exports `GIT_CONFIG_GLOBAL`, the SSH fence,
+  `home/.local/libexec/devbox-agent/` holds `agent-launch`, the one body both launchers source
+  (`omp-launcher`, `claude-launcher` are three lines each): it exports `GIT_CONFIG_GLOBAL`, the SSH fence,
   `GIT_TERMINAL_PROMPT=0` and a login-less `GH_CONFIG_DIR` for its own process tree only - on the laptop,
-  bare `gh` would otherwise fall back to your OAuth login), reached as `omp` only through a symlink and
-  never as a file named `omp`, because `omp update` resolves its install target by looking `omp` up on the
-  PATH and takes a plain file there over in place - it once wrote the release binary onto the launcher,
-  dropping agent sessions back on the user's gitconfig and SSH keys; the launcher drops its own PATH
-  entries for the `update` subcommand so the updater lands on the real install, and the symlink confines a
-  missed argv shape to the updater's shebang refusal. Beside it, the `gh` shim that deliberately shadows
+  bare `gh` would otherwise fall back to your OAuth login. Each launcher is reached as `omp`/`claude` only
+  through a symlink and never as a file named after its tool, because `omp update` resolves its install
+  target by looking `omp` up on the PATH and takes a plain file there over in place - it once wrote the
+  release binary onto the launcher, dropping agent sessions back on the user's gitconfig and SSH keys; the
+  launchers drop their own PATH entries for `update` (the exports still apply, so a misread argv stays
+  fenced) so the updater lands on the real install, and the symlink confines a missed argv shape to omp's
+  shebang refusal. Never put a launcher symlink in `~/.local/bin`: Claude's native install owns
+  `~/.local/bin/claude` and re-points it on every auto-update - on the devbox the symlinks live in
+  `devbox-agent` itself, on the laptop in `devbox-agent/launchers`, a directory holding nothing else that
+  the user puts first on the PATH. Beside them, the `gh` shim that deliberately shadows
   the real `gh` on the PATH: with `devbox-gh-token` it resolves `GH_TOKEN_<SLUG>` per invocation from the
   working directory, on the same `dir` prefixes in `identities.conf` that git's `includeIf` uses, because
   an agent's cwd is a project while its shell was opened in `$HOME`. In an agent session (`GIT_CONFIG_GLOBAL`
@@ -143,15 +155,15 @@ the host's root Docker daemon.
     that from every login bash, putting the user's name and email on five agent commits, and git's lock file
     makes the directory mode the only thing that stops such a write. `home/.bash_profile` exists only to
     reassert the `PATH` order for login shells: bash prefers it over `~/.profile`, which it sources first,
-    because the distro's file prepends `~/.local/bin` *after* `~/.bashrc` and so put the real `omp` ahead of
-    the launcher in every interactive `ssh devbox`, herdr pane and `./bin/devbox shell`; `devbox.sh`
+    because the distro's file prepends `~/.local/bin` *after* `~/.bashrc` and so put the real `omp`/`claude`
+    ahead of the launchers in every interactive `ssh devbox`, herdr pane and `./bin/devbox shell`; `devbox.sh`
     therefore asserts the order (move to front) instead of prepending only when absent
 - `container/devbox-ports` - symlinked to `/usr/local/bin` by the `Dockerfile`, so a host edit is live
   without a rebuild; mirrors published project ports onto the container's own `127.0.0.1`
 - `bin/devbox` - host-side CLI (`env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`,
   `logs`, `hook`, `keys`, `doctor`); `up`/`down`/`rebuild` refuse to drop live SSH sessions without
   `--force`, `hook` restarts the `moshi-hook` daemon with a detached `exec` precisely so it does not have
-  to (`--update` runs `moshi-hook update` and rewrites the OMP extension first, aborting before the old
+  to (`--update` runs `moshi-hook update` and rewrites the OMP extension and Claude hooks first, aborting before the old
   daemon is stopped if the update fails), and `keys` prints every identity's installed public keys (or
   "not set") plus the sshd host-key fingerprint - nothing to paste anywhere, since they are already the
   laptop's own keys
@@ -170,13 +182,15 @@ the host's root Docker daemon.
   identity-derived file catches up; validates locally with `devbox-identities check` first, the same
   reader that runs on both sides, so a broken registry never becomes the one the devbox boots from
 - `bin/install-agent` - laptop-side, idempotent: installs the same agent git override the devbox bootstraps
-  (`omp-launcher`, `gh` shim, credential helper, fence, `devbox-gh-token`, `devbox-identities` in
-  `~/.local/libexec` with a `~/.local/bin` symlink so it answers by name, the read-only *rendered*
-  `git/agent*.gitconfig`, and `omp` symlinks to the launcher in
-  `~/.local/libexec/devbox-agent` and `~/.local/bin`), and prints the `cp` command for
-  `~/.config/devbox/identities.conf` rather than seeding it; regenerates every generated file, reads/edits
-  nothing of the user's own `identities.conf`; reports whether `omp` resolves to the launcher and prints
-  the remaining manual steps (PATs, App credentials)
+  (`agent-launch`, `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence,
+  `devbox-gh-token`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin` symlink so it answers
+  by name, the read-only *rendered* `git/agent*.gitconfig`, and `omp`/`claude` symlinks to the launchers in
+  `~/.local/libexec/devbox-agent/launchers` - removing the pre-Claude `~/.local/bin/omp` symlink only once
+  `omp` already resolves through that directory, since until the PATH line exists the old link is what
+  keeps `omp` fenced), and prints the `cp` command for `~/.config/devbox/identities.conf` rather than seeding it;
+  regenerates every generated file, reads/edits nothing of the user's own `identities.conf` or shell rc;
+  reports whether `omp` and `claude` resolve to their launchers - printing the one `PATH` line for the
+  user's shell rc until they do - and the remaining manual steps (PATs, App credentials)
 - `bin/laptop-doctor` - laptop-side, read-only counterpart of `devbox doctor`: no private key on disk, one
   `id_<slug>.pub`/`signing_<slug>.pub` pair per identity (plus `devbox.pub`) held by the 1Password agent,
   each forge host's plain key and one `.pub` per identity's ssh tag selecting through it, `~/.gitconfig`'s
@@ -184,8 +198,9 @@ the host's root Docker daemon.
   clone left on a stale SSH-alias remote, the registry itself (`devbox-identities check`),
   every gitconfig signing via `op-ssh-sign` with the right `signing_*.pub`, the agent override installed -
   the static files byte-identical to `home/`'s templates, the agent gitconfigs byte-identical to a fresh
-  `devbox-identities render agent-gitconfig` - with both `omp` hops still symlinks (a plain file is an
-  `omp update` takeover) and `~/.local/bin/devbox-identities` still a symlink onto the libexec reader (the
+  `devbox-identities render agent-gitconfig` - with `omp` and `claude` resolving through
+  `devbox-agent/launchers` symlinks (a plain file is an `omp update` takeover) and
+  `~/.local/bin/devbox-identities` still a symlink onto the libexec reader (the
   only hop that makes `devbox-identities` resolve by name),
   `~/.config/devbox/git` still unwritable and no login shell writing a git identity
   into it, no agent token in the macOS keychain (a system `credential.helper` running ahead of ours), every
@@ -204,3 +219,6 @@ the host's root Docker daemon.
   (keys in 1Password, ssh/git config, the agent override, tokens - `laptop-doctor` as the acceptance test),
   `devbox-deploy` (sync vs apply, what a redeploy cannot destroy). They must stay consistent with `docs/`;
   when a command or default changes, update both
+- `CLAUDE.md` and `.claude/skills/` - Claude Code reads neither `AGENTS.md` (before v2.1.277) nor
+  `.agents/skills/`, so `CLAUDE.md` is the single line `@AGENTS.md` and `.claude/skills/<name>` are
+  relative symlinks to `.agents/skills/<name>`. Edit only the originals; a new skill needs its symlink

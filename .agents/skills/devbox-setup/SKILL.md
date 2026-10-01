@@ -124,11 +124,14 @@ register on GitHub - already your normal, registered laptop keys.
    works but overrides every identity's own, killing the per-directory choice.
 3. Fill the rest of `~/.config/devbox/secrets.env` (mode 600) with project-shared `KEY=value` pairs - model
    API keys for OMP. Every shell sources it, interactive or not. Never put one project's secrets here;
-   those go in that project's `.env`.
+   those go in that project's `.env`. An `ANTHROPIC_API_KEY` here is OMP's only - `claude-launcher`
+   unsets it so Claude Code stays on its `/login` subscription.
 4. Place each identity's GitHub App credentials in *that identity's own* `app` directory from
    `identities.conf` (`app-id`, `app.pem`, mode 600) if it needs one. Bootstrap creates the directory,
    never fetches secrets; once present, the credential helper mints a repo-scoped installation token for
    that identity's agent git, ahead of the PAT, and agent `gh` on that repo (PRs, issues) uses it too.
+5. Log Claude Code in once (bootstrap installed it): `ssh -t devbox claude`, then `/login`, open the URL on
+   the laptop, paste the code back. Lands in `~/.claude/.credentials.json`; survives rebuilds.
 
 No `op` step: the container holds no 1Password account or `op` binary. Project secrets render on the
 laptop (`op inject -i .env.tpl -o .env`), copy in; Google APIs need a per-project service-account key, never
@@ -137,7 +140,7 @@ laptop (`op inject -i .env.tpl -o .env`), copy in; Google APIs need a per-projec
 Manual git and signing need the agent forwarded (`ssh -A devbox`, not plain `ssh devbox`, herdr, or
 `./bin/devbox shell`): `ssh -T git@github.com` → `Hi <your-github-username>!`, `ssh -P work -T git@github.com`
 → `Hi <your-work-username>!` for any identity with its own key (`devbox-identities get work tag`). Agent
-sessions (`omp` launcher) skip this, pushing HTTPS with a token minted per operation. Full mechanism:
+sessions (`omp`/`claude` launchers) skip this, pushing HTTPS with a token minted per operation. Full mechanism:
 `docs/git.md`.
 
 ## Optional but recommended, after the phases pass
@@ -148,7 +151,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # agent skills + agent-
 ```
 
 `skills` installs `agent-browser`, `skill-creator`, `find-skills` into `~/.agents/skills` (OMP's skills
-dir), plus its CLI and Chrome build. Separate from bootstrap since the first run downloads ~180 MB, needs
+dir) and symlinks each into `~/.claude/skills` (Claude Code's), plus its CLI and Chrome build. Separate from bootstrap since the first run downloads ~180 MB, needs
 Chrome shared libraries the `Dockerfile` provides - run after an `up` on the current image, not stale. Both
 idempotent; details: `docs/toolchain.md#agent-skills-and-browser-automation`.
 

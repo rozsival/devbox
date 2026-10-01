@@ -4,16 +4,17 @@
 # Sourced by every shell, interactive or not: `ssh devbox <cmd>` must see the
 # same toolchain a pane does.
 
-# OMP installs in ~/.local/bin so `omp update` works without an image rebuild.
-# ~/.local/libexec/devbox-agent goes in front of it: that is where the `omp`
-# launcher lives (the agent git override, docs/git.md) and the `gh` shim that
-# picks a GitHub token per working directory (docs/secrets.md).
+# OMP and Claude Code install in ~/.local/bin so `omp update` and Claude's
+# auto-update work without an image rebuild. ~/.local/libexec/devbox-agent goes
+# in front of it: that is where the `omp` and `claude` launchers live (the agent
+# git override, docs/git.md) and the `gh` shim that picks a GitHub token per
+# working directory (docs/secrets.md).
 #
 # Order is asserted, not "prepend if absent": a login shell reads ~/.profile,
-# which sources this file and *then* prepends ~/.local/bin, putting the real omp
-# binary ahead of the launcher. ~/.bash_profile calls this function again after
-# ~/.profile has run, so it has to move both directories to the front even when
-# they are already on the PATH.
+# which sources this file and *then* prepends ~/.local/bin, putting the real
+# binaries ahead of the launchers. ~/.bash_profile calls this function again
+# after ~/.profile has run, so it has to move both directories to the front
+# even when they are already on the PATH.
 devbox_path_reset() {
   local entry dirs=() kept=()
   IFS=: read -ra dirs <<<"$PATH"

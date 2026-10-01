@@ -2,7 +2,7 @@
 # Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
 # edit home/.local/libexec/devbox-agent/devbox-git-no-ssh in the repo.
 #
-# GIT_SSH_COMMAND for agent sessions (see the `omp` launcher next to this file).
+# GIT_SSH_COMMAND for agent sessions (see agent-launch next to this file).
 # Reached only for a remote the agent gitconfig's HTTPS rewrite did not cover;
 # refusing here is what keeps an agent off your SSH keys and off a forwarded
 # 1Password agent, whatever the remote URL says. Exit 255 is ssh's own "could

@@ -24,6 +24,7 @@ per host.
 | SSH identity public keys (one pair per identity) | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `pubkey`/`signing_pubkey` in `~/.config/devbox/identities.conf` - no private key present |
 | `gh` tokens, one per identity                    | `~/.config/devbox/secrets.env`                                       | you, one fine-grained GitHub PAT per identity                                                              |
 | Model API keys for OMP                           | `~/.config/devbox/secrets.env`                                       | you, plain values                                                                                          |
+| Claude Code login                                | `~/.claude/.credentials.json`                                        | you, once, `/login` in a `claude` session ([below](#claude-code-login))                                    |
 | GitHub App credentials (per identity, optional)  | the directory that identity's `app` field names                      | you, `app-id` + `app.pem` at mode 600 ([Git identities](git.md#devbox-git-credential))                     |
 | Per-project secrets                              | `<project>/.env`                                                     | you, rendered on the laptop                                                                                |
 | GCP service-account key                          | `~/.config/gcloud/<gcp-project>-*.json`                              | you, one per project, mode 600                                                                             |
@@ -40,6 +41,7 @@ per host.
    keys reach open shells.
 3. Place any identity's GitHub App credentials in the directory its `app` field names (`app-id`, `app.pem`
    at mode 600) if configured - see [Agent git credentials](#agent-git-credentials).
+4. Log Claude Code in once: `claude` in a pane, then `/login` - see [Claude Code login](#claude-code-login).
 
 ## Box-wide tool credentials
 
@@ -123,7 +125,7 @@ Three consequences:
 #### Agent sessions: the App for one repository's commands
 
 In an agent session - the shim recognises one by `GIT_CONFIG_GLOBAL` pointing at `agent.gitconfig`, which
-only the `omp` launcher sets - a command about **one repository** first asks
+only an agent launcher (`omp`, `claude`) sets - a command about **one repository** first asks
 `devbox-git-credential token <owner>/<repo>` for that repository's App installation token, the same token
 agent git pushes with. A PR, issue or comment an agent makes is then authored by the App's bot, like its
 commits; without it the PAT made it *you*. Those commands are `pr`, `issue`, `run`, `workflow`, `release`,
@@ -162,9 +164,22 @@ posture as `secrets.env`. Plaintext isn't the deciding factor - scope breadth an
 `gh auth status` succeeds on a resolved token alone, so `bootstrap` stops asking once every identity's is
 set.
 
+## Claude Code login
+
+Claude Code authenticates with your claude.ai subscription, not a key in `secrets.env`: run `claude` in a
+pane, `/login`, open the printed URL in a laptop browser and paste the code back. The resulting OAuth
+credentials live in `~/.claude/.credentials.json` (written by Claude) on the bind mount - one login per
+host, surviving rebuilds. Same blast radius as the other box-wide credentials: any agent here can read it
+and spend that subscription's usage. Revoke it from claude.ai's settings if the box is compromised, then
+`/login` again.
+
+An `ANTHROPIC_API_KEY` exported from `secrets.env` is there for OMP only: `claude-launcher` unsets it for
+Claude's process tree, because Claude otherwise bills such a key instead of the subscription - always under
+`-p`, after one approval interactively. A `claude` that bypasses the launcher (absolute path) would see it.
+
 ## Agent git credentials
 
-`git` itself in an agent session uses a different credential path from `gh` above: the `omp` launcher's
+`git` itself in an agent session uses a different credential path from `gh` above: the agent launchers'
 `agent.gitconfig` and `devbox-git-credential`. See
 [Git identities](git.md#agent-sessions) for the mechanism; this page covers only where those secrets live -
 `~/.config/devbox/secrets.env` and each identity's `app` directory (`{app-id,app.pem}`) on the laptop too,
