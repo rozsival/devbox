@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
+# edit home/.local/libexec/devbox-agent/claude-launcher in the repo.
+#
+# PATH launcher in front of the real `claude` (Claude Code): every Claude
+# session runs under the agent git override. The body is shared with
+# omp-launcher - see agent-launch next to this file and docs/git.md.
+#
+# The real `claude` is the native install's ~/.local/bin/claude, a symlink the
+# auto-updater re-points at every release - so the launcher symlink can never
+# live there, only in a directory ahead of it on the PATH.
+#
+# ANTHROPIC_API_KEY is dropped for Claude's process tree: secrets.env exports
+# it for OMP, and Claude would otherwise bill it instead of the /login
+# subscription - always in `-p` mode, after one approval interactively. Claude
+# Code runs on the subscription; a project's own LLM calls take their key from
+# that project's .env, not from here.
+set -euo pipefail
+unset ANTHROPIC_API_KEY
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+# shellcheck source=agent-launch
+. "$(dirname "${self}")/agent-launch"
+agent_launch claude "${self}" 'install Claude Code (curl -fsSL https://claude.ai/install.sh | bash)' "$@"

@@ -14,6 +14,7 @@ readonly TEMPLATE_DIR="${REPO_ROOT}/home"
 readonly LIBEXEC_DIR="${HOME}/.local/libexec"
 readonly AGENT_DIR="${LIBEXEC_DIR}/devbox-agent"
 readonly BIN_DIR="${HOME}/.local/bin"
+readonly LAUNCHER_DIR="${AGENT_DIR}/launchers"
 readonly CONFIG_DIR="${HOME}/.config/devbox"
 readonly SSH_DIR="${HOME}/.ssh"
 readonly OP_AGENT_SOCK="${HOME}/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
@@ -272,16 +273,18 @@ fi
 
 # -- 4. Agent git override: installed and identical to the templates ---------
 log_info 'agent git override'
-if resolved="$(command -v omp 2>/dev/null)" && [[ "$(readlink -f "${resolved}")" == "${AGENT_DIR}/omp-launcher" ]]; then
-  log_success "omp → ${resolved} → launcher"
-else
-  fail "omp resolves to ${resolved:-nothing}, not the launcher - run ./bin/install-agent and put ~/.local/bin first on the PATH"
-fi
-# Both hops must stay symlinks. A plain file named `omp` on the PATH is what
-# `omp update` takes over in place: that is how a release binary once landed on
-# top of the launcher, leaving agent sessions on your own gitconfig and SSH keys.
-for link in "${AGENT_DIR}/omp" "${BIN_DIR}/omp"; do
-  [[ -L ${link} ]] || fail "${link} is not a symlink to ${AGENT_DIR}/omp-launcher - an omp release binary may have replaced it; run ./bin/install-agent"
+for agent in omp claude; do
+  if resolved="$(command -v "${agent}" 2>/dev/null)" && [[ ${resolved} -ef "${AGENT_DIR}/${agent}-launcher" ]]; then
+    log_success "${agent} → ${resolved} → launcher"
+  else
+    fail "${agent} resolves to ${resolved:-nothing}, not the launcher - run ./bin/install-agent and put ${LAUNCHER_DIR} first on the PATH"
+  fi
+  # Must stay a symlink. A plain file named `omp` on the PATH is what `omp
+  # update` takes over in place: that is how a release binary once landed on
+  # top of the launcher, leaving agent sessions on your own gitconfig and SSH
+  # keys.
+  link="${LAUNCHER_DIR}/${agent}"
+  [[ -L ${link} ]] || fail "${link} is not a symlink to ${AGENT_DIR}/${agent}-launcher - an ${agent} release binary may have replaced it; run ./bin/install-agent"
 done
 # The reader is installed in libexec and reached by name through ~/.local/bin,
 # because that is the only one of the two the shells put on the PATH - and every
@@ -296,7 +299,8 @@ else
   log_success 'devbox-identities resolves by name through ~/.local/bin'
 fi
 stale=()
-for rel in .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
+for rel in .local/libexec/devbox-agent/agent-launch .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/claude-launcher \
+  .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
   .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .local/libexec/devbox-identities; do
   cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
 done
@@ -339,7 +343,7 @@ fi
 if ((${#stale[@]})); then
   fail "differ from the repo templates: ${stale[*]} - run ./bin/install-agent"
 else
-  log_success 'launcher, shim, helper, fence, devbox-identities and agent gitconfigs match the repo templates'
+  log_success 'launchers, shim, helper, fence, devbox-identities and agent gitconfigs match the repo templates'
 fi
 # The gitconfigs must also be unwritable, directory included: GIT_CONFIG_GLOBAL
 # points in there, so `git config --global` in a session rewrites them - that is

@@ -1,6 +1,6 @@
 ---
 name: devbox-laptop
-description: Sets up and checks the laptop side of the devbox - private keys only in 1Password, one id_<slug>.pub/signing_<slug>.pub pair per identity in ~/.ssh (plus the fixed devbox key), the identity registry at ~/.config/devbox/identities.conf, ~/.ssh/config that selects keys through the 1Password agent, gitconfigs signing through op-ssh-sign, the agent git override (./bin/install-agent - omp launcher, gh shim, credential helper, rendered agent gitconfigs), one fine-grained PAT per identity in ~/.config/devbox/secrets.env, the GitHub App credentials, and ./bin/laptop-doctor as the acceptance test. Use this whenever someone is onboarding a new laptop or Mac, asks where a key, token or config file lives on the laptop, wants OMP on the laptop to stop using their identity, finds a private key on disk, sees commits Unverified on GitHub, is adding a new account to the registry, or gets a laptop-doctor warning.
+description: Sets up and checks the laptop side of the devbox - private keys only in 1Password, one id_<slug>.pub/signing_<slug>.pub pair per identity in ~/.ssh (plus the fixed devbox key), the identity registry at ~/.config/devbox/identities.conf, ~/.ssh/config that selects keys through the 1Password agent, gitconfigs signing through op-ssh-sign, the agent git override (./bin/install-agent - omp and claude launchers and their PATH line, gh shim, credential helper, rendered agent gitconfigs), one fine-grained PAT per identity in ~/.config/devbox/secrets.env, the GitHub App credentials, and ./bin/laptop-doctor as the acceptance test. Use this whenever someone is onboarding a new laptop or Mac, asks where a key, token or config file lives on the laptop, wants OMP or Claude Code on the laptop to stop using their identity, finds a private key on disk, sees commits Unverified on GitHub, is adding a new account to the registry, or gets a laptop-doctor warning.
 ---
 
 # devbox laptop
@@ -86,31 +86,36 @@ signature for <email>` with the *signing* key's fingerprint.
 ./bin/install-agent
 ```
 
-Installs the devbox's bootstrap override, from `home/` templates: `omp-launcher`
-(`~/.local/bin/omp` → `~/.local/libexec/devbox-agent/omp` → `omp-launcher`, symlinks at both hops), `gh`
+Installs the devbox's bootstrap override, from `home/` templates: `agent-launch` with `omp-launcher` and
+`claude-launcher` (`~/.local/libexec/devbox-agent/launchers/{omp,claude}` → their launcher), `gh`
 shim, `devbox-git-credential`, `devbox-git-no-ssh`, `devbox-gh-token`, and `devbox-identities` - the
 registry reader, in `~/.local/libexec` with a `~/.local/bin` symlink, since only the latter is on the PATH
 and every checklist tells you to run `devbox-identities check` (`laptop-doctor` checks that hop too).
 It never writes `~/.config/devbox/identities.conf`: when that file is absent it prints
-the `cp` command for it, because the example is valid and would otherwise become the agent's author.
+the `cp` command for it, because the example is valid and would otherwise become the agent's author. Nor
+does it edit your shell rc: the launchers directory must come before `~/.local/bin` on the PATH - Claude's
+native install owns `~/.local/bin/claude` and re-points it on every update - so add the line it prints,
+`export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"`, after anything that prepends
+`~/.local/bin`, then open a new shell.
 
 The agent gitconfigs are *rendered* from the registry, not copied: `~/.config/devbox/git/agent.gitconfig`
 plus one `agent-<slug>.gitconfig` per identity claiming a `dir` (all of them - an inherited author is
 written out explicitly, or a tree nested inside another identity's would keep the outer bot), directory
-locked to mode 500 afterwards. Every OMP session through a shell after gets HTTPS
+locked to mode 500 afterwards. Every OMP or Claude Code session through a shell after gets HTTPS
 remotes, per-operation tokens, a bot author, no signing, a `gh` with no stored login - shell/IDE on same
 clones keep SSH remote, 1Password agent, signed commits. Re-run after `git pull` touches `home/` or after
 editing `identities.conf`; `laptop-doctor` reports drift from a fresh render.
 
-The launcher only covers what resolves `omp` via PATH - a herdr pane or alias naming the binary by
-absolute path (`~/.bun/bin/omp`) bypasses it; use plain `omp`. Proof: `echo $GIT_CONFIG_GLOBAL` prints
+The launchers only cover what resolves `omp`/`claude` via PATH - a herdr pane or alias naming the binary
+by absolute path (`~/.bun/bin/omp`, `~/.local/bin/claude`) bypasses them, as does an app or IDE that starts
+its own Claude; use plain `omp`/`claude` from a terminal. Proof: `echo $GIT_CONFIG_GLOBAL` prints
 `~/.config/devbox/git/agent.gitconfig`; empty means session predates install or bypassed launcher.
 
-`omp update` is safe: the launcher drops its own PATH entries for that subcommand, so the updater replaces
-the real install (bun/npm-managed here, `~/.local/bin/omp` on the devbox) and not the launcher. Before that
-passthrough, an update wrote the release binary over the launcher and agent sessions silently fell back to
-`~/.gitconfig` - SSH remotes, your keys. Re-run `./bin/install-agent` if a session ever reaches for a key;
-the symlinks are what `laptop-doctor` checks.
+`omp update` and `claude update` are safe: the launchers drop their own PATH entries for that subcommand,
+so the updater replaces the real install (bun/npm-managed or `~/.local/bin/omp`, `~/.local/bin/claude`) and
+not the launcher. Before that passthrough, an `omp update` wrote the release binary over the launcher and
+agent sessions silently fell back to `~/.gitconfig` - SSH remotes, your keys. Re-run `./bin/install-agent`
+if a session ever reaches for a key; the symlinks are what `laptop-doctor` checks.
 
 A session's git config is the file `GIT_CONFIG_GLOBAL` names, so any `git config --global …` in its
 process tree rewrites the agent's own identity. The real caller here was `~/.extra` (sourced by
@@ -128,7 +133,7 @@ authored wrongly need `git commit --amend --reset-author` (or `rebase -x`) plus 
   fine-grained, `contents: write` on repos agents push to without the App, plus `actions`/`checks` read,
   `issues`/`pull-requests` write if agents should post. Used by the credential helper for App-less repos,
   by `gh` in agent sessions. Same file/variables as devbox; only PATs belong here - model keys come from
-  OMP.
+  OMP's own config, Claude Code from its login.
 - Per identity with an `app` field in `identities.conf`: `<app-dir>/app-id`, `<app-dir>/app.pem`
   (mode 600) - the credential helper mints a repo-scoped installation token (cached ≤30 min on tmpfs) for
   agent git on a repo the App is installed on, ahead of the PAT, and the `gh` shim uses the same token for
@@ -156,8 +161,8 @@ repo.
 | `… still rewrites remote URLs (url.*.insteadof)`       | Old alias-era file; replace with `devbox-identities render user-gitconfig <slug>` (phase 3)                                            |
 | `a <pattern> remote gets '…'`                          | Missing or wrong `includeIf "hasconfig:remote.*.url:<pattern>"`; add it with `devbox-identities render org-gitconfig <slug>` (phase 3) |
 | `clones still on an SSH alias`                         | Run the printed `git remote set-url` commands (`devbox-identities alias-remotes` lists them again)                                     |
-| `omp resolves to …, not the launcher`                  | `./bin/install-agent`; put `~/.local/bin` first on PATH                                                                                |
-| `… is not a symlink to …/omp-launcher`                 | An `omp` release binary replaced a launcher symlink; `./bin/install-agent`, then `omp update` again                                    |
+| `omp`/`claude resolves to …, not the launcher`         | `./bin/install-agent`; add its `export PATH=…/devbox-agent/launchers:$PATH` line after whatever puts `~/.local/bin` first          |
+| `… is not a symlink to …/<agent>-launcher`             | A release binary replaced a launcher symlink; `./bin/install-agent`, then `omp update`/`claude update` again                       |
 | `differ from a fresh render of the templates`          | `./bin/install-agent` (templates or `identities.conf` changed since last install)                                                      |
 | `the keychain holds an agent token`                    | Homebrew's `osxkeychain` preempted the helper; erase via `git credential-osxkeychain erase`, reinstall                                 |
 | `no <slug> token` / `token is rejected`                | Fill/re-issue `GH_TOKEN_<SLUG>` in `secrets.env` (phase 5)                                                                             |

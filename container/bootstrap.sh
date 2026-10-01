@@ -19,16 +19,31 @@ export PATH="${HOME_DIR}/.local/libexec/devbox-agent:${HOME_DIR}/.local/bin:${PA
 declare -a ACTIONS=()
 register_action() { ACTIONS+=("$1"); }
 
-# -- 1. OMP -------------------------------------------------------------------
-# Deliberately not in the image: installing it here to ~/.local/bin (the
-# installer's default PI_INSTALL_DIR, on the bind mount) keeps `omp update`
-# working without an image rebuild. Checked by path, not `command -v`: the
-# launcher installed in §12 answers to `omp` on the PATH set above.
+# -- 1. Agents: OMP and Claude Code -------------------------------------------
+# Deliberately not in the image: both install to ~/.local/bin on the bind
+# mount (OMP's installer default PI_INSTALL_DIR; Claude's native installer
+# keeps ~/.local/bin/claude as a symlink into ~/.local/share/claude/versions),
+# so `omp update` and Claude's own auto-update work without an image rebuild -
+# which is also why neither has an ARG pin. Checked by path, not `command -v`:
+# the launchers installed in §13 answer to both names on the PATH set above.
 if [[ -x "${HOME_DIR}/.local/bin/omp" ]]; then
   log_info "OMP already installed: ${HOME_DIR}/.local/bin/omp"
 else
   log_info 'Installing OMP...'
   curl -fsSL https://omp.sh/install.sh | sh
+fi
+# Non-fatal: a box without Claude Code still runs OMP, and everything below
+# (identities, the agent override) must not depend on a download.
+if [[ -x "${HOME_DIR}/.local/bin/claude" ]]; then
+  log_info "Claude Code already installed: ${HOME_DIR}/.local/bin/claude"
+else
+  log_info 'Installing Claude Code...'
+  if ! curl -fsSL https://claude.ai/install.sh | bash; then
+    log_warn 'Claude Code install failed; re-run ./bin/devbox bootstrap.'
+  fi
+fi
+if [[ -x "${HOME_DIR}/.local/bin/claude" && ! -f "${HOME_DIR}/.claude/.credentials.json" ]]; then
+  register_action "Log Claude Code in once: run 'claude' in a pane and follow /login (the credentials land in ~/.claude on the bind mount and survive rebuilds)"
 fi
 
 # -- 2. Identity registry -----------------------------------------------------
@@ -384,22 +399,26 @@ if ${identities_ok}; then
 fi
 
 # -- 13. Agent git override ---------------------------------------------------
-# What makes one clone serve both you and an agent: the `omp` launcher exports
-# GIT_CONFIG_GLOBAL=~/.config/devbox/git/agent.gitconfig (HTTPS rewrites, the
-# per-operation credential helper, the bot author, signing off) and a
-# GIT_SSH_COMMAND that refuses, for its own process tree only. The directory is
-# first on the PATH from devbox.sh so `omp` resolves to the launcher ahead of
-# ~/.local/bin/omp. All generated files: reinstalled on every run.
+# What makes one clone serve both you and an agent: the `omp` and `claude`
+# launchers export GIT_CONFIG_GLOBAL=~/.config/devbox/git/agent.gitconfig (HTTPS
+# rewrites, the per-operation credential helper, the bot author, signing off)
+# and a GIT_SSH_COMMAND that refuses, for their own process trees only - the
+# shared body is agent-launch. The directory is first on the PATH from
+# devbox.sh so `omp` and `claude` resolve to the launchers ahead of the real
+# installs in ~/.local/bin (§1). All generated files: reinstalled on every run.
 #
-# `omp` here is a symlink to the launcher script, never the script itself:
-# `omp update` resolves what to replace by looking `omp` up on the PATH, and
-# would take over a plain file in place. The launcher drops its own PATH entries
-# for that subcommand so the update lands on ~/.local/bin/omp (§1); the symlink
-# is the backstop, since the updater refuses to replace a script behind one.
-for tool in omp-launcher devbox-git-credential devbox-git-no-ssh; do
+# `omp` and `claude` here are symlinks to the launcher scripts, never the
+# scripts themselves: `omp update` resolves what to replace by looking `omp` up
+# on the PATH, and would take over a plain file in place. The launchers drop
+# their own PATH entries for `update` so it lands on the real install; the
+# symlink is the backstop, since omp's updater refuses to replace a script
+# behind one.
+for tool in omp-launcher claude-launcher devbox-git-credential devbox-git-no-ssh; do
   install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${agent_dir}/${tool}"
 done
+install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${agent_dir}/agent-launch"
 ln -sfn "${agent_dir}/omp-launcher" "${agent_dir}/omp"
+ln -sfn "${agent_dir}/claude-launcher" "${agent_dir}/claude"
 
 # The gitconfigs and their directory are read-only: GIT_CONFIG_GLOBAL points in
 # there, so `git config --global` in a session would rewrite them - on the
@@ -451,10 +470,10 @@ fi
 
 # -- 15. moshi-hook -----------------------------------------------------------
 # Companion daemon for the Moshi phone client: it owns the Unix socket the OMP
-# extension posts lifecycle events to, serves the local gateway on
+# extension and the Claude Code hooks post lifecycle events to, serves the local gateway on
 # 127.0.0.1:24543 that the app reaches over its own SSH forward, and holds the
 # WebSocket that turns those events into push notifications and approvals.
-# Installed here rather than in the image for the same reason as OMP (§1): it
+# Installed here rather than in the image for the same reason as the agents (§1): it
 # lands in ~/.local/bin on the bind mount, so `moshi-hook update` works without
 # a rebuild. That is also why there is no ARG pin - a pin on a self-updating
 # bind-mount tool only records the version of the first install. The daemon is
@@ -504,11 +523,13 @@ fi
 if command -v moshi-hook >/dev/null 2>&1; then
   # Idempotent, and the cure for the daemon's "agent hooks missing or stale"
   # warning: the extension is generated by the installer, so it has to be
-  # rewritten whenever the binary changes. Scoped to OMP deliberately - it is
-  # the agent this box runs, and an unscoped install also writes project-local
-  # files for agents that are not installed here.
-  moshi-hook install --target omp >/dev/null 2>&1 ||
-    log_warn 'moshi-hook install --target omp failed; agent events may be stale.'
+  # rewritten whenever the binary changes. Scoped to OMP and Claude Code
+  # deliberately - they are the agents this box runs, and an unscoped install
+  # also writes project-local files for agents that are not installed here.
+  # For Claude it merges hook entries into ~/.claude/settings.json, the one
+  # change made to a file Claude otherwise owns.
+  moshi-hook install --target omp,claude >/dev/null 2>&1 ||
+    log_warn 'moshi-hook install --target omp,claude failed; agent events may be stale.'
   # Captured rather than piped into `grep -q`: status prints ~20 lines, grep
   # exits at the first match, and the resulting SIGPIPE makes the pipeline fail
   # under `set -o pipefail` - so the piped form silently never fires.

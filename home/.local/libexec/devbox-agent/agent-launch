@@ -1,0 +1,122 @@
+# shellcheck shell=bash
+# Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
+# edit home/.local/libexec/devbox-agent/agent-launch in the repo.
+#
+# The body every agent launcher shares (omp-launcher, claude-launcher): sourced,
+# never run. Everything an agent session does to git - clone, fetch, push,
+# commit, and every tool that shells out to git - runs under the exports below,
+# and nothing outside the session does. That is what lets one clone serve both
+# you (SSH remote, 1Password agent, signed commits) and the agent (HTTPS,
+# per-operation tokens, bot author, unsigned) with no per-repository setup. See
+# docs/git.md.
+#
+# A launcher is reached as `<tool>` through a symlink - `devbox-agent/<tool>` on
+# the devbox, where devbox.sh puts that directory first on the PATH, and
+# `devbox-agent/launchers/<tool>` on the laptop - never as a file literally
+# named after the tool, and never as the file the tool's updater writes to. The
+# real binary is found by skipping every PATH entry that resolves to the
+# launcher, so an update replacing it never breaks the launcher.
+
+# agent_launch <tool> <launcher> <install hint> [args...]
+#   <launcher> is the launcher script's resolved path (readlink -f), the one
+#   every `<tool>` symlink on the PATH leads to.
+agent_launch() {
+  local tool="$1" self="$2" install_hint="$3"
+  shift 3
+  local self_dir real='' dir candidate subcommand='' arg
+  local -a clean_dirs=() path_dirs=()
+  self_dir="$(dirname "${self}")"
+
+  # The real binary is the first PATH entry that is not this launcher under any
+  # of its names; `clean_dirs` is the same PATH with every launcher entry
+  # removed (see the update passthrough below).
+  IFS=: read -ra path_dirs <<<"${PATH}"
+  for dir in "${path_dirs[@]}"; do
+    candidate="${dir}/${tool}"
+    if [[ -f ${candidate} && -x ${candidate} ]]; then
+      if [[ "$(readlink -f "${candidate}")" == "${self}" ]]; then
+        continue
+      fi
+      if [[ -z ${real} ]]; then
+        real="${candidate}"
+      fi
+    fi
+    clean_dirs+=("${dir}")
+  done
+  if [[ -z ${real} ]]; then
+    printf '%s launcher: no other %s on the PATH - %s\n' "${tool}" "${tool}" "${install_hint}" >&2
+    exit 127
+  fi
+
+  # The agent's git configuration, read instead of ~/.gitconfig: HTTPS
+  # rewrites, the credential helper, the bot author, signing off. Its directory
+  # is installed read-only, because a `git config --global` anywhere in this
+  # process tree writes *here* - and a login bash does exactly that if ~/.extra
+  # or a similar dotfile pins the user's identity that way, which is how five
+  # agent commits came to be authored by the laptop's owner.
+  export GIT_CONFIG_GLOBAL="${HOME}/.config/devbox/git/agent.gitconfig"
+  if [[ ! -r ${GIT_CONFIG_GLOBAL} ]]; then
+    printf 'devbox: %s is missing - run ./bin/install-agent (laptop) or ./bin/devbox bootstrap (devbox)\n' \
+      "${GIT_CONFIG_GLOBAL}" >&2
+    exit 1
+  fi
+  # These four outrank every configuration file, including the one above, so
+  # a dotfile that sets them for the user's own shell must not reach an agent's
+  # git.
+  unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
+  # Fence, not transport: any remote the HTTPS rewrite does not cover fails
+  # with a one-line explanation instead of reaching an SSH key or a forwarded
+  # agent. Environment rather than config so a repository-local core.sshCommand
+  # cannot override it.
+  export GIT_SSH_COMMAND="${self_dir}/devbox-git-no-ssh"
+  # A missing credential is an error, never a prompt an agent cannot answer.
+  export GIT_TERMINAL_PROMPT=0
+  # gh in this session is a token from the shim or nothing. Without this, a
+  # laptop `gh` with no resolvable token falls back to the OAuth login stored
+  # in ~/.config/gh's keyring entry - and acts as you. The directory is created
+  # on demand and never holds a login; gh's own defaults apply inside it (git
+  # protocol https, which the credential helper serves).
+  export GH_CONFIG_DIR="${HOME}/.config/devbox/gh"
+  mkdir -p "${GH_CONFIG_DIR}"
+
+  # `<tool> update` must replace the real install, never a launcher - `omp
+  # update` decides what to replace by looking `omp` up on the PATH and takes
+  # over whatever it finds there (a plain file in place, a symlink through its
+  # target), and once wrote the release binary over the launcher: agent
+  # sessions afterwards ran under your own gitconfig and reached for your SSH
+  # keys, silently. Every launcher entry is therefore dropped for that one
+  # subcommand, so any PATH lookup the updater makes lands on the real install.
+  #
+  # The exports above still apply. An argv this misreads as an update - a
+  # prompt that is literally `update` - then runs with git fenced and with a gh
+  # that has no token rather than as you; an argv shape it misses (a global
+  # flag taking a separate value before the subcommand) keeps the launcher's
+  # PATH, and the symlink layout is the backstop: omp's updater refuses to
+  # replace a script it reached through a symlink, and the doctors report a
+  # launcher symlink that turned into a plain file.
+  for arg in "$@"; do
+    if [[ ${arg} == -* ]]; then
+      continue
+    fi
+    subcommand="${arg}"
+    break
+  done
+  if [[ ${subcommand} == update ]]; then
+    PATH="$(
+      IFS=:
+      printf '%s' "${clean_dirs[*]:-}"
+    )"
+    export PATH
+    exec "${real}" "$@"
+  fi
+
+  # Puts the `gh` shim next to this file ahead of the real gh for this
+  # session; on the devbox the directory is already there
+  # (home/.bashrc.d/devbox.sh).
+  case ":${PATH}:" in
+  *":${self_dir}:"*) ;;
+  *) export PATH="${self_dir}:${PATH}" ;;
+  esac
+
+  exec "${real}" "$@"
+}

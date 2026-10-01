@@ -76,13 +76,14 @@ These are known and deliberate, not gaps to be closed later:
    confidentiality - assume anything inside can leave.
 2. **A forwarded agent is reachable by anything in that one connection.** `ssh -A devbox` exposes the
    1Password agent socket for the connection's lifetime; a hand-started process inside it - not through
-   `git`, fenced to HTTPS by the `omp` launcher - could call `ssh` directly, requesting a signature.
+   `git`, fenced to HTTPS by the `omp`/`claude` launchers - could call `ssh` directly, requesting a signature.
    1Password's per-use laptop approval is the backstop: nothing signs without it. Plain `herdr` panes,
    `./bin/devbox shell`, and a bare `ssh devbox` never forward it.
 3. **No isolation between projects.** One container, one `dev` user, one bind mount: an agent in project
    A can read project B's `.env` and GCP key. Cloning something less trusted is where per-project
    containers or separate users stop being over-engineering.
-4. **Secrets are plaintext at rest.** `.env` files, `gh` tokens and key files are unencrypted on the
+4. **Secrets are plaintext at rest.** `.env` files, `gh` tokens, key files and the Claude Code login
+   (`~/.claude/.credentials.json`) are unencrypted on the
    workstation's disk, readable by the host user. Workstation disk encryption and host account hygiene
    are part of this security model, not separate.
 5. **The project Docker daemon widens reach to the `dev` account.** Anything in the container can start a

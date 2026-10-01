@@ -8,7 +8,7 @@ differently.
 |                                             | Default identity (everywhere)                                                                                           | A second identity (`~/projects/work/**`, org `your-org`)                                                                  |
 |---------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------|
 | **You** (manual, `ssh -A devbox` or laptop) | SSH `git@github.com:`, forwarded `id_personal.pub` (the host's plain key), author `Your Name <you@example.com>`, signed | SSH `git@github.com:`, forwarded `id_work.pub` (`ssh -P work` tags it), author `Your Name <you@work.example.com>`, signed |
-| **Agent session** (`omp` launcher)          | HTTPS, token from `devbox-git-credential`, author `your-agent <your-agent@users.noreply.github.com>`, unsigned          | HTTPS, same helper, author `your-app[bot] <00000000+your-app[bot]@users.noreply.github.com>`, unsigned                    |
+| **Agent session** (`omp`/`claude` launcher) | HTTPS, token from `devbox-git-credential`, author `your-agent <your-agent@users.noreply.github.com>`, unsigned          | HTTPS, same helper, author `your-app[bot] <00000000+your-app[bot]@users.noreply.github.com>`, unsigned                    |
 
 A `dir` in `identities.conf` picks the identity both ways: `includeIf gitdir:` in your own `~/.gitconfig`,
 the same prefix in `agent.gitconfig`'s `includeIf` for an agent. Exactly one block omits `dir` - that one is
@@ -140,9 +140,11 @@ and the laptop's `Host devbox` block keeps it off - only an explicit `ssh -A dev
 
 ## Agent sessions
 
-Every agent session - an `omp`-launched process and everything it shells out to (`gh`, `wt`, `lazygit`, git
-itself) - runs under five exports the `omp` launcher (`~/.local/libexec/devbox-agent/omp-launcher`, reached
-as `omp` through a symlink) sets for its process tree, before `exec`-ing real `omp`:
+Every agent session - an OMP or Claude Code process started through its launcher, and everything it shells
+out to (`gh`, `wt`, `lazygit`, git itself) - runs under five exports the launcher sets for its process tree,
+before `exec`-ing the real binary. Both launchers (`omp-launcher`, `claude-launcher` in
+`~/.local/libexec/devbox-agent`, each reached as `omp`/`claude` through a symlink) are three lines around
+one shared body, `agent-launch`, so the two agents can never drift apart:
 
 | Export                | Value                                  | What it does                            |
 |-----------------------|----------------------------------------|-----------------------------------------|
@@ -184,20 +186,22 @@ run without an identity, because that is what invites something to set one. Both
 and compare the files against the repo templates; the installers (`./bin/install-agent`,
 `./bin/devbox bootstrap`) lift the mode, regenerate, and lock it again.
 
-### `omp update`
+### Updates: `omp update`, `claude update`
 
 `omp update` picks what to replace by looking `omp` up on the `PATH`, and takes over whatever it finds -
-a plain file in place, a symlink through its target. Both are the launcher, so the launcher drops its own
-`PATH` entries for that one subcommand: the lookup then lands on the real install - bun/npm-managed on the
-laptop, the standalone binary in `~/.local/bin` on the devbox - which is what the updater must replace.
-`omp update` works normally; the launcher is untouched, and no export applies (no git runs).
+a plain file in place, a symlink through its target. Both are the launcher, so each launcher drops its own
+`PATH` entries for `update`: any lookup then lands on the real install - bun/npm-managed or
+`~/.local/bin/omp` for OMP, the native install's `~/.local/bin/claude` for Claude Code - which is what the
+updater must replace. The same passthrough covers `claude update`; Claude's background auto-update re-points
+`~/.local/bin/claude` itself, which is exactly why no launcher symlink ever lives there. The other exports
+still apply, so a prompt that is literally `update` runs fenced, with a token-less `gh`, not as you.
 
-Belt and braces, because the failure was silent: `omp` is a **symlink** to `omp-launcher` at both hops
-(`~/.local/bin/omp` → `~/.local/libexec/devbox-agent/omp` → `omp-launcher`), never a file named `omp`.
-An argv shape the passthrough does not recognise therefore hits the updater's own refusal to replace a
-script behind a symlink - a one-line error - instead of a release binary landing on top of the launcher,
-which leaves agent sessions on your `~/.gitconfig`, with SSH remotes and your keys. `./bin/laptop-doctor`
-checks both hops are still symlinks.
+Belt and braces, because the failure was silent: `omp` and `claude` are **symlinks** to their launchers
+(`~/.local/libexec/devbox-agent/<agent>` on the devbox, `~/.local/libexec/devbox-agent/launchers/<agent>` on
+the laptop), never files named after the tool. An argv shape the passthrough does not recognise therefore
+hits omp's own refusal to replace a script behind a symlink - a one-line error - instead of a release binary
+landing on top of the launcher, which leaves agent sessions on your `~/.gitconfig`, with SSH remotes and
+your keys. `./bin/laptop-doctor` and `./bin/devbox doctor` check that the symlinks are still symlinks.
 
 ### `agent.gitconfig`
 
@@ -308,9 +312,11 @@ bootstraps from:
 ./bin/install-agent
 ```
 
-It installs `omp-launcher`, the `gh` shim, `devbox-git-credential`, and `devbox-git-no-ssh` into
-`~/.local/libexec/devbox-agent`; `devbox-gh-token` into `~/.local/bin` and `devbox-identities` into
-`~/.local/libexec`; symlinks `~/.local/bin/omp` → `~/.local/libexec/devbox-agent/omp` → `omp-launcher`;
+It installs `agent-launch`, `omp-launcher`, `claude-launcher`, the `gh` shim, `devbox-git-credential`, and
+`devbox-git-no-ssh` into `~/.local/libexec/devbox-agent`; `devbox-gh-token` into `~/.local/bin` and
+`devbox-identities` into `~/.local/libexec`; symlinks `omp` and `claude` in
+`~/.local/libexec/devbox-agent/launchers` to their launchers (and removes the pre-Claude `~/.local/bin/omp`
+symlink once `omp` resolves through the new directory - until then that link is what keeps `omp` fenced);
 names the `cp` command for `~/.config/devbox/identities.conf` when it is absent, and never writes that
 file itself (the example validates, so seeding it would author agent commits as `your-agent`); and renders
 `~/.config/devbox/git/agent*.gitconfig` from the registry, regenerating every file
@@ -319,9 +325,19 @@ the example if absent and never overwritten either. The installer reads or edits
 file. It does **not** touch `~/.ssh/config` or `~/.gitconfig` - both are hand-maintained here (below);
 `bootstrap` renders them on the devbox because nothing there is meant to be hand-edited.
 
-On the laptop, only the launcher's `PATH` puts the libexec directory first - an ordinary shell or IDE never
-resolves the `gh` shim, so your `gh` keeps its OAuth login. Whatever else resolves `omp` is "the real `omp`";
-the installer reports which, and whether `omp` resolves to the launcher.
+On the laptop the launchers need their own directory, first on your `PATH`, holding nothing but the two
+symlinks: `~/.local/bin` cannot carry them, because Claude's native install owns `~/.local/bin/claude` and
+re-points it on every update. Add, as the last line of `~/.zshrc`/`~/.bashrc` (after anything that prepends
+`~/.local/bin`):
+
+```bash
+export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"
+```
+
+Only a launcher's own `PATH` puts the libexec directory itself first - an ordinary shell or IDE never
+resolves the `gh` shim, so your `gh` keeps its OAuth login. Whatever else resolves `omp`/`claude` is "the
+real" one; the installer reports which, whether each name resolves to its launcher, and prints the line
+above as a manual step until it does. An agent that is not installed is fine - its launcher waits for it.
 
 Remaining manual steps, printed by the installer: fill in each identity's block in
 `~/.config/devbox/identities.conf` (at minimum `name`/`email`, plus `agent_name`/`agent_email` on the
@@ -458,9 +474,21 @@ Fixed in the launcher, and worth recognising: before the `update` passthrough ex
 sessions read `~/.gitconfig` - SSH remotes, your keys, 1Password prompting. Repair is
 `./bin/install-agent` on the laptop, `./bin/devbox bootstrap` on the devbox; both are idempotent and the
 update itself is not lost (re-run `omp update`). Recognition cue: `./bin/laptop-doctor` reports the
-installed launcher no longer matching the repo template - the `~/.local/bin/omp` symlink stays intact, it
-is the file behind it that became a ~180 MB binary. Inside a session, `echo $GIT_CONFIG_GLOBAL` printing
-nothing says the same thing.
+installed launcher no longer matching the repo template - the `omp` symlink stays intact, it is the file
+behind it that became a ~180 MB binary. Inside a session, `echo $GIT_CONFIG_GLOBAL` printing nothing says
+the same thing.
+
+**Do OMP and Claude Code sessions commit as the same bot?**
+Yes. Both launchers source the same `agent-launch`, so they read the same `agent.gitconfig`, the same
+credential helper and the same `gh` shim: the identity follows the tree a repository sits in, never the
+agent. Claude Code additionally adds its own `Co-Authored-By` trailer to commit messages (its `attribution`
+setting) - text in the message, not the author.
+
+**My `claude` runs as me on the laptop.**
+`command -v claude` prints `~/.local/bin/claude`: the launchers directory is not ahead of it on the `PATH`.
+Add the `export PATH=…/launchers:$PATH` line from [Laptop install](#laptop-install) after whatever puts
+`~/.local/bin` first, then open a new shell. A `claude` started from an app or IDE that ignores your shell
+`PATH` bypasses the launcher the same way; start agent sessions from a terminal.
 
 **An agent committed under my own name and email.**
 Different failure from the one above, and the fence was working: HTTPS remote, per-operation token,

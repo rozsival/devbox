@@ -4,12 +4,12 @@
 # ~/.config/devbox/git/agent.gitconfig by container/bootstrap.sh and
 # bin/install-agent. Edit this file in the repo, never the rendered one.
 #
-# The `omp` launcher in ~/.local/libexec/devbox-agent exports GIT_CONFIG_GLOBAL
-# pointing at the rendered file, so every git the agent runs - and every tool
-# that shells out to git: gh, wt, lazygit, OMP itself - reads it *instead of*
-# ~/.gitconfig. Nothing else on the machine sees it: the same clone opened in an
-# IDE or a plain shell keeps its SSH remote, the 1Password agent and the signing
-# key. See docs/git.md.
+# The `omp` and `claude` launchers in ~/.local/libexec/devbox-agent export
+# GIT_CONFIG_GLOBAL pointing at the rendered file, so every git the agent runs -
+# and every tool that shells out to git: gh, wt, lazygit, the agent itself -
+# reads it *instead of* ~/.gitconfig. Nothing else on the machine sees it: the
+# same clone opened in an IDE or a plain shell keeps its SSH remote, the
+# 1Password agent and the signing key. See docs/git.md.
 #
 # ~/.config/devbox/git/ is installed read-only (dir 500, files 444) because
 # `git config --global` inside a session writes *here*: one such call replaced

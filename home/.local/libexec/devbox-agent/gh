@@ -5,8 +5,9 @@
 # PATH shim in front of the real `gh`. Where this directory sits on the PATH
 # decides who goes through it: on the devbox home/.bashrc.d/devbox.sh puts it
 # first for every shell, so a pane, `ssh devbox <cmd>` and an agent all land
-# here; on the laptop only the `omp` launcher next to this file adds it, so your
-# own `gh` keeps its OAuth login and only agent sessions use the tokens.
+# here; on the laptop only the `omp`/`claude` launchers next to this file add
+# it, so your own `gh` keeps its OAuth login and only agent sessions use the
+# tokens.
 #
 # Why a shim and not an exported GH_TOKEN: the account has to be chosen from the
 # *current* directory, not from wherever the shell happened to start. Agents run
@@ -37,7 +38,7 @@ if [[ -z ${real} ]]; then
   exit 127
 fi
 
-# An agent session is one the omp launcher started: it, and only it, points git
+# An agent session is one an agent launcher started: it, and only it, points git
 # at agent.gitconfig - the file that makes the App's bot the commit author.
 agent_session() {
   [[ ${GIT_CONFIG_GLOBAL:-} == "${HOME}/.config/devbox/git/agent.gitconfig" ]]

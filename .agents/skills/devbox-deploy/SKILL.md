@@ -64,7 +64,7 @@ entrypoint and bootstrap. That's why `up` answers both; unchanged, it's idempote
 
 One caveat for `home/`: bootstrap rewrites several files unconditionally - `~/.bashrc.d/devbox.sh`,
 `~/.bash_profile`, `~/.ssh/config`,
-`~/.local/libexec/devbox-agent/{omp-launcher,omp,gh,devbox-git-credential,devbox-git-no-ssh,devbox-identities}`,
+`~/.local/libexec/devbox-agent/{agent-launch,omp-launcher,claude-launcher,omp,claude,gh,devbox-git-credential,devbox-git-no-ssh,devbox-identities}`,
 `~/.config/devbox/git/agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir`
 (reinstalled through their read-only directory: bootstrap lifts the mode, re-renders from
 `identities.conf`, locks it again) - all generated, not hand-edited, so template edits land next run.
@@ -82,8 +82,9 @@ This matters: "will I lose my keys / repos / gh login" is a flat no, by construc
   `~/.ssh/signing_*.pub` (public keys only - devbox holds no private key), sshd host key under
   `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/identities.conf`, `~/.config/devbox/secrets.env`,
   `~/.config/devbox/git/agent*.gitconfig`,
-  `~/.local/libexec/devbox-agent` (`omp-launcher` plus its `omp` symlink, `gh` shim, credential helper,
-  fence), `~/.gitconfig`, every project checkout, project daemon's images, build cache, named volumes under
+  `~/.local/libexec/devbox-agent` (`agent-launch`, both launchers plus their `omp`/`claude` symlinks, `gh`
+  shim, credential helper, fence), the OMP and Claude Code installs in `~/.local/bin` with the Claude login
+  in `~/.claude`, `~/.gitconfig`, every project checkout, project daemon's images, build cache, named volumes under
   `~/.local/share/docker` - all persist across `up`, `rebuild`, image changes.
 - `--delete` applies only to synced paths; it *will* remove hand-added files from a tracked directory's
   remote copy - the remote is a mirror, deliberately.
@@ -109,8 +110,8 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 
 `doctor` runs all checks, reports each, exits non-zero on any failure: compose present, `BIND_ADDR` equal
 to `tailscale ip -4`, port listening on `BIND_ADDR`, **nothing** on `0.0.0.0`, container `healthy`, PID 1
-as `dev`, eleven toolchain probes, real exit codes, the agent git override intact (`omp` resolving through
-a symlink to `omp-launcher`, not a file an `omp update` replaced), `moshi-hook` running (unpaired warns,
+as `dev`, twelve toolchain probes, real exit codes, the agent git override intact (`omp` and `claude` each
+resolving through a symlink to their launcher, not a file an update replaced), `moshi-hook` running (unpaired warns,
 stopped fails - `./bin/devbox hook` restarts it), project Docker daemon reachable and rootless, `host.docker.internal`
 resolving to publish address, and `devbox-docker-firewall` active.
 

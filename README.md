@@ -5,7 +5,8 @@
 **Containerised remote development environment for an AI coding workstation.**
 
 One Docker container with its own unprivileged `sshd`, published only on the node's Tailscale address.
-A [herdr](https://herdr.dev) client on a laptop attaches to it as a saved machine and runs OMP agents inside.
+A [herdr](https://herdr.dev) client on a laptop attaches to it as a saved machine and runs OMP and Claude Code
+agents inside.
 
 [Setup](docs/setup.md) · [Connecting](docs/connecting.md) · [Git identities](docs/git.md) ·
 [Secrets](docs/secrets.md) · [CLI](docs/cli.md) · [Docker](docs/docker.md) · [Security](docs/security.md)
@@ -22,7 +23,7 @@ daemon, and never a private key: the box holds public keys only.
 flowchart LR
   L["laptop<br/>herdr client"] -->|" ssh devbox<br/>Tailnet only "| H["<workstation><br/>BIND_ADDR:2223"]
   H -->|" DNAT "| C["container :2222<br/>sshd as dev"]
-  C --> P["panes: OMP, node, gh, wt"]
+  C --> P["panes: OMP, Claude Code, node, gh, wt"]
   C --- V["/home/dev<br/>bind mount"]
 ```
 
@@ -38,6 +39,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
 herdr machine add devbox --label "Devbox"                            # once the ~/.ssh/config blocks below exist
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'                # optional: agent skills + browser automation
 ./bin/sync-omp                                                        # optional: this laptop's OMP preset → devbox
+ssh -t devbox claude                                                  # once, if you use Claude Code: /login
 ```
 
 Not optional: the **Devbox Laptop key in 1Password** (only `~/.ssh/devbox.pub` on disk), the two **`~/.ssh/config`
@@ -49,15 +51,16 @@ The laptop is the only place a private key or a 1Password session ever lives; th
 connection. Two scripts make the laptop match:
 
 ```bash
-./bin/install-agent   # omp launcher, gh shim, credential helper, fence, agent gitconfigs - same as the devbox
+./bin/install-agent   # omp + claude launchers, gh shim, credential helper, fence, agent gitconfigs - same as the devbox
 ./bin/laptop-doctor   # acceptance test: keys, ~/.ssh/config, signing, the override, tokens, connections
 ```
 
 - **Keys** - one `id_<slug>.pub`/`signing_<slug>.pub` pair per identity in
   `~/.config/devbox/identities.conf`, plus `devbox`: 1Password SSH items, public halves only in `~/.ssh`,
   selected per `Host` by `IdentityFile <name>.pub` + `IdentitiesOnly`.
-- **Git** - your own commits sign through `op-ssh-sign`; agents run through the `omp` launcher and get HTTPS
-  remotes, per-operation tokens, a bot author and no signing, on the same clones.
+- **Git** - your own commits sign through `op-ssh-sign`; agents run through the `omp`/`claude` launchers and
+  get HTTPS remotes, per-operation tokens, a bot author and no signing, on the same clones. On the laptop
+  the launchers need one `PATH` line, which `install-agent` prints.
 - **Tokens** - one `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env` (mode 600) and each
   identity's GitHub App credentials in its own `app` directory, read only by agent sessions.
 
@@ -71,7 +74,7 @@ connection. Two scripts make the laptop match:
 | [Setup](docs/setup.md)             | First deploy, `.env` reference, laptop key, `~/.ssh/config`, laptop agent install                                       |
 | [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, Moshi, `devbox shell`                                                       |
 | [Git identities](docs/git.md)      | Cloning repos, the identity registry, manual vs agent git, signing, laptop install                                      |
-| [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Moshi hooks, agent skills                                                             |
+| [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Claude Code, Moshi hooks, agent skills                                                |
 | [Secrets](docs/secrets.md)         | Box-wide vs per-project, per-identity `gh` tokens, GCP ADC, App creds                                                   |
 | [CLI reference](docs/cli.md)       | Every `bin/devbox`, `bin/push`, `bin/sync-omp`, `bin/sync-identities`, `bin/install-agent` and `bin/laptop-doctor` flag |
 | [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding                                                                    |
@@ -107,7 +110,7 @@ bin/rootless-docker   host-side, one-time: provisions the rootless project Docke
 bin/push              laptop-side rsync deploy
 bin/sync-omp          laptop-side OMP preset sync (~/.omp/agent/config.yml → devbox)
 bin/sync-identities   laptop-side identity registry sync (~/.config/devbox/identities.conf → devbox)
-bin/install-agent     laptop-side: installs the omp launcher, gh shim, devbox-identities and agent git config
+bin/install-agent     laptop-side: installs the omp/claude launchers, gh shim, devbox-identities and agent git config
 bin/laptop-doctor     laptop-side: checks keys, ssh/git config, the registry, the override, tokens and connections
 container/            entrypoint.sh (PID 1), bootstrap.sh (user setup), skills.sh (optional), sshd_config
 home/                                          templates installed into /home/dev by bootstrap (and onto the
@@ -118,11 +121,14 @@ home/.local/libexec/devbox-identities          the one reader of identities.conf
 home/.config/devbox/git/agent.gitconfig.tpl    template devbox-identities renders into the agent gitconfig
 docs/                 this documentation
 .agents/skills/       agent skills: devbox-basics, devbox-setup, devbox-laptop, devbox-deploy
+.claude/skills/       symlinks to .agents/skills/ - the one skills directory Claude Code reads
+CLAUDE.md             imports AGENTS.md for Claude Code
 ```
 
 ## 🤖 Working on this repo
 
-[AGENTS.md](AGENTS.md) holds the conventions. Four skills in `.agents/skills/` route an agent through the
+[AGENTS.md](AGENTS.md) holds the conventions (Claude Code reads it through `CLAUDE.md`). Four skills in
+`.agents/skills/` (mirrored into `.claude/skills/` by symlink) route an agent through the
 same material: [devbox-basics](.agents/skills/devbox-basics/SKILL.md) (what it is, how it is isolated),
 [devbox-setup](.agents/skills/devbox-setup/SKILL.md) (first install, connection failures),
 [devbox-laptop](.agents/skills/devbox-laptop/SKILL.md) (keys, configs, the agent override on the laptop),
