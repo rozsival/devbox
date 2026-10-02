@@ -177,7 +177,8 @@ the host's root Docker daemon.
   lingering rootless `dockerd` on `/run/devbox/docker.sock` from a root-owned unit in `/etc/systemd/user`,
   so nothing in the bind mount can rewrite the daemon's command line
 - `bin/sync-omp` - laptop-side: copies `~/.omp/agent/config.yml` into the devbox over `Host devbox`; only
-  the preset, never the per-machine OMP state
+  the preset, never the per-machine OMP state. Refuses (without `--force`) a file lacking a top-level
+  `bash:` block, since the copy replaces the devbox's whole file and would drop its seeded guardrail
 - `bin/sync-identities` - laptop-side: copies `~/.config/devbox/identities.conf` into the devbox over
   `Host devbox`, keeping one `identities.conf.bak` remotely, then re-runs `bootstrap.sh` there so every
   identity-derived file catches up; validates locally with `devbox-identities check` first, the same

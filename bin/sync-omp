@@ -14,13 +14,17 @@ log_error() {
 
 usage() {
   cat <<'USAGE'
-Usage: ./bin/sync-omp [ssh-host]
+Usage: ./bin/sync-omp [--force] [ssh-host]
 
 Copies ~/.omp/agent/config.yml to <ssh-host>:~/.omp/agent/config.yml, keeping one
-backup as config.yml.bak on the remote side.
+backup as config.yml.bak on the remote side. Refuses a file without a top-level
+`bash:` block: the devbox's seeded guardrail would be silently replaced.
 
 Arguments:
   ssh-host    devbox SSH host from ~/.ssh/config (default: $DEVBOX_SSH_HOST, then 'devbox')
+
+Options:
+  --force     sync a config without the bash: guardrail anyway
 
 Environment:
   DEVBOX_SSH_HOST   default SSH host
@@ -29,6 +33,7 @@ USAGE
 }
 
 host="${DEVBOX_SSH_HOST:-devbox}"
+force=0
 
 for arg in "$@"; do
   case "${arg}" in
@@ -36,6 +41,7 @@ for arg in "$@"; do
     usage
     exit 0
     ;;
+  --force) force=1 ;;
   -*) log_error "Unknown option: ${arg}" ;;
   *) host="${arg}" ;;
   esac
@@ -43,6 +49,12 @@ done
 
 src="${OMP_CONFIG:-${HOME}/.omp/agent/config.yml}"
 [[ -f "${src}" ]] || log_error "No OMP config at ${src}"
+# The devbox's config.yml carries the bash.patterns guardrail bootstrap seeded
+# (home/.omp/agent/config.yml). This sync replaces the whole file, so a laptop
+# preset without that block would remove it there without a trace.
+if ((!force)) && ! grep -qE '^bash:' "${src}"; then
+  log_error "${src} has no bash: block - syncing it would drop the devbox's OMP guardrail. Copy the block from home/.omp/agent/config.yml into it first, or pass --force."
+fi
 
 # The host entry is the container's sshd (port 2223), not the workstation's, so
 # the file lands inside /home/dev on the bind mount.
