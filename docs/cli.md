@@ -175,7 +175,7 @@ workstation's.
 ## `bin/sync-omp`
 
 ```
-Usage: ./bin/sync-omp [ssh-host]
+Usage: ./bin/sync-omp [--force] [ssh-host]
 
   ssh-host    devbox SSH host from ~/.ssh/config (default: $DEVBOX_SSH_HOST, then 'devbox')
 
@@ -187,6 +187,8 @@ Environment:
 Copies this laptop's OMP preset into the devbox, keeping one `config.yml.bak` there. Talks to the
 container's sshd (`Host devbox`, port 2223), not the workstation's, so the file lands inside bind-mounted
 `/home/dev`. Unlike `bin/push`, not part of a deploy - the preset is personal state, not repo content.
+Refuses a file without a top-level `bash:` block unless `--force`: the copy replaces the devbox's whole
+`config.yml`, and with it the `bash.patterns` guardrail bootstrap seeded ([Toolchain](toolchain.md#omp)).
 
 ## `bin/install-agent`
 

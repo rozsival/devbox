@@ -45,6 +45,39 @@ bash:
       approval: deny
     - match: 'gh auth switch*'
       approval: deny
+    # Stepping out of the launcher's fence - the exact shape of a past bypass,
+    # `env -u GH_CONFIG_DIR -u GH_TOKEN /opt/homebrew/bin/gh pr create`, which
+    # reached the human OAuth login. Every `gh` rule above is anchored on the
+    # bare name, so an absolute path to the real gh skips both them and the
+    # shim; clearing or reassigning the four exports undoes the fence for one
+    # command. Reading them (`echo $GIT_CONFIG_GLOBAL`, the documented session
+    # check) stays allowed: only unset, assignment and env-scrubbing match.
+    - match: '*/bin/gh *'
+      approval: deny
+    - match: '*/bin/gh'
+      approval: deny
+    - match: '*env -u *'
+      approval: deny
+    - match: '*env --unset*'
+      approval: deny
+    - match: '*env -i *'
+      approval: deny
+    - match: '*unset *GIT_CONFIG_GLOBAL*'
+      approval: deny
+    - match: '*unset *GIT_SSH_COMMAND*'
+      approval: deny
+    - match: '*unset *GH_CONFIG_DIR*'
+      approval: deny
+    - match: '*unset *GIT_TERMINAL_PROMPT*'
+      approval: deny
+    - match: '*GIT_CONFIG_GLOBAL=*'
+      approval: deny
+    - match: '*GIT_SSH_COMMAND=*'
+      approval: deny
+    - match: '*GH_CONFIG_DIR=*'
+      approval: deny
+    - match: '*GIT_TERMINAL_PROMPT=*'
+      approval: deny
     # Credential stores outside the agent's own: the macOS keychain (where the
     # human gh login and git credentials live) and 1Password.
     - match: '*security find-generic-password*'
