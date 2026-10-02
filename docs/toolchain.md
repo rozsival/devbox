@@ -83,9 +83,9 @@ it shadows, which is why the launcher survives an update. See
 devbox, by `./bin/install-agent` on the laptop - with `secrets: { enabled: true }` obfuscating an API key in
 the environment (`~/.config/devbox/secrets.env` or a project `.env`) before it reaches a provider, and a
 `bash.patterns` guardrail: `deny` for reaching past the agent's scoped tokens (`gh auth token|login|…`, an
-absolute-path `gh`, `env -u`/`env -i`, unsetting or reassigning `GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND`,
+absolute-path `gh`, `env -u`, unsetting or reassigning `GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND`,
 `GH_CONFIG_DIR`, `GIT_TERMINAL_PROMPT`, keychain reads, `gh secret`/`variable`/`repo delete`) and for history rewrites (`--no-verify`, force push),
-`prompt` for `op`, `gcloud`, `terraform apply`. Your edits are never overwritten; an existing file without
+`prompt` for `env -i` (this repo's smoke tests use it), `op`, `gcloud`, `terraform apply`. Your edits are never overwritten; an existing file without
 a `bash:` block is reported by both installers so you can copy the block in. A project's own
 `bash.patterns` replaces this list entirely - arrays don't merge across settings layers. What it does and
 does not stop: [Security](security.md#accepted-limits).
