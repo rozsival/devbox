@@ -1,5 +1,104 @@
-# Seeded once by container/bootstrap.sh; OMP owns the file afterwards.
+# Seeded once by container/bootstrap.sh (devbox) and bin/install-agent (laptop)
+# when absent; OMP owns the file afterwards. An existing file is never touched -
+# both installers say so when it lacks the `bash:` block below, so you can copy
+# the block in by hand.
+
 # `secrets.enabled` obfuscates any API key found in the environment - from
 # ~/.config/devbox/secrets.env or a project .env - before it can reach a provider.
 secrets:
   enabled: true
+
+# Guardrail, not containment (docs/security.md, accepted limit 7). `deny` holds
+# even under yolo; `prompt` means a person decides. Three things it cannot do:
+#
+# - Survive a project's own `bash.patterns`. Arrays are replaced, not merged,
+#   across settings layers, so a repository whose .omp/config.yml lists any
+#   patterns drops every rule here - copy the ones it needs into that file.
+# - Cover the `eval` tool, which can start a shell of its own.
+# - Stop a determined process: patterns match command text (`*` is the only
+#   wildcard), so a script file or an interpreter one-liner walks past them.
+#
+# What actually bounds an agent is what its credentials can do - on the devbox
+# nothing broader than the scoped PATs and App keys exists. These rules catch
+# the obvious reach past that: the human GitHub login, the keychain, the vault,
+# cloud consoles, and history or data destruction.
+bash:
+  patterns:
+    # The human GitHub login. The agent's `gh` is the shim's scoped token; these
+    # read, replace or reconfigure the account-wide one. Plain `gh auth status`
+    # is left to the session's mode - it shows which token a shell holds - and
+    # the subcommands are enumerated rather than `gh auth *`, because a deny is
+    # also tested against every segment and would kill `gh auth status | ...`.
+    - match: 'gh auth status*--show-token*'
+      approval: deny
+    - match: 'gh auth status* -t*'
+      approval: deny
+    - match: 'gh auth token*'
+      approval: deny
+    - match: 'gh auth login*'
+      approval: deny
+    - match: 'gh auth logout*'
+      approval: deny
+    - match: 'gh auth refresh*'
+      approval: deny
+    - match: 'gh auth setup-git*'
+      approval: deny
+    - match: 'gh auth switch*'
+      approval: deny
+    # Credential stores outside the agent's own: the macOS keychain (where the
+    # human gh login and git credentials live) and 1Password.
+    - match: '*security find-generic-password*'
+      approval: deny
+    - match: '*security find-internet-password*'
+      approval: deny
+    - match: '*security dump-keychain*'
+      approval: deny
+    - match: '*git credential-osxkeychain*'
+      approval: deny
+    - match: 'op *'
+      approval: prompt
+    - match: 'op'
+      approval: prompt
+    # GitHub surfaces no agent session should touch.
+    - match: 'gh repo delete*'
+      approval: deny
+    - match: 'gh secret *'
+      approval: deny
+    - match: 'gh variable *'
+      approval: deny
+    - match: 'gh api -X DELETE *'
+      approval: deny
+    - match: 'gh api --method DELETE *'
+      approval: deny
+    - match: 'gh workflow run *'
+      approval: prompt
+    # Cloud and infrastructure: a person decides.
+    - match: 'gcloud *'
+      approval: prompt
+    - match: 'gcloud'
+      approval: prompt
+    - match: '*terraform apply*'
+      approval: prompt
+    - match: '*terraform import*'
+      approval: prompt
+    - match: '*terraform destroy*'
+      approval: deny
+    # History and data destruction. --force-with-lease is deliberately left
+    # alone: every force pattern needs a space right after --force/-f.
+    - match: '* --no-verify*'
+      approval: deny
+    - match: 'git push --force *'
+      approval: deny
+    - match: 'git push * --force *'
+      approval: deny
+    - match: 'git push -f *'
+      approval: deny
+    - match: 'git push * -f *'
+      approval: deny
+    - match: '*docker system prune*'
+      approval: deny
+    - match: '*docker volume rm*'
+      approval: deny
+    # No `rm -rf` rules: `rm -rf /*` and `rm -rf ~*` would also match every
+    # absolute or home path (`rm -rf ~/projects/app/node_modules`), and bash's
+    # built-in critical check already forces a prompt for `rm -rf /`.

@@ -206,9 +206,9 @@ resolves through that directory, kept until then);
 every run; nothing else of yours is
 touched. `~/.config/devbox/identities.conf` is *not* created for you - the example is a valid file, so
 seeding it would render agent gitconfigs authoring as `your-agent`; a missing registry fails the check and
-the run prints the `cp` command instead. `~/.config/devbox/secrets.env` is created from its template if
-absent, then left
-alone. Reports whether `omp` and `claude` resolve to their launchers - printing the `PATH` line for your
+the run prints the `cp` command instead. `~/.config/devbox/secrets.env` and `~/.omp/agent/config.yml` (the
+OMP guardrail, [Toolchain](toolchain.md#omp)) are created from their templates if absent, then left
+alone - an existing OMP config without a `bash:` block becomes a manual step. Reports whether `omp` and `claude` resolve to their launchers - printing the `PATH` line for your
 shell rc as a manual step until they do - plus the remaining manual steps per registry
 identity: a `GH_TOKEN_<SLUG>` line in `secrets.env`, and - for any identity with an `app` directory set -
 its `{app-id,app.pem}` (mode 600) there. See [Git identities](git.md#laptop-install).

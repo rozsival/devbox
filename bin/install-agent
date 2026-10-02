@@ -158,6 +158,20 @@ if [[ ! -f "${secrets_file}" ]]; then
 fi
 chmod 600 "${secrets_file}"
 
+# The OMP guardrail: bash approval patterns that deny the obvious reach past
+# the agent's scoped tokens (the human gh login, the keychain, history
+# rewrites). Same template bootstrap seeds on the devbox. Create-if-absent
+# only: OMP and you own the file afterwards, so an existing one is reported,
+# never merged into.
+omp_config="${HOME}/.omp/agent/config.yml"
+omp_guard_missing=0
+if [[ ! -e ${omp_config} ]]; then
+  install -d -m 755 "${omp_config%/*}"
+  install -m 644 "${TEMPLATE_DIR}/.omp/agent/config.yml" "${omp_config}"
+elif ! grep -qE '^bash:' "${omp_config}"; then
+  omp_guard_missing=1
+fi
+
 # -- Report ---------------------------------------------------------------------
 log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
 path_fix=${legacy_kept}
@@ -187,6 +201,9 @@ echo 'Remaining manual steps:'
 if ((path_fix)); then
   # shellcheck disable=SC2016 # printed for the user's dotfile, expands there
   echo '  - Put the launchers first on your PATH - last line of ~/.zshrc / ~/.bashrc, after anything that prepends ~/.local/bin: export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH" - then open a new shell and re-run ./bin/install-agent (it removes the old ~/.local/bin/omp link only once the new directory wins)'
+fi
+if ((omp_guard_missing)); then
+  echo "  - ${omp_config} has no bash: block - copy the guardrail patterns from ${TEMPLATE_DIR}/.omp/agent/config.yml into it (an existing OMP config is never overwritten)"
 fi
 if ((identities_seeded)); then
   echo "  - Create ${identities_file}: cp ${TEMPLATE_DIR}/.config/devbox/identities.conf.example ${identities_file} and fill in one [slug] block per account (name, email, the laptop's public keys, optionally a GitHub App directory), then re-run ./bin/install-agent"

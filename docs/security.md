@@ -96,10 +96,23 @@ These are known and deliberate, not gaps to be closed later:
    input to that daemon's sockets outside loopback and the devbox bridge, confines them.
    `./bin/devbox doctor` fails if inactive; removed, every project port reaches the Tailnet and LAN. See
    [Docker](docker.md).
+7. **On the laptop, an agent is only as contained as your OS user.** The launchers, the `gh` shim and the
+   SSH fence choose which credential an agent session uses *by default*; they cannot stop a process
+   running as you from calling the real `gh` with your OAuth login, reading the keychain, or asking the
+   1Password agent for a key (1Password's approval prompt is then the only gate). On the devbox the same
+   bypass gains nothing - no credential broader than the scoped PATs and App keys exists there. Keep
+   autonomous or bypass-permission work against orgs you own on the devbox; on the laptop, a `gh auth
+   logout` (your own `gh` on fine-grained PATs too) and 1Password set to approve every SSH request remove
+   what a bypass could reach.
 
 An agent's own command allowlist - forbidding `op`, `gcloud` and similar - is a useful guardrail, not a
 control: a subverted agent can call the same APIs through an SDK without either binary. The boundary is
-what each credential can do.
+what each credential can do. `home/.omp/agent/config.yml` ships exactly such a guardrail for OMP, seeded
+when absent by `bootstrap` and `./bin/install-agent`: `bash.patterns` that deny `gh auth token|login|…`,
+keychain reads, `gh secret`/`variable`/`repo delete`, `--no-verify` and force pushes, and prompt for `op`,
+`gcloud` and `terraform apply`. `deny` holds even under yolo, but the rules match command text in the
+`bash` tool only - not `eval`, not a script file - and a project's own `bash.patterns` **replaces** the
+list (settings arrays never merge), so such a repository has to carry the rules it wants itself.
 
 ## Deliberate boundaries
 
