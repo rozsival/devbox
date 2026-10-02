@@ -461,11 +461,17 @@ rm -f "${secrets_dir}"/agent.gitconfig "${secrets_dir}"/agent-*.gitconfig
 chmod 500 "${git_config_dir}"
 
 # -- 14. OMP config -----------------------------------------------------------
+# Seeded once - `secrets.enabled` plus the bash approval guardrail (see the
+# template's comments and docs/security.md). OMP owns the file afterwards and
+# ./bin/sync-omp may replace it with the laptop's, so an existing file is never
+# merged into; one without the guardrail is reported instead.
 omp_config_dir="${HOME_DIR}/.omp/agent"
 mkdir -p "${omp_config_dir}"
 if [[ ! -f "${omp_config_dir}/config.yml" ]]; then
   log_info 'Seeding ~/.omp/agent/config.yml...'
   install -m 644 "${TEMPLATE_DIR}/.omp/agent/config.yml" "${omp_config_dir}/config.yml"
+elif ! grep -qE '^bash:' "${omp_config_dir}/config.yml"; then
+  register_action "~/.omp/agent/config.yml has no bash: block - copy the guardrail patterns from home/.omp/agent/config.yml into it (on the laptop too, if ./bin/sync-omp brought it here)"
 fi
 
 # -- 15. moshi-hook -----------------------------------------------------------

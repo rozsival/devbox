@@ -117,6 +117,12 @@ not the launcher. Before that passthrough, an `omp update` wrote the release bin
 agent sessions silently fell back to `~/.gitconfig` - SSH remotes, your keys. Re-run `./bin/install-agent`
 if a session ever reaches for a key; the symlinks are what `laptop-doctor` checks.
 
+`install-agent` also seeds `~/.omp/agent/config.yml` when absent - `bash.patterns` denying the obvious
+reach past the scoped tokens (`gh auth token|login|…`, keychain reads, force push). An existing config is
+never edited; one without a `bash:` block is listed as a manual step (copy the block from
+`home/.omp/agent/config.yml`). It is a guardrail, not a boundary: on the laptop an agent runs as you and can
+still reach your `gh` login or 1Password by other means - `docs/security.md`, accepted limit 7.
+
 A session's git config is the file `GIT_CONFIG_GLOBAL` names, so any `git config --global …` in its
 process tree rewrites the agent's own identity. The real caller here was `~/.extra` (sourced by
 `~/.bash_profile`), whose `git config --global user.name/email` lines ran in every login bash a session
