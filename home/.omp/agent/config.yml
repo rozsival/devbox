@@ -52,6 +52,11 @@ bash:
     # shim; clearing or reassigning the four exports undoes the fence for one
     # command. Reading them (`echo $GIT_CONFIG_GLOBAL`, the documented session
     # check) stays allowed: only unset, assignment and env-scrubbing match.
+    # Tradeoff: this repo's own smoke tests use `env -i HOME=… PATH=…` and
+    # `GIT_CONFIG_GLOBAL=… <cmd>` probes. `env -i` is therefore `prompt` - a
+    # person approves it, and yolo still stops instead of failing silently -
+    # while assigning an export stays `deny`: a probe can write a throwaway
+    # HOME and let the launcher set the variable instead.
     - match: '*/bin/gh *'
       approval: deny
     - match: '*/bin/gh'
@@ -61,7 +66,7 @@ bash:
     - match: '*env --unset*'
       approval: deny
     - match: '*env -i *'
-      approval: deny
+      approval: prompt
     - match: '*unset *GIT_CONFIG_GLOBAL*'
       approval: deny
     - match: '*unset *GIT_SSH_COMMAND*'
