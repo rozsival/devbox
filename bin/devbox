@@ -50,6 +50,7 @@ devbox_usage() {
   echo
   printf "%s\n" "Both Commands:"
   printf "  %s   Check this machine's side of the devbox\n" "doctor         "
+  printf "  %s   Print the shell completion script for bash or zsh\n" "completions    "
   echo
 
   if [[ -n "$long_usage" ]]; then
@@ -585,6 +586,38 @@ devbox_doctor_usage() {
   fi
 }
 
+devbox_completions_usage() {
+  printf "devbox completions - Print the shell completion script for bash or zsh\n\n"
+
+  printf "%s\n" "Usage:"
+  printf "  devbox completions [SHELL]\n"
+  printf "  devbox completions --help | -h\n"
+  echo
+
+  if [[ -n "$long_usage" ]]; then
+
+    printf "%s\n" "Options:"
+
+    printf "  %s\n" "--help, -h"
+    printf "    Show this help\n"
+    echo
+
+    printf "%s\n" "Arguments:"
+
+    printf "  %s\n" "SHELL"
+    printf "    Shell to complete in\n"
+    printf "    %s\n" "Allowed: bash, zsh"
+    printf "    %s\n" "Default: bash"
+    echo
+
+    printf "%s\n" "Examples:"
+    printf "  source <(./bin/devbox completions bash)\n"
+    printf "  source <(./bin/devbox completions zsh)\n"
+    echo
+
+  fi
+}
+
 normalize_input() {
   local arg passthru flags
   passthru=false
@@ -612,6 +645,39 @@ normalize_input() {
     fi
 
     shift
+  done
+}
+
+# Completion candidates for the [host] arguments of deploy and sync: every
+# concrete `Host` alias in ~/.ssh/config and the files it `Include`s, wildcard
+# and negated patterns skipped. Runs on every <TAB>, so it only reads files.
+# Words are split with `read -a`, never by unquoted expansion: `Host *` would
+# otherwise glob into the current directory's file names.
+completion_ssh_hosts() {
+  local config="${HOME}/.ssh/config" file pattern word
+  local -a files=("${config}") words
+  [[ -r ${config} ]] || return 0
+
+  # One level of Include, relative paths resolved against ~/.ssh as ssh does;
+  # these are the only words meant to glob.
+  while read -ra words; do
+    [[ ${words[0],,} == include ]] || continue
+    for pattern in "${words[@]:1}"; do
+      pattern="${pattern/#\~/${HOME}}"
+      [[ ${pattern} == /* ]] || pattern="${HOME}/.ssh/${pattern}"
+      for file in ${pattern}; do
+        [[ -r ${file} ]] && files+=("${file}")
+      done
+    done
+  done <"${config}"
+
+  for file in "${files[@]}"; do
+    while read -ra words; do
+      [[ ${words[0],,} == host ]] || continue
+      for word in "${words[@]:1}"; do
+        [[ ${word} == *[\*\?\!]* ]] || printf '%s\n' "${word}"
+      done
+    done <"${file}"
   done
 }
 
@@ -2626,6 +2692,12 @@ devbox_doctor_command() {
 
 }
 
+devbox_completions_command() {
+
+  send_completions "${args[shell]}"
+
+}
+
 parse_requirements() {
   local key
 
@@ -2764,6 +2836,13 @@ parse_requirements() {
     action="doctor"
     shift
     devbox_doctor_parse_requirements "$@"
+    shift $#
+    ;;
+
+  completions)
+    action="completions"
+    shift
+    devbox_completions_parse_requirements "$@"
     shift $#
     ;;
 
@@ -4218,6 +4297,1013 @@ devbox_doctor_parse_requirements() {
 
 }
 
+devbox_completions_parse_requirements() {
+  local key
+
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case "$key" in
+    --help | -h)
+      long_usage=yes
+      devbox_completions_usage
+      exit
+      ;;
+
+    *)
+      break
+      ;;
+
+    esac
+  done
+
+  action="completions"
+
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case "$key" in
+
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        if [[ -z ${args['shell']+x} ]]; then
+          args['shell']=$1
+          shift
+        else
+          printf "invalid argument: %s\n" "$key" >&2
+          exit 1
+        fi
+
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      if [[ -z ${args['shell']+x} ]]; then
+        args['shell']=$1
+        shift
+      else
+        printf "invalid argument: %s\n" "$key" >&2
+        exit 1
+      fi
+
+      ;;
+
+    esac
+  done
+
+  [[ -n ${args['shell']:-} ]] || args['shell']="bash"
+
+  if [[ -n ${args['shell']:-} ]] && [[ ! ${args['shell']:-} =~ ^(bash|zsh)$ ]]; then
+    printf "%s\n" "shell must be one of: bash, zsh" >&2
+    exit 1
+  fi
+
+}
+
+completion_run() {
+  local -a completion_words=("$@")
+  local -A completion_blocked_flags=()
+  local -A completion_emitted=()
+  local -a completion_options=()
+  local -A completion_options_seen=()
+  local completion_count=${#completion_words[@]}
+  local completion_current=""
+
+  if [[ $completion_count -gt 0 ]]; then
+    completion_current="${completion_words[$((completion_count - 1))]}"
+    unset 'completion_words[completion_count - 1]'
+  fi
+
+  devbox_completion "$completion_current" "${completion_words[@]}"
+
+  local completion_options_string=""
+  if [[ ${#completion_options[@]} -gt 0 ]]; then
+    completion_options_string="$(
+      IFS=,
+      printf '%s' "${completion_options[*]}"
+    )"
+  fi
+  printf ':options=%s\n' "$completion_options_string"
+}
+
+completion_candidates() {
+  local completion_current="$1"
+  shift
+
+  local completion_candidate
+  for completion_candidate in "$@"; do
+    if [[ $completion_candidate == "$completion_current"* ]] &&
+      [[ -z "${completion_emitted[$completion_candidate]:-}" ]]; then
+      printf '%s\n' "$completion_candidate"
+      completion_emitted["$completion_candidate"]=1
+    fi
+  done
+}
+
+completion_flag_candidates() {
+  local completion_flag="$1"
+  local completion_current="$2"
+  shift 2
+
+  if [[ -z "${completion_blocked_flags[$completion_flag]:-}" ]]; then
+    completion_candidates "$completion_current" "$@"
+  fi
+}
+
+completion_add_options() {
+  local completion_option
+  for completion_option in "$@"; do
+    if [[ -z "${completion_options_seen[$completion_option]:-}" ]]; then
+      completion_options+=("$completion_option")
+      completion_options_seen["$completion_option"]=1
+    fi
+  done
+}
+
+completion_dynamic_candidates() {
+  local completion_current="$1"
+  local completion_output="$2"
+
+  [[ -n $completion_output ]] || return
+
+  local completion_candidate
+  while IFS= read -r completion_candidate; do
+    if [[ -n $completion_candidate ]]; then
+      completion_candidates "$completion_current" "$completion_candidate"
+    fi
+  done <<<"$completion_output"
+}
+
+send_completions() {
+  local completion_shell="${1:-bash}"
+
+  case "$completion_shell" in
+  bash) send_completions_bash ;;
+  zsh) send_completions_zsh ;;
+  *)
+    printf 'unsupported shell: %s\n' "$completion_shell" >&2
+    return 1
+    ;;
+  esac
+}
+
+send_completions_bash() {
+  echo $'_devbox_completions() {'
+  echo $'  local completion_command="${COMP_WORDS[0]}"'
+  echo $'  local completion_current="${COMP_WORDS[COMP_CWORD]:-}"'
+  echo $'  local completion_word_count=$((COMP_CWORD - 1))'
+  echo $'  local -a completion_words=()'
+  echo $'  local -a completion_response=()'
+  echo $'  local -a completion_options=()'
+  echo $'  local -A completion_seen=()'
+  echo $''
+  echo $'  if [[ $completion_word_count -gt 0 ]]; then'
+  echo $'    completion_words=("${COMP_WORDS[@]:1:completion_word_count}")'
+  echo $'  fi'
+  echo $''
+  echo $'  COMPREPLY=()'
+  echo $'  while IFS= read -r completion_line; do'
+  echo $'    completion_response+=("$completion_line")'
+  echo $'  done < <("$completion_command" __complete "${completion_words[@]}" "$completion_current")'
+  echo $''
+  echo $'  local completion_directive="${completion_response[-1]:-}"'
+  echo $'  if [[ $completion_directive == :options=* ]]; then'
+  echo $'    unset "completion_response[-1]"'
+  echo $'    IFS=, read -r -a completion_options <<< "${completion_directive#:options=}"'
+  echo $'  fi'
+  echo $''
+  echo $'  COMPREPLY=("${completion_response[@]}")'
+  echo $'  local completion_candidate'
+  echo $'  for completion_candidate in "${COMPREPLY[@]}"; do'
+  echo $'    completion_seen["$completion_candidate"]=1'
+  echo $'  done'
+  echo $''
+  echo $'  local completion_option'
+  echo $'  local completion_files=false'
+  echo $'  local completion_directories=false'
+  echo $'  for completion_option in "${completion_options[@]}"; do'
+  echo $'    case "$completion_option" in'
+  echo $'      files) completion_files=true ;;'
+  echo $'      directories) completion_directories=true ;;'
+  echo $'      no-space) compopt -o nospace ;;'
+  echo $'    esac'
+  echo $'  done'
+  echo $''
+  echo $'  if [[ $completion_files == true ]]; then'
+  echo $'    while IFS= read -r completion_candidate; do'
+  echo $'      if [[ -z "${completion_seen[$completion_candidate]:-}" ]]; then'
+  echo $'        COMPREPLY+=("$completion_candidate")'
+  echo $'        completion_seen["$completion_candidate"]=1'
+  echo $'      fi'
+  echo $'    done < <(compgen -f -- "$completion_current")'
+  echo $'  elif [[ $completion_directories == true ]]; then'
+  echo $'    while IFS= read -r completion_candidate; do'
+  echo $'      if [[ -z "${completion_seen[$completion_candidate]:-}" ]]; then'
+  echo $'        COMPREPLY+=("$completion_candidate")'
+  echo $'        completion_seen["$completion_candidate"]=1'
+  echo $'      fi'
+  echo $'    done < <(compgen -d -- "$completion_current")'
+  echo $'  fi'
+  echo $'}'
+  echo $''
+  echo $'complete -F _devbox_completions devbox'
+}
+
+send_completions_zsh() {
+  echo $'#compdef devbox'
+  echo $''
+  echo $'_devbox_completions() {'
+  echo $'  local completion_command="${words[1]}"'
+  echo $'  local completion_current="${words[CURRENT]:-}"'
+  echo $'  local completion_output'
+  echo $'  local completion_directive'
+  echo $'  local -a completion_words=()'
+  echo $'  local -a completion_response=()'
+  echo $'  local -a completion_options=()'
+  echo $'  local -a completion_add_args=()'
+  echo $''
+  echo $'  if (( CURRENT > 2 )); then'
+  echo $'    completion_words=("${words[2,$((CURRENT - 1))]}")'
+  echo $'  fi'
+  echo $''
+  echo $'  completion_output="$("$completion_command" __complete "${completion_words[@]}" "$completion_current")"'
+  echo $'  completion_response=("${(@f)completion_output}")'
+  echo $''
+  echo $'  completion_directive="${completion_response[-1]:-}"'
+  echo $'  if [[ $completion_directive == :options=* ]]; then'
+  echo $'    completion_response[-1]=()'
+  echo $'    completion_options=("${(@s:,:)${completion_directive#:options=}}")'
+  echo $'  fi'
+  echo $''
+  echo $'  local completion_option'
+  echo $'  local completion_files=false'
+  echo $'  local completion_directories=false'
+  echo $'  for completion_option in "${completion_options[@]}"; do'
+  echo $'    case "$completion_option" in'
+  echo $'      files) completion_files=true ;;'
+  echo $'      directories) completion_directories=true ;;'
+  echo $'      no-space) completion_add_args=(-S "") ;;'
+  echo $'    esac'
+  echo $'  done'
+  echo $''
+  echo $'  if (( ${#completion_response[@]} > 0 )); then'
+  echo $'    compadd "${completion_add_args[@]}" -- "${completion_response[@]}"'
+  echo $'  fi'
+  echo $''
+  echo $'  if [[ $completion_files == true ]]; then'
+  echo $'    _files "${completion_add_args[@]}"'
+  echo $'  elif [[ $completion_directories == true ]]; then'
+  echo $'    _files -/ "${completion_add_args[@]}"'
+  echo $'  fi'
+  echo $'}'
+  echo $''
+  echo $'compdef _devbox_completions devbox'
+}
+
+devbox_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    env)
+      shift
+      devbox_env_completion "$completion_current" "$@"
+      return
+      ;;
+    up)
+      shift
+      devbox_up_completion "$completion_current" "$@"
+      return
+      ;;
+    down)
+      shift
+      devbox_down_completion "$completion_current" "$@"
+      return
+      ;;
+    rebuild)
+      shift
+      devbox_rebuild_completion "$completion_current" "$@"
+      return
+      ;;
+    bootstrap)
+      shift
+      devbox_bootstrap_completion "$completion_current" "$@"
+      return
+      ;;
+    skills)
+      shift
+      devbox_skills_completion "$completion_current" "$@"
+      return
+      ;;
+    shell)
+      shift
+      devbox_shell_completion "$completion_current" "$@"
+      return
+      ;;
+    sessions)
+      shift
+      devbox_sessions_completion "$completion_current" "$@"
+      return
+      ;;
+    logs)
+      shift
+      devbox_logs_completion "$completion_current" "$@"
+      return
+      ;;
+    hook)
+      shift
+      devbox_hook_completion "$completion_current" "$@"
+      return
+      ;;
+    keys)
+      shift
+      devbox_keys_completion "$completion_current" "$@"
+      return
+      ;;
+    docker)
+      shift
+      devbox_docker_completion "$completion_current" "$@"
+      return
+      ;;
+    deploy)
+      shift
+      devbox_deploy_completion "$completion_current" "$@"
+      return
+      ;;
+    sync)
+      shift
+      devbox_sync_completion "$completion_current" "$@"
+      return
+      ;;
+    agent)
+      shift
+      devbox_agent_completion "$completion_current" "$@"
+      return
+      ;;
+    doctor)
+      shift
+      devbox_doctor_completion "$completion_current" "$@"
+      return
+      ;;
+    completions)
+      shift
+      devbox_completions_completion "$completion_current" "$@"
+      return
+      ;;
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    --version | -v)
+      completion_blocked_flags["--version"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+  completion_candidates "$completion_current" env up down rebuild bootstrap skills shell sessions logs hook keys docker deploy sync agent doctor completions
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+    completion_flag_candidates --version "$completion_current" --version -v
+  fi
+
+}
+
+devbox_env_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+}
+
+devbox_up_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    --force | -f)
+      completion_blocked_flags["--force"]=1
+
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+    completion_flag_candidates --force "$completion_current" --force -f
+  fi
+
+}
+
+devbox_down_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    --force | -f)
+      completion_blocked_flags["--force"]=1
+
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+    completion_flag_candidates --force "$completion_current" --force -f
+  fi
+
+}
+
+devbox_rebuild_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    --force | -f)
+      completion_blocked_flags["--force"]=1
+
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+    completion_flag_candidates --force "$completion_current" --force -f
+  fi
+
+}
+
+devbox_bootstrap_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+}
+
+devbox_skills_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+}
+
+devbox_shell_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+}
+
+devbox_sessions_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+}
+
+devbox_logs_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    --follow | -f)
+      completion_blocked_flags["--follow"]=1
+
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+    completion_flag_candidates --follow "$completion_current" --follow -f
+  fi
+
+}
+
+devbox_hook_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    --update | -u)
+      completion_blocked_flags["--update"]=1
+
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+    completion_flag_candidates --update "$completion_current" --update -u
+  fi
+
+}
+
+devbox_keys_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+}
+
+devbox_docker_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    setup)
+      shift
+      devbox_docker_setup_completion "$completion_current" "$@"
+      return
+      ;;
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+  completion_candidates "$completion_current" setup
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+}
+
+devbox_docker_setup_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    --check)
+      completion_blocked_flags["--check"]=1
+
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+    completion_flag_candidates --check "$completion_current" --check
+  fi
+
+}
+
+devbox_deploy_completion() {
+  local completion_current="$1"
+  local completion_arg_index=0
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    --up)
+      completion_blocked_flags["--up"]=1
+
+      shift
+      ;;
+    --force | -f)
+      completion_blocked_flags["--force"]=1
+
+      shift
+      ;;
+    *)
+      if [[ $completion_arg_index -ge 1 ]]; then
+        return
+      fi
+      completion_arg_index=$((completion_arg_index + 1))
+      shift
+
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+    completion_flag_candidates --up "$completion_current" --up
+    completion_flag_candidates --force "$completion_current" --force -f
+  fi
+
+  if [[ $completion_current != -* ]]; then
+    case "$completion_arg_index" in
+    0)
+      if completion_output="$({ completion_ssh_hosts; } 2>/dev/null)"; then
+        completion_dynamic_candidates "$completion_current" "$completion_output"
+      fi
+      ;;
+    esac
+  fi
+
+}
+
+devbox_sync_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    omp)
+      shift
+      devbox_sync_omp_completion "$completion_current" "$@"
+      return
+      ;;
+    identities)
+      shift
+      devbox_sync_identities_completion "$completion_current" "$@"
+      return
+      ;;
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+  completion_candidates "$completion_current" omp identities
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+}
+
+devbox_sync_omp_completion() {
+  local completion_current="$1"
+  local completion_arg_index=0
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    --allow-unguarded)
+      completion_blocked_flags["--allow-unguarded"]=1
+
+      shift
+      ;;
+    *)
+      if [[ $completion_arg_index -ge 1 ]]; then
+        return
+      fi
+      completion_arg_index=$((completion_arg_index + 1))
+      shift
+
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+    completion_flag_candidates --allow-unguarded "$completion_current" --allow-unguarded
+  fi
+
+  if [[ $completion_current != -* ]]; then
+    case "$completion_arg_index" in
+    0)
+      if completion_output="$({ completion_ssh_hosts; } 2>/dev/null)"; then
+        completion_dynamic_candidates "$completion_current" "$completion_output"
+      fi
+      ;;
+    esac
+  fi
+
+}
+
+devbox_sync_identities_completion() {
+  local completion_current="$1"
+  local completion_arg_index=0
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      if [[ $completion_arg_index -ge 1 ]]; then
+        return
+      fi
+      completion_arg_index=$((completion_arg_index + 1))
+      shift
+
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+  if [[ $completion_current != -* ]]; then
+    case "$completion_arg_index" in
+    0)
+      if completion_output="$({ completion_ssh_hosts; } 2>/dev/null)"; then
+        completion_dynamic_candidates "$completion_current" "$completion_output"
+      fi
+      ;;
+    esac
+  fi
+
+}
+
+devbox_agent_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    install)
+      shift
+      devbox_agent_install_completion "$completion_current" "$@"
+      return
+      ;;
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+  completion_candidates "$completion_current" install
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+}
+
+devbox_agent_install_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+}
+
+devbox_doctor_completion() {
+  local completion_current="$1"
+  local completion_arg_index=0
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      if [[ $completion_arg_index -ge 1 ]]; then
+        return
+      fi
+      completion_arg_index=$((completion_arg_index + 1))
+      shift
+
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+  if [[ $completion_current != -* ]]; then
+    case "$completion_arg_index" in
+    0)
+      local -a completion_values=(
+        "host"
+        "laptop"
+      )
+      completion_candidates "$completion_current" "${completion_values[@]}"
+      ;;
+    esac
+  fi
+
+}
+
+devbox_completions_completion() {
+  local completion_current="$1"
+  local completion_arg_index=0
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      if [[ $completion_arg_index -ge 1 ]]; then
+        return
+      fi
+      completion_arg_index=$((completion_arg_index + 1))
+      shift
+
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+  if [[ $completion_current != -* ]]; then
+    case "$completion_arg_index" in
+    0)
+      local -a completion_values=(
+        "bash"
+        "zsh"
+      )
+      completion_candidates "$completion_current" "${completion_values[@]}"
+      ;;
+    esac
+  fi
+
+}
+
 initialize() {
   declare -g version="1.0.0"
   set -euo pipefail
@@ -4277,10 +5363,16 @@ run() {
   "agent") devbox_agent_command ;;
   "agent install") devbox_agent_install_command ;;
   "doctor") devbox_doctor_command ;;
+  "completions") devbox_completions_command ;;
   esac
 }
 
 start() {
+  if [[ ${1:-} == "__complete" ]]; then
+    completion_run "${@:2}"
+    return
+  fi
+
   command_line_args=("$@")
   initialize
   run "${command_line_args[@]}"
