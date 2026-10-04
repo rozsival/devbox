@@ -2,133 +2,78 @@
 
 # 📦 devbox
 
-**Containerised remote development environment for an AI coding workstation.**
+### Containerised remote development environment for an AI coding workstation
 
-One Docker container with its own unprivileged `sshd`, published only on the node's Tailscale address.
-A [herdr](https://herdr.dev) client on a laptop attaches to it as a saved machine and runs OMP and Claude Code
-agents inside.
+![Platform](https://img.shields.io/badge/Platform-Ubuntu%2026.04%20LTS-0A84FF)
+![Runtime](https://img.shields.io/badge/Runtime-Docker%20%2B%20rootless%20project%20daemon-2496ED)
+![Network](https://img.shields.io/badge/Network-Tailscale%20only-4CAF50)
+![Agents](https://img.shields.io/badge/Agents-OMP%20%2B%20Claude%20Code-F46800)
 
-[Setup](docs/setup.md) · [Connecting](docs/connecting.md) · [Git identities](docs/git.md) ·
-[Secrets](docs/secrets.md) · [CLI](docs/cli.md) · [Docker](docs/docker.md) · [Security](docs/security.md)
+One Docker container with its own unprivileged `sshd`, published only on the node's Tailscale address. A
+[herdr](https://herdr.dev) client on a laptop attaches to it as a saved machine and runs **OMP** and **Claude Code**
+agents inside — the container is the agent sandbox.
+
+**[📚 Documentation](docs/README.md)** · [Installation](docs/installation.md) · [Connecting](docs/connecting.md) ·
+[Git identities](docs/git.md) · [CLI](docs/cli.md)
 
 </div>
 
 ---
 
-The container **is** the sandbox. Agents running with bypassed permissions reach the project tree, the
-internet and a rootless project Docker daemon - never the host filesystem, never the host's root Docker
-daemon, and never a private key: the box holds public keys only.
+## ✨ Highlights
 
-```mermaid
-flowchart LR
-  L["laptop<br/>herdr client"] -->|" ssh devbox<br/>Tailnet only "| H["<workstation><br/>BIND_ADDR:2223"]
-  H -->|" DNAT "| C["container :2222<br/>sshd as dev"]
-  C --> P["panes: OMP, Claude Code, node, gh, wt"]
-  C --- V["/home/dev<br/>bind mount"]
-```
+| Feature                  | What it gives you                                                                                                |
+|--------------------------|------------------------------------------------------------------------------------------------------------------|
+| **Agent sandbox**        | Agents with bypassed permissions reach the project tree, the internet and a rootless project Docker daemon only  |
+| **Tailnet-only access**  | One `sshd` port, published on the Tailscale address (`BIND_ADDR`) and loopback — never `0.0.0.0`                 |
+| **No private keys**      | Public keys only; manual git borrows the laptop's 1Password agent, agent git gets HTTPS and per-operation tokens |
+| **Multiple identities**  | One `identities.conf` routes git author, signing key and GitHub token by directory and GitHub owner              |
+| **Project Docker**       | `docker compose` against a rootless sibling daemon, with path identity and project ports kept off the Tailnet    |
+| **Persistent workspace** | herdr panes survive client exit; `/home/dev` is a host bind mount that survives every rebuild                    |
+| **One CLI, both sides**  | `./bin/devbox` for workstation and laptop, with a `doctor` acceptance test on each                               |
 
-## 🚀 60-second start
+> [!IMPORTANT]
+> The container **is** the sandbox: agents never reach the host filesystem, the host's root Docker daemon or a private
+> key — the box holds public keys only. It contains authority, not data: outbound network is unrestricted, so assume
+> anything inside can leave. See [Security model](docs/security.md).
 
-Workstation side, from the laptop:
+## 🚀 Quick start
+
+**Requires** a workstation running Ubuntu 26.04 LTS with Docker and Tailscale, the **Devbox Laptop key in 1Password**
+(only `~/.ssh/devbox.pub` on disk), the two **`~/.ssh/config` blocks**, a non-empty **`BIND_ADDR`** and **bash >= 4.2
+on the laptop** (`brew install bash`; macOS ships 3.2, which the generated `bin/devbox` refuses) — see
+[Installation](docs/installation.md).
+
+From the laptop:
 
 ```bash
 ./bin/devbox deploy <workstation>                                     # sync the repo to ~/devbox
 ssh <workstation> 'cd ~/devbox && ./bin/devbox env'                   # .env from .env.example, BIND_ADDR from Tailscale
 ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'  # once: project Docker, asks for a password
 ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
-herdr machine add devbox --label "Devbox"                            # once the ~/.ssh/config blocks below exist
+herdr machine add devbox --label "Devbox"                             # once the ~/.ssh/config blocks exist
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'                # optional: agent skills + browser automation
 ./bin/devbox sync omp                                                 # optional: this laptop's OMP preset → devbox
 ssh -t devbox claude                                                  # once, if you use Claude Code: /login
+./bin/devbox agent install                                            # laptop: the same agent git override
+./bin/devbox doctor laptop                                            # laptop: acceptance test
 ```
 
-Not optional: the **Devbox Laptop key in 1Password** (only `~/.ssh/devbox.pub` on disk), the two **`~/.ssh/config`
-blocks**, a non-empty **`BIND_ADDR`**, and **bash >= 4.2 on the laptop** (`brew install bash`; macOS ships 3.2,
-which the generated `bin/devbox` refuses). The first three are in [Setup](docs/setup.md).
+Then run `herdr` and open panes on the **Devbox** machine, or `ssh devbox` for a plain shell.
 
-## 💻 Laptop setup
-
-The laptop is the only place a private key or a 1Password session ever lives; the devbox borrows them per
-connection. Two commands make the laptop match:
-
-```bash
-./bin/devbox agent install   # omp + claude launchers, gh shim, credential helper, fence, agent gitconfigs - same as the devbox
-./bin/devbox doctor laptop   # acceptance test: keys, ~/.ssh/config, signing, the override, tokens, connections
-```
-
-- **Keys** - one `id_<slug>.pub`/`signing_<slug>.pub` pair per identity in
-  `~/.config/devbox/identities.conf`, plus `devbox`: 1Password SSH items, public halves only in `~/.ssh`,
-  selected per `Host` by `IdentityFile <name>.pub` + `IdentitiesOnly`.
-- **Git** - your own commits sign through `op-ssh-sign`; agents run through the `omp`/`claude` launchers and
-  get HTTPS remotes, per-operation tokens, a bot author and no signing, on the same clones. On the laptop
-  the launchers need one `PATH` line, which `devbox agent install` prints.
-- **Tokens** - one `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env` (mode 600) and each
-  identity's GitHub App credentials in its own `app` directory, read only by agent sessions.
-
-`devbox doctor laptop` names what is missing; the [devbox-laptop](.agents/skills/devbox-laptop/SKILL.md) skill and
-[Git identities](docs/git.md#laptop-install) walk the fixes.
+> [!WARNING]
+> `up`, `down` and `rebuild` recreate the container and drop every live SSH session and herdr pane; they ask first
+> unless `--force` is given.
 
 ## 📚 Documentation
 
-| Doc                                | Read it when                                                                                     |
-|------------------------------------|--------------------------------------------------------------------------------------------------|
-| [Setup](docs/setup.md)             | First deploy, `.env` reference, laptop key, `~/.ssh/config`, laptop agent install                |
-| [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, Moshi, `devbox shell`                                |
-| [Git identities](docs/git.md)      | Cloning repos, the identity registry, manual vs agent git, signing, laptop install               |
-| [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Claude Code, Moshi hooks, agent skills                         |
-| [Secrets](docs/secrets.md)         | Box-wide vs per-project, per-identity `gh` tokens, GCP ADC, App creds                            |
-| [CLI reference](docs/cli.md)       | Every `bin/devbox` command and flag - workstation, laptop and `doctor` - and how to edit the CLI |
-| [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding                                             |
-| [Docker](docs/docker.md)           | Project containers, the rootless daemon, `devbox-ports`                                          |
-| [Operations](docs/operations.md)   | Redeploy, restart, backup, `doctor`, troubleshooting                                             |
-| [Security model](docs/security.md) | Boundaries, trust assumptions, what an escaped agent reaches                                     |
+Everything else — architecture, installation, connecting, git identities, secrets, toolchain, networking, project
+Docker, operations, security, CLI and development — lives in **[docs/](docs/README.md)**.
 
-## ⚡ Cheat sheet
+## 👤 Ownership
 
-```bash
-./bin/devbox deploy <workstation> --up   # deploy + start (keeps state; asks before killing SSH sessions)
-ssh devbox                           # shell in the container
-ssh -A devbox                        # + push, pull, sign as yourself (forwards the 1Password agent)
-herdr                                # attach panes; they survive client exit
-ssh -N -L 5173:localhost:5173 devbox # reach a dev server
-ssh devbox 'cd projects/app && docker compose up -d && devbox-ports'  # project containers on localhost
-ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
-ssh <workstation> 'cd ~/devbox && ./bin/devbox sessions'   # who is connected (a recreate kills them)
-./bin/devbox sync omp                # push this laptop's OMP preset into the devbox
-./bin/devbox agent install           # laptop-side: same agent git override as the devbox
-./bin/devbox doctor laptop           # laptop-side acceptance test: keys, configs, override, tokens
-./bin/devbox sync identities         # push this laptop's identity registry into the devbox
-```
-
-## 🗺 Layout
-
-```
-.env.example          the only per-host configuration (.env is gitignored, never deployed)
-Dockerfile            pinned toolchain; ends as USER dev
-docker-compose.yml    ${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222 is the whole network boundary
-bashly-settings.yml   bashly settings: builds bin/devbox from cli/
-cli/                  the CLI source: bashly.yml (commands), commands/ (bodies), lib/ (shared functions)
-bin/devbox            the CLI, generated by bashly and committed - never hand-edited. Workstation: env, up, down,
-                      rebuild, bootstrap, skills, shell, sessions, logs, hook, keys, docker setup. Laptop:
-                      deploy, sync omp, sync identities, agent install. Both: doctor
-container/            entrypoint.sh (PID 1), bootstrap.sh (user setup), skills.sh (optional), sshd_config
-home/                                          templates installed into /home/dev by bootstrap (and onto the
-                                                laptop by devbox agent install)
-home/.config/devbox/identities.conf.example    identity registry template - you copy it to ~/.config/devbox/
-                                                identities.conf; nothing seeds it for you
-home/.local/libexec/devbox-identities          the one reader of identities.conf: sourceable library and CLI
-home/.config/devbox/git/agent.gitconfig.tpl    template devbox-identities renders into the agent gitconfig
-docs/                 this documentation
-.agents/skills/       agent skills: devbox-basics, devbox-setup, devbox-laptop, devbox-deploy
-.claude/skills/       symlinks to .agents/skills/ - the one skills directory Claude Code reads
-CLAUDE.md             imports AGENTS.md for Claude Code
-```
-
-## 🤖 Working on this repo
-
-[AGENTS.md](AGENTS.md) holds the conventions (Claude Code reads it through `CLAUDE.md`). Four skills in
-`.agents/skills/` (mirrored into `.claude/skills/` by symlink) route an agent through the
-same material: [devbox-basics](.agents/skills/devbox-basics/SKILL.md) (what it is, how it is isolated),
-[devbox-setup](.agents/skills/devbox-setup/SKILL.md) (first install, connection failures),
-[devbox-laptop](.agents/skills/devbox-laptop/SKILL.md) (keys, configs, the agent override on the laptop),
-[devbox-deploy](.agents/skills/devbox-deploy/SKILL.md) (shipping a change and applying it).
+| Item       | Details                                                                   |
+|------------|---------------------------------------------------------------------------|
+| Maintainer | [@rozsival](https://github.com/rozsival) (see [`CODEOWNERS`](CODEOWNERS)) |
+| Issues     | [GitHub Issues](https://github.com/rozsival/devbox/issues)                |
+| License    | [MIT](LICENSE)                                                            |

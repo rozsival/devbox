@@ -50,22 +50,26 @@ the host's root Docker daemon.
 
 ## Key Files
 
-- `README.md` - entry point: 60-second start, documentation index, layout, cheat sheet
-- `docs/` - domain-scoped documentation, each file ending in an FAQ. Update the file that owns the domain
-  rather than growing `README.md`:
-  - `docs/setup.md` - prerequisites, laptop key, `~/.ssh/config`, first deploy, `.env` reference
+- `README.md` - minimal project overview, highlights, quick start, ownership; links to `docs/`
+- `docs/README.md` - documentation index; one domain per file in `docs/`, each ending in an FAQ (follow its
+  conventions - page shape, emoji headings, Prettier at 120 columns - when adding or editing docs). Update the file
+  that owns the domain rather than growing `README.md`:
+  - `docs/architecture.md` - system map, components, container startup order, ways in, repository layout
+  - `docs/installation.md` - prerequisites, laptop key, `~/.ssh/config`, first deploy, laptop agent install, `.env`
+    reference
   - `docs/connecting.md` - herdr panes, `ssh devbox`, Moshi on a phone, `./bin/devbox shell`, cloning, port forwarding
   - `docs/git.md` - the identity registry, manual vs agent git, the credential helper, signing, laptop install
   - `docs/toolchain.md` - pinned versions, install locations, OMP, Claude Code, Moshi/`moshi-hook`, agent skills, adding
     a tool
   - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, the Claude Code login, GCP ADC, App
     credentials
-  - `docs/cli.md` - the `bin/devbox` reference (workstation, laptop and `doctor` commands), `devbox-identities`,
-    and editing the CLI
+  - `docs/cli.md` - the `bin/devbox` reference (cheat sheet, workstation, laptop and `doctor` commands),
+    `devbox-identities`, and the maintainer workflow for editing the CLI
   - `docs/networking.md` - exposure model, why UFW cannot block a published port, tunnels
   - `docs/docker.md` - the rootless project daemon, path identity, reaching services, `devbox-ports`
   - `docs/operations.md` - redeploy, persistence, backup, health, troubleshooting
   - `docs/security.md` - boundaries, trust assumptions, deliberate limits
+  - `docs/development.md` - toolchain, rules, shipping a change, agent assets
 - `.env.example` - the only per-host configuration; `.env` is gitignored and never synced by `devbox deploy`.
   Holds no identity: who this box is, per account and per directory tree, lives in
   `~/.config/devbox/identities.conf` instead (see the `home/` bullet below) - an enumeration of

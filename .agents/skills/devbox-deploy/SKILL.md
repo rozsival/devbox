@@ -7,7 +7,7 @@ description: Pushes repo changes out to the devbox and applies them - ./bin/devb
 
 Deploying is two easily-conflated steps: **sync the repo** to the workstation (`devbox deploy`, laptop side), **apply
 it** to the running container (`devbox up` and friends, workstation side) - picking the wrong one is
-usually why a change seems to do nothing. Syncing the *identity registry* is a separate, third step
+usually why a change seems to do nothing. Syncing the _identity registry_ is a separate, third step
 (`devbox sync identities`): it never travels with `devbox deploy`, since `identities.conf` is gitignored,
 hand-held state, not repo content.
 
@@ -57,7 +57,7 @@ script - `--force` overrides, needing say-so. `./bin/devbox sessions` also shows
 into the container. `hook` restarts `moshi-hook` (after `moshi-hook pair`, or crashing) without
 costing anyone their session; `hook --update` upgrades it first, for a new release.
 
-`container/` and `home/` are bind-mounted `:ro` *and* `COPY`d into the image (`COPY container/` / `COPY
+`container/` and `home/` are bind-mounted `:ro` _and_ `COPY`d into the image (`COPY container/` / `COPY
 home/` in the `Dockerfile`, as fallback): the mount makes new bytes visible immediately; editing also
 changes the build context - `up` produces a new image id, compose recreates the container, re-running
 entrypoint and bootstrap. That's why `up` answers both; unchanged, it's idempotent: compose reports
@@ -87,7 +87,7 @@ This matters: "will I lose my keys / repos / gh login" is a flat no, by construc
   shim, credential helper, fence), the OMP and Claude Code installs in `~/.local/bin` with the Claude login
   in `~/.claude`, `~/.gitconfig`, every project checkout, project daemon's images, build cache, named volumes under
   `~/.local/share/docker` - all persist across `up`, `rebuild`, image changes.
-- `--delete` applies only to synced paths; it *will* remove hand-added files from a tracked directory's
+- `--delete` applies only to synced paths; it _will_ remove hand-added files from a tracked directory's
   remote copy - the remote is a mirror, deliberately.
 
 What does **not** survive a recreate: anything in the container's writable layer, e.g.
@@ -145,7 +145,7 @@ ssh -t <workstation> 'sudo rm -f /tmp/devbox-home.tar.gz'
 The exclusion drops the project daemon's images, cache, named volumes; dump a database you care about,
 don't tar its volume. Restore: extract into place, preserve `HOST_UID:HOST_GID` ownership, then
 `./bin/devbox up`. Copy the host's `.env` separately - in neither repo nor data dir. The sshd host
-key *is* in the archive, so restore keeps the laptop's `known_hosts` valid.
+key _is_ in the archive, so restore keeps the laptop's `known_hosts` valid.
 
 ## Repo conventions when the change is yours
 

@@ -1,7 +1,15 @@
 # 🔗 Connecting
 
-Four ways into the container, landing as `dev` in the same bind-mounted `/home/dev` - laptop and
-workstation `~/projects` differ.
+> Four ways into the container, landing as `dev` in the same bind-mounted `/home/dev` — laptop and workstation
+> `~/projects` differ. Normal work goes through `herdr`; `ssh devbox` covers one-off commands and tunnels, Moshi covers
+> the phone, and `./bin/devbox shell` is the recovery route.
+
+**Related:** [Installation](installation.md) · [Git Identities](git.md) · [Toolchain](toolchain.md) ·
+[Networking](networking.md)
+
+---
+
+## 🗺️ Routes
 
 | Route                | From        | Use it for                                         |
 |----------------------|-------------|----------------------------------------------------|
@@ -10,22 +18,22 @@ workstation `~/projects` differ.
 | Moshi                | Phone       | Watching, steering an agent away from the desk     |
 | `./bin/devbox shell` | Workstation | Recovery when SSH or the network is broken         |
 
-## herdr panes
+## 🪟 herdr panes
 
 ```bash
 herdr                    # select "Devbox" in the sidebar
 ```
 
-A pane opens a login shell in `/home/dev`, running server-side after detach or quit - lid-close or
-killed client won't interrupt a build, clone, or agent; reconnecting restores it.
+A pane opens a login shell in `/home/dev`, running server-side after detach or quit — lid-close or a killed client won't
+interrupt a build, clone, or agent; reconnecting restores it.
 
-`herdr` requires the pinned binary at `/usr/local/bin/herdr` - background connections get only the
-default non-interactive SSH `PATH`, so it's missing from `~/.local/bin`.
+`herdr` requires the pinned binary at `/usr/local/bin/herdr` — background connections get only the default
+non-interactive SSH `PATH`, so it's missing from `~/.local/bin`.
 
-## `ssh devbox`
+## 🔑 `ssh devbox`
 
-`devbox` is an SSH config alias, not a shell alias ([Setup](setup.md#2-add-the-sshconfig-blocks)). Expands
-to:
+`devbox` is an SSH config alias, not a shell alias ([Installation](installation.md#2-add-the-sshconfig-blocks)).
+Expands to:
 
 ```bash
 ssh -p 2223 -l dev -o IdentitiesOnly=yes -i ~/.ssh/devbox.pub <workstation>
@@ -40,39 +48,41 @@ ssh devbox 'cd ~/projects/devbox && git status -sb'
 
 Anything reading `~/.ssh/config` honours it: `scp`, `rsync`, `git`, `ssh -L`.
 
-Add `-A` to forward the laptop's 1Password agent for one connection - manual git needs it (clone, fetch,
-push, signed commit; agent sessions use HTTPS instead - [Git identities](git.md)):
+Add `-A` to forward the laptop's 1Password agent for one connection — manual git needs it (clone, fetch, push, signed
+commit; agent sessions use HTTPS instead — [Git Identities](git.md)):
 
 ```bash
 ssh -A devbox
 ```
 
-Plain `ssh devbox` (no `-A`), herdr panes, `./bin/devbox shell` never forward the agent - manual git
-fails, on purpose: [Git identities](git.md#manual-work-on-the-devbox---the-escape-hatch).
+> [!NOTE]
+> Plain `ssh devbox` (no `-A`), herdr panes and `./bin/devbox shell` never forward the agent — manual git fails, on
+> purpose: [Git Identities](git.md#-manual-work-on-the-devbox--the-escape-hatch).
 
-## `./bin/devbox shell`
+## 🧯 `./bin/devbox shell`
 
 ```bash
 ssh <workstation> 'cd ~/devbox && ./bin/devbox shell'   # docker compose exec -it devbox bash -l
 ```
 
-This bypasses the container's sshd, working even if `authorized_keys`, the host key, or Tailscale is
-broken.
+This bypasses the container's sshd, working even if `authorized_keys`, the host key, or Tailscale is broken.
 
-## Moshi on a phone
+## 📱 Moshi on a phone
 
-Moshi's an SSH client: host `<workstation>`, port `2223`, user `dev`, container-authorized key. Add the
-phone's key to `DEVBOX_EXTRA_AUTHORIZED_KEYS` in `.env` on the workstation, not via Easy Pair - the
-entrypoint rebuilds `authorized_keys` from GitHub plus that variable each start, erasing direct edits at
-the next `./bin/devbox up`.
+Moshi's an SSH client: host `<workstation>`, port `2223`, user `dev`, container-authorized key.
 
-Notifications, lock-screen approvals, and transcript view need `moshi-hook`, which `bootstrap` installs
-and the entrypoint starts. One pairing step activates it - [Toolchain](toolchain.md#moshi-and-moshi-hook).
+> [!IMPORTANT]
+> Add the phone's key to `DEVBOX_EXTRA_AUTHORIZED_KEYS` in `.env` on the workstation, not via Easy Pair — the
+> entrypoint rebuilds `authorized_keys` from GitHub plus that variable each start, erasing direct edits at the next
+> `./bin/devbox up`.
 
-## Cloning a repo
+Notifications, lock-screen approvals, and transcript view need `moshi-hook`, which `bootstrap` installs and the
+entrypoint starts. One pairing step activates it — [Toolchain](toolchain.md#-moshi-and-moshi-hook).
 
-Clone inside the container, agent forwarded, target directory picking the identity - the remote is the
-same plain GitHub URL either way:
+## 📥 Cloning a repo
+
+Clone inside the container, agent forwarded, target directory picking the identity — the remote is the same plain GitHub
+URL either way:
 
 ```bash
 ssh -A devbox
@@ -80,13 +90,12 @@ git clone git@github.com:<your-github-username>/<repo> ~/projects/<repo>       #
 git clone git@github.com:<org>/<repo> ~/projects/work/<repo>                   # non-default, org in its `orgs`
 ```
 
-Full rules - how the ssh tag and the `hasconfig:` org include pick a non-default identity's key and author,
-how agent sessions authenticate without either - in
-[Git identities](git.md).
+Full rules — how the ssh tag and the `hasconfig:` org include pick a non-default identity's key and author, how agent
+sessions authenticate without either — in [Git Identities](git.md).
 
-## Reaching a dev server
+## 🌐 Reaching a dev server
 
-Dev servers aren't published - forward the port over the existing SSH connection:
+Dev servers aren't published — forward the port over the existing SSH connection:
 
 ```bash
 # in a devbox pane
@@ -100,46 +109,56 @@ curl -sS -o /dev/null -w '%{http_code}\n' localhost:5173    # 200
 `AllowTcpForwarding yes` in `container/sshd_config` enables this. Add more `-L` pairs for more ports; no
 `docker-compose.yml` changes.
 
+---
+
 ## ❓ FAQ
 
-**Do I clone on the laptop, the workstation, or in the container?**
-In the container: the bind mount makes a repo cloned in a herdr pane visible over `ssh devbox` and
-`./bin/devbox shell`, surviving `docker compose restart`.
+### Do I clone on the laptop, the workstation, or in the container?
 
-**Is `ssh devbox` reachable from outside the Tailnet?**
-No - the port publishes only on the node's Tailscale address and `127.0.0.1` ([Networking](networking.md)).
+In the container: the bind mount makes a repo cloned in a herdr pane visible over `ssh devbox` and `./bin/devbox shell`,
+surviving `docker compose restart`.
 
-**Why does `git push` fail over plain `ssh devbox`?**
-The devbox holds no private key; `-A` forwards the laptop's 1Password agent - see
-[Git identities](git.md#manual-work-on-the-devbox---the-escape-hatch).
+### Is `ssh devbox` reachable from outside the Tailnet?
 
-**`Too many authentication failures` - why?**
-The agent offered more than six keys before the right one; `IdentitiesOnly yes` plus
-`IdentityFile ~/.ssh/devbox.pub` in `Host devbox` fixes it.
+No — the port publishes only on the node's Tailscale address and `127.0.0.1` ([Networking](networking.md)).
 
-**`Host key verification failed` after a rebuild?**
-Shouldn't happen: the host key lives in `/home/dev/.ssh/host/`'s bind mount, surviving rebuilds. Wiped
-data dir? Remove the stale line: `ssh-keygen -R '[<workstation>]:2223'`, reconnect.
+### Why does `git push` fail over plain `ssh devbox`?
 
-**Moshi connected to my *laptop* and 1Password asked to use the Devbox Laptop key - why?**
-Moshi's laptop host runs `herdr`, and every herdr client connects every saved machine itself: the new client
-opens its own `ssh devbox` for the Devbox machine, and that is what 1Password is approving. Approve, and that
-client shows the devbox through the laptop; deny, and only its Devbox entry sits at *Attention* - Local
-panes, the desktop client and a direct phone → devbox connection are unaffected. The direct route above
-involves neither the laptop nor 1Password, which is why it is the recommended one.
+The devbox holds no private key; `-A` forwards the laptop's 1Password agent — see
+[Git Identities](git.md#-manual-work-on-the-devbox--the-escape-hatch).
 
-**Which tools resolve in a non-interactive `ssh devbox '<cmd>'`?**
-All of them: pinned binaries in `/usr/local/bin` (`node`/`npm`/`npx`/`corepack`/`pnpm`, symlinked from
-`/opt/nvm`); `~/.bashrc.d/devbox.sh` loads *above* Ubuntu's non-interactive early return, putting
-`~/.local/bin` (OMP's and Claude Code's install dir) on `PATH`, and `~/.bash_profile` reasserts that order
-for login shells, where `~/.profile` would re-prepend `~/.local/bin` ahead of the agent launchers. Verify
-both routes: `ssh devbox 'command -v omp claude node pnpm herdr'` and
-`ssh devbox 'bash -lc "command -v omp claude"'` - the second must print
-`~/.local/libexec/devbox-agent/omp` and `…/claude`, the launchers.
+### `Too many authentication failures` — why?
 
-**Can I use VS Code / JetBrains Remote?**
-Yes - point Remote-SSH at `devbox`: an OpenSSH server, `sftp` enabled.
+The agent offered more than six keys before the right one; `IdentitiesOnly yes` plus `IdentityFile ~/.ssh/devbox.pub` in
+`Host devbox` fixes it.
 
-**Does a pane keep running if the container restarts?**
-No - the herdr server dies with the container; only the filesystem survives. herdr restores the shape,
-but running processes are gone.
+### `Host key verification failed` after a rebuild?
+
+Shouldn't happen: the host key lives in `/home/dev/.ssh/host/`'s bind mount, surviving rebuilds. Wiped data dir? Remove
+the stale line: `ssh-keygen -R '[<workstation>]:2223'`, reconnect.
+
+### Moshi connected to my _laptop_ and 1Password asked to use the Devbox Laptop key — why?
+
+Moshi's laptop host runs `herdr`, and every herdr client connects every saved machine itself: the new client opens its
+own `ssh devbox` for the Devbox machine, and that is what 1Password is approving. Approve, and that client shows the
+devbox through the laptop; deny, and only its Devbox entry sits at _Attention_ — Local panes, the desktop client and a
+direct phone → devbox connection are unaffected. The direct route above involves neither the laptop nor 1Password, which
+is why it is the recommended one.
+
+### Which tools resolve in a non-interactive `ssh devbox '<cmd>'`?
+
+All of them: pinned binaries in `/usr/local/bin` (`node`/`npm`/`npx`/`corepack`/`pnpm`, symlinked from `/opt/nvm`);
+`~/.bashrc.d/devbox.sh` loads _above_ Ubuntu's non-interactive early return, putting `~/.local/bin` (OMP's and Claude
+Code's install dir) on `PATH`, and `~/.bash_profile` reasserts that order for login shells, where `~/.profile` would
+re-prepend `~/.local/bin` ahead of the agent launchers. Verify both routes:
+`ssh devbox 'command -v omp claude node pnpm herdr'` and `ssh devbox 'bash -lc "command -v omp claude"'` — the second
+must print `~/.local/libexec/devbox-agent/omp` and `…/claude`, the launchers.
+
+### Can I use VS Code / JetBrains Remote?
+
+Yes — point Remote-SSH at `devbox`: an OpenSSH server, `sftp` enabled.
+
+### Does a pane keep running if the container restarts?
+
+No — the herdr server dies with the container; only the filesystem survives. herdr restores the shape, but running
+processes are gone.

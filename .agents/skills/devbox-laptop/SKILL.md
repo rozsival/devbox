@@ -13,7 +13,7 @@ Prerequisite: bash >= 4.2 - `bin/devbox` is bashly-generated and refuses to star
 `brew install bash`, so `/usr/bin/env bash` finds the Homebrew one first on the PATH. (The launchers, `gh` shim,
 credential helper and `devbox-identities` are not generated and stay bash 3.2 compatible.)
 
-Blocks, rationale: `docs/setup.md` (key, ssh config), `docs/git.md` (identities, agent override, signing).
+Blocks, rationale: `docs/installation.md` (key, ssh config), `docs/git.md` (identities, agent override, signing).
 Read the needed section, not retyped, so a changed default gets picked up, not reintroduced.
 
 ## Phase 1 - keys: 1Password items, public halves on disk
@@ -25,11 +25,11 @@ file names follow from them:
 | file                 | 1Password item              | used by                                                                                                            |
 |----------------------|-----------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `id_<slug>.pub`      | that identity's auth key    | `Host <host>` (plain) or `Match host <host> tagged <slug>` (its own key)                                           |
-| `signing_<slug>.pub` | that identity's signing key | `~/.gitconfig` `user.signingkey` (default) or `user-<slug>.gitconfig`/`org-<slug>.gitconfig`; GitHub *Signing* key |
+| `signing_<slug>.pub` | that identity's signing key | `~/.gitconfig` `user.signingkey` (default) or `user-<slug>.gitconfig`/`org-<slug>.gitconfig`; GitHub _Signing_ key |
 | `devbox.pub`         | Devbox Laptop               | `Host <workstation>`, `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS`                                                |
 
 Auth/signing are separate files: GitHub registers each separately, per account - signing with auth key
-verifies locally, shows *Unverified* on GitHub.
+verifies locally, shows _Unverified_ on GitHub.
 
 `ssh-keygen -t …` is wrong: it creates a private key on disk - exactly what this layout removes.
 `devbox doctor laptop` reporting `private key(s) on disk`: delete if already a 1Password item, else import (1Password →
@@ -45,8 +45,8 @@ key most identities on it share, `IdentitiesOnly yes` so ssh offers only that ke
 `Match host <host> tagged <slug>` block per identity whose key differs, selected by the `ssh -P <slug>` its
 `org-<slug>.gitconfig` sets as `core.sshCommand` - no alias `Host` block, ever. `Host devbox` sets
 `ForwardAgent no` - herdr never carries the agent; only explicit `ssh -A devbox` does. Blocks verbatim:
-`docs/setup.md#2-add-the-sshconfig-blocks` for `Host *`/`<workstation>`/`devbox`; the GitHub blocks follow
-the pattern in `docs/git.md#laptop-install` - one `Match … tagged <slug>` per identity with a key of its
+`docs/installation.md#2-add-the-sshconfig-blocks` for `Host *`/`<workstation>`/`devbox`; the GitHub blocks follow
+the pattern in `docs/git.md#-laptop-install` - one `Match … tagged <slug>` per identity with a key of its
 own, the plain `Host github.com` block for the rest.
 
 Check: `ssh -G devbox | grep -E 'identityfile|identitiesonly|identityagent'`, then `ssh -T git@github.com`
@@ -82,7 +82,7 @@ devbox read it alike. Two kinds of block in `~/.gitconfig`, both hand-maintained
 owner, not the tree it was cloned into.
 
 Check: an empty commit in a throwaway repo under each tree, `git log --show-signature -1` → `Good "git"
-signature for <email>` with the *signing* key's fingerprint.
+signature for <email>` with the _signing_ key's fingerprint.
 
 ## Phase 4 - the agent git override
 
@@ -102,7 +102,7 @@ native install owns `~/.local/bin/claude` and re-points it on every update - so 
 `export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"`, after anything that prepends
 `~/.local/bin`, then open a new shell.
 
-The agent gitconfigs are *rendered* from the registry, not copied: `~/.config/devbox/git/agent.gitconfig`
+The agent gitconfigs are _rendered_ from the registry, not copied: `~/.config/devbox/git/agent.gitconfig`
 plus one `agent-<slug>.gitconfig` per identity claiming a `dir` (all of them - an inherited author is
 written out explicitly, or a tree nested inside another identity's would keep the outer bot), directory
 locked to mode 500 afterwards. Every OMP or Claude Code session through a shell after gets HTTPS
@@ -194,10 +194,10 @@ herdr's saved-machine connections are background ssh over that agent - a machine
 
 ## Where the details live
 
-| Topic                                          | File                 |
-|------------------------------------------------|----------------------|
-| Key item, ssh config, herdr, 1Password         | `docs/setup.md`      |
-| Both git modes, launcher, helper, signing      | `docs/git.md`        |
-| Tokens, App credentials, `secrets.env`         | `docs/secrets.md`    |
-| `devbox agent install`, `devbox doctor laptop` | `docs/cli.md`        |
-| Workstation/container side of the same setup   | `devbox-setup` skill |
+| Topic                                          | File                   |
+|------------------------------------------------|------------------------|
+| Key item, ssh config, herdr, 1Password         | `docs/installation.md` |
+| Both git modes, launcher, helper, signing      | `docs/git.md`          |
+| Tokens, App credentials, `secrets.env`         | `docs/secrets.md`      |
+| `devbox agent install`, `devbox doctor laptop` | `docs/cli.md`          |
+| Workstation/container side of the same setup   | `devbox-setup` skill   |

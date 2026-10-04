@@ -9,7 +9,7 @@ Five phases, strict order: laptop key → `~/.ssh/config` → deploy/`.env` on t
 Docker → in-container identity steps. Each ends with a check that must pass before moving on - a failure two
 phases later is almost always an earlier phase left unverified.
 
-Command/config blocks live in `docs/setup.md` - read the section pointed to, not from memory, so a changed
+Command/config blocks live in `docs/installation.md` - read the section pointed to, not from memory, so a changed
 default gets picked up. Phases 1-2 are the laptop's share of a larger layout (GitHub keys, gitconfigs, the
 agent git override, tokens) owned by `devbox-laptop`; `./bin/devbox doctor laptop` checks it.
 
@@ -20,7 +20,7 @@ start under macOS's /bin/bash 3.2, so `/usr/bin/env bash` must find the Homebrew
 The workstation's Ubuntu bash is fine.
 
 The key is a 1Password SSH item served by its agent; only the public half lands in `~/.ssh/devbox.pub`,
-which `IdentityFile` selects. Steps: `docs/setup.md#1-create-the-laptop-key`:
+which `IdentityFile` selects. Steps: `docs/installation.md#1-create-the-laptop-key`:
 
 ```bash
 ssh-copy-id -i ~/.ssh/devbox.pub -p 2222 <user>@<workstation>  # host sshd, needed by deploy
@@ -35,7 +35,7 @@ unworkable: a dedicated passphrase-less file key (documented).
 
 Two `Host` entries, same machine, different ports: `2222` the workstation's sshd (needed by
 `devbox deploy`), `2223` the container's. Copy both blocks verbatim from
-`docs/setup.md#2-add-the-sshconfig-blocks`; the field people drop and debug for an hour is
+`docs/installation.md#2-add-the-sshconfig-blocks`; the field people drop and debug for an hour is
 `IdentitiesOnly yes` - without it the agent offers every key it holds and the server rejects with
 `Too many authentication failures` before the right one.
 
@@ -112,7 +112,7 @@ The devbox generates no keys - it installs only the laptop's public keys from
 register on GitHub - already your normal, registered laptop keys.
 
 1. Create `~/.config/devbox/identities.conf` - `cp /opt/devbox/home/.config/devbox/identities.conf.example
-   ~/.config/devbox/identities.conf` (bootstrap never writes it for you: the example validates, so seeding
+~/.config/devbox/identities.conf` (bootstrap never writes it for you: the example validates, so seeding
    it would give agent commits the placeholder author) - then fill it in: one `[slug]` block per account, `pubkey`/
    `signing_pubkey` set to
    the public keys `git config user.signingkey` prints for that account on the laptop, then
@@ -130,7 +130,7 @@ register on GitHub - already your normal, registered laptop keys.
    API keys for OMP. Every shell sources it, interactive or not. Never put one project's secrets here;
    those go in that project's `.env`. An `ANTHROPIC_API_KEY` here is OMP's only - `claude-launcher`
    unsets it so Claude Code stays on its `/login` subscription.
-4. Place each identity's GitHub App credentials in *that identity's own* `app` directory from
+4. Place each identity's GitHub App credentials in _that identity's own_ `app` directory from
    `identities.conf` (`app-id`, `app.pem`, mode 600) if it needs one. Bootstrap creates the directory,
    never fetches secrets; once present, the credential helper mints a repo-scoped installation token for
    that identity's agent git, ahead of the PAT, and agent `gh` on that repo (PRs, issues) uses it too.
@@ -158,7 +158,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # agent skills + agent-
 dir) and symlinks each into `~/.claude/skills` (Claude Code's), plus its CLI and Chrome build. Separate from bootstrap
 since the first run downloads ~180 MB, needs
 Chrome shared libraries the `Dockerfile` provides - run after an `up` on the current image, not stale. Both
-idempotent; details: `docs/toolchain.md#agent-skills-and-browser-automation`.
+idempotent; details: `docs/toolchain.md#-agent-skills-and-browser-automation`.
 
 ## When setup does not work
 

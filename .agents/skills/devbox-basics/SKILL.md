@@ -33,7 +33,7 @@ Four facts:
    Tailscale IP keeps devbox off the public internet. An empty `BIND_ADDR` makes `./bin/devbox up` refuse to
    start rather than publish on `0.0.0.0`.
 4. **No root, no root socket.** `USER dev`, PID 1 `dev`, `cap_drop: [ALL]`, `no-new-privileges`; the host's
-   root Docker socket is never mounted. Project containers come from a *second* daemon: a rootless
+   root Docker socket is never mounted. Project containers come from a _second_ daemon: a rootless
    `dockerd` owned by the dedicated host user `dev`, socket `/run/devbox/docker.sock`, provisioned once by
    `sudo ./bin/devbox docker setup` - after which `docker` and `docker compose` work in the box. That daemon
    publishes project ports on the devbox bridge gateway (`--ip` plus `--default-network-opt`, since `--ip`
@@ -88,7 +88,7 @@ PRs carry the bot author too. Full mechanism: `docs/git.md`.
 `~/.agents/skills` (OMP) with a symlink each in `~/.claude/skills` (Claude Code), plus its CLI and a Chrome
 build, so panes can drive a headless browser. `./bin/devbox sync omp` (laptop) copies `~/.omp/agent/config.yml`
 into the devbox so panes share the laptop's OMP preset. Neither runs during bootstrap; both are idempotent.
-Claude Code itself is installed by bootstrap and needs one `/login` in a pane (`docs/toolchain.md#claude-code`).
+Claude Code itself is installed by bootstrap and needs one `/login` in a pane (`docs/toolchain.md#-claude-code`).
 
 ## What credentials live in the box
 
@@ -114,26 +114,29 @@ network is unrestricted; assume anything inside can leave.
 
 Answer from these files, not memory - each ends with an FAQ of real failures.
 
-| Question                                             | File                 |
-|------------------------------------------------------|----------------------|
-| First deploy, `.env`, laptop key, SSH cfg            | `docs/setup.md`      |
-| Getting a shell, cloning, port forwarding            | `docs/connecting.md` |
-| Identity split, signing, verification                | `docs/git.md`        |
-| Installed tools, pinned versions, agent skills       | `docs/toolchain.md`  |
-| Secret layers, `secrets.env`, `gh` tokens, GCP ADC   | `docs/secrets.md`    |
-| Every `bin/devbox` command (workstation + laptop)    | `docs/cli.md`        |
-| Exposure model, why UFW cannot help                  | `docs/networking.md` |
-| Redeploy, restart, backup, `doctor`, troubleshooting | `docs/operations.md` |
-| Project containers, path identity, `devbox-ports`    | `docs/docker.md`     |
-| Boundaries; what an escaped agent reaches            | `docs/security.md`   |
-| Conventions for this repo                            | `AGENTS.md`          |
+| Question                                             | File                   |
+|------------------------------------------------------|------------------------|
+| Doc index, reading paths, doc conventions            | `docs/README.md`       |
+| System map, components, startup order, repo layout   | `docs/architecture.md` |
+| First deploy, `.env`, laptop key, SSH cfg            | `docs/installation.md` |
+| Getting a shell, cloning, port forwarding            | `docs/connecting.md`   |
+| Identity split, signing, verification                | `docs/git.md`          |
+| Installed tools, pinned versions, agent skills       | `docs/toolchain.md`    |
+| Secret layers, `secrets.env`, `gh` tokens, GCP ADC   | `docs/secrets.md`      |
+| Every `bin/devbox` command (workstation + laptop)    | `docs/cli.md`          |
+| Exposure model, why UFW cannot help                  | `docs/networking.md`   |
+| Redeploy, restart, backup, `doctor`, troubleshooting | `docs/operations.md`   |
+| Project containers, path identity, `devbox-ports`    | `docs/docker.md`       |
+| Boundaries; what an escaped agent reaches            | `docs/security.md`     |
+| Rules, regenerating the CLI, agent assets            | `docs/development.md`  |
+| Conventions for this repo                            | `AGENTS.md`            |
 
 ## Misconceptions worth correcting on sight
 
 - "I'll clone it on the laptop and push it over" - no; clone in the container, the bind mount does the rest.
 - "Let's open another port for the dev server" - no; `ssh -L` exists so `docker-compose.yml` stays a
   one-port file.
-- "Add the Docker socket so agents can run containers" - the host's *root* socket is the one thing
+- "Add the Docker socket so agents can run containers" - the host's _root_ socket is the one thing
   forbidden. Project containers come from the rootless sibling daemon; nesting a daemon here is impossible:
   rootless needs setuid `newuidmap` and this container has `cap_drop: ALL` plus `no-new-privileges`.
 - "`ssh devbox` is a shell alias in `.bashrc`" - it is `~/.ssh/config`.
