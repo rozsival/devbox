@@ -630,9 +630,14 @@ ssh_sessions() {
 }
 
 # `up` only drops sessions when compose decides to recreate; a no-op `up` is
-# safe, so ask compose instead of guessing.
+# safe, so ask compose instead of guessing. The plan is captured before it is
+# matched: piped into `grep -q`, compose takes SIGPIPE on the line after the
+# match, and under pipefail that 141 reads as "nothing to recreate" - which
+# skipped the guard and dropped live sessions.
 compose_would_recreate() {
-  compose up -d --dry-run 2>&1 | grep -qE 'Recreate|Starting|Created'
+  local plan
+  plan="$(compose up -d --dry-run 2>&1)" || true
+  grep -qE 'Recreate|Starting|Created' <<<"${plan}"
 }
 
 # $1 describes the action; ${args[--force]} skips the prompt.
@@ -841,7 +846,7 @@ step_data_dir() {
     elif [[ -d "${current}" ]]; then
       [[ -e "${DEV_HOME}" ]] &&
         log_error "${DEV_HOME} already exists and ${current} is still in use; merge them by hand"
-      docker ps --format '{{.Names}}' 2>/dev/null | grep -qx devbox &&
+      grep -qx devbox <<<"$(docker ps --format '{{.Names}}' 2>/dev/null)" &&
         log_error "the devbox container is running; stop it first: ./bin/devbox down"
       log_info "Moving ${current} to ${DEV_HOME}..."
       mv "${current}" "${DEV_HOME}"
@@ -895,11 +900,11 @@ step_firewall() {
     log_info 'ufw is not installed; no firewall rule needed.'
     return 0
   }
-  ufw status 2>/dev/null | grep -q '^Status: active' || {
+  grep -q '^Status: active' <<<"$(ufw status 2>/dev/null)" || {
     log_info 'ufw is inactive; no firewall rule needed.'
     return 0
   }
-  if ufw status | grep -q "${gateway}"; then
+  if grep -q "${gateway}" <<<"$(ufw status)"; then
     log_success "ufw already allows ${DEVBOX_BRIDGE} -> ${gateway}"
     return 0
   fi
@@ -1226,13 +1231,13 @@ doctor_host() {
     log_success "BIND_ADDR matches the Tailscale address (${bind_addr})"
   fi
 
-  if ss -ltn 2>/dev/null | grep -qE "${bind_addr}:${ssh_port}\b"; then
+  if grep -qE "${bind_addr}:${ssh_port}\b" <<<"$(ss -ltn 2>/dev/null)"; then
     log_success "sshd published on ${bind_addr}:${ssh_port}"
   else
     fail "nothing listening on ${bind_addr}:${ssh_port}"
   fi
 
-  if ss -ltn 2>/dev/null | grep -qE "0\.0\.0\.0:${ssh_port}\b"; then
+  if grep -qE "0\.0\.0\.0:${ssh_port}\b" <<<"$(ss -ltn 2>/dev/null)"; then
     fail "port ${ssh_port} is published on 0.0.0.0 - the devbox is internet-exposed"
   else
     log_success "port ${ssh_port} is not published on 0.0.0.0"

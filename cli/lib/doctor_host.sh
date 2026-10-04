@@ -27,13 +27,13 @@ doctor_host() {
     log_success "BIND_ADDR matches the Tailscale address (${bind_addr})"
   fi
 
-  if ss -ltn 2>/dev/null | grep -qE "${bind_addr}:${ssh_port}\b"; then
+  if grep -qE "${bind_addr}:${ssh_port}\b" <<<"$(ss -ltn 2>/dev/null)"; then
     log_success "sshd published on ${bind_addr}:${ssh_port}"
   else
     fail "nothing listening on ${bind_addr}:${ssh_port}"
   fi
 
-  if ss -ltn 2>/dev/null | grep -qE "0\.0\.0\.0:${ssh_port}\b"; then
+  if grep -qE "0\.0\.0\.0:${ssh_port}\b" <<<"$(ss -ltn 2>/dev/null)"; then
     fail "port ${ssh_port} is published on 0.0.0.0 - the devbox is internet-exposed"
   else
     log_success "port ${ssh_port} is not published on 0.0.0.0"

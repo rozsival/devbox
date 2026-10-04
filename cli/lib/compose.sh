@@ -13,9 +13,14 @@ ssh_sessions() {
 }
 
 # `up` only drops sessions when compose decides to recreate; a no-op `up` is
-# safe, so ask compose instead of guessing.
+# safe, so ask compose instead of guessing. The plan is captured before it is
+# matched: piped into `grep -q`, compose takes SIGPIPE on the line after the
+# match, and under pipefail that 141 reads as "nothing to recreate" - which
+# skipped the guard and dropped live sessions.
 compose_would_recreate() {
-  compose up -d --dry-run 2>&1 | grep -qE 'Recreate|Starting|Created'
+  local plan
+  plan="$(compose up -d --dry-run 2>&1)" || true
+  grep -qE 'Recreate|Starting|Created' <<<"${plan}"
 }
 
 # $1 describes the action; ${args[--force]} skips the prompt.

@@ -135,7 +135,7 @@ step_data_dir() {
     elif [[ -d "${current}" ]]; then
       [[ -e "${DEV_HOME}" ]] &&
         log_error "${DEV_HOME} already exists and ${current} is still in use; merge them by hand"
-      docker ps --format '{{.Names}}' 2>/dev/null | grep -qx devbox &&
+      grep -qx devbox <<<"$(docker ps --format '{{.Names}}' 2>/dev/null)" &&
         log_error "the devbox container is running; stop it first: ./bin/devbox down"
       log_info "Moving ${current} to ${DEV_HOME}..."
       mv "${current}" "${DEV_HOME}"
@@ -189,11 +189,11 @@ step_firewall() {
     log_info 'ufw is not installed; no firewall rule needed.'
     return 0
   }
-  ufw status 2>/dev/null | grep -q '^Status: active' || {
+  grep -q '^Status: active' <<<"$(ufw status 2>/dev/null)" || {
     log_info 'ufw is inactive; no firewall rule needed.'
     return 0
   }
-  if ufw status | grep -q "${gateway}"; then
+  if grep -q "${gateway}" <<<"$(ufw status)"; then
     log_success "ufw already allows ${DEVBOX_BRIDGE} -> ${gateway}"
     return 0
   fi
