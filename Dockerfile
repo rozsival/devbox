@@ -9,7 +9,7 @@ ARG HOST_GID=1000
 
 # Pinned toolchain. Every version is a real upstream release asset; bump one arg
 # at a time and rebuild with `./bin/devbox rebuild`.
-ARG HERDR_VERSION=0.9.0
+ARG HERDR_VERSION=0.9.3
 ARG NVM_VERSION=0.40.7
 ARG NODE_VERSION=24.21.0
 ARG PNPM_VERSION=12.4.1

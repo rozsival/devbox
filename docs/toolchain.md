@@ -13,7 +13,7 @@
 
 | Tool             | Version   | Installed as                                       |
 |------------------|-----------|----------------------------------------------------|
-| `herdr`          | `0.9.0`   | `/usr/local/bin/herdr`                             |
+| `herdr`          | `0.9.3`   | `/usr/local/bin/herdr`                             |
 | `node`           | `24.21.0` | nvm in `/opt/nvm`, symlinked into `/usr/local/bin` |
 | `pnpm`           | `12.4.1`  | `npm install -g`, symlinked into `/usr/local/bin`  |
 | `gh`             | `2.100.0` | pinned `.deb`                                      |
