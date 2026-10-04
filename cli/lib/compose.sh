@@ -16,10 +16,12 @@ ssh_sessions() {
 # safe, so ask compose instead of guessing. The plan is captured before it is
 # matched: piped into `grep -q`, compose takes SIGPIPE on the line after the
 # match, and under pipefail that 141 reads as "nothing to recreate" - which
-# skipped the guard and dropped live sessions.
+# skipped the guard and dropped live sessions. A dry run that fails (transient
+# error, a compose without --dry-run) is no answer at all, so it counts as a
+# recreate: the guard only prompts when sessions are actually connected.
 compose_would_recreate() {
   local plan
-  plan="$(compose up -d --dry-run 2>&1)" || true
+  plan="$(compose up -d --dry-run 2>&1)" || return 0
   grep -qE 'Recreate|Starting|Created' <<<"${plan}"
 }
 

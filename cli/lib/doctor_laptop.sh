@@ -259,7 +259,7 @@ doctor_laptop() {
   reader_link="${BIN_DIR}/devbox-identities"
   if [[ ! -L ${reader_link} ]]; then
     fail "${reader_link} is not a symlink to ${identities_lib} - 'devbox-identities' will not resolve by name; run ./bin/devbox agent install"
-  elif [[ "$(readlink -f "${reader_link}")" != "$(readlink -f "${identities_lib}")" ]]; then
+  elif [[ ! ${reader_link} -ef ${identities_lib} ]]; then
     fail "${reader_link} points at $(readlink "${reader_link}"), not ${identities_lib}; run ./bin/devbox agent install"
   else
     log_success 'devbox-identities resolves by name through ~/.local/bin'

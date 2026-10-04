@@ -19,9 +19,13 @@ doctor_host() {
   ssh_port="$(env_get DEVBOX_SSH_PORT)"
   addr="$(tailscale_addr)"
 
+  # BIND_ADDR is what keeps sshd off the public internet; without a Tailscale
+  # address there is nothing to compare it with, so that is a failure too.
   if [[ -z "${bind_addr}" ]]; then
     fail 'BIND_ADDR is empty'
-  elif [[ -n "${addr}" && "${bind_addr}" != "${addr}" ]]; then
+  elif [[ -z "${addr}" ]]; then
+    fail "Tailscale reports no IPv4 address - cannot verify BIND_ADDR ${bind_addr} (is tailscale installed and up?)"
+  elif [[ "${bind_addr}" != "${addr}" ]]; then
     fail "BIND_ADDR is ${bind_addr} but Tailscale reports ${addr} - run './bin/devbox env'"
   else
     log_success "BIND_ADDR matches the Tailscale address (${bind_addr})"
