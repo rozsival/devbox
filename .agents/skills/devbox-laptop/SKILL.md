@@ -168,6 +168,7 @@ repo.
 | `~/.ssh/config still has the alias Host <slug>.<host>` | Aliases are gone; delete the block - the tag selects the key now (phase 2)                                                             |
 | `Host devbox: ForwardAgent yes`                        | Remove it; forward via `ssh -A devbox` when needed                                                                                     |
 | `user.signingkey is …`                                 | Points at literal or auth key; use `signing_*.pub`                                                                                     |
+| `user.email is …` / `user.name is …`                   | Base `[user]` in `~/.gitconfig` isn't the default identity's; every repo no include claims commits as it - fix it                      |
 | `includeIf gitdir:… is not configured`                 | Add the tree's `includeIf "gitdir:…"` (phase 3)                                                                                        |
 | `… still rewrites remote URLs (url.*.insteadof)`       | Old alias-era file; replace with `devbox-identities render user-gitconfig <slug>` (phase 3)                                            |
 | `a <pattern> remote gets '…'`                          | Missing or wrong `includeIf "hasconfig:remote.*.url:<pattern>"`; add it with `devbox-identities render org-gitconfig <slug>` (phase 3) |

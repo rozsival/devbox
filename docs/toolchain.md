@@ -251,8 +251,8 @@ shell.
 1. Add `ARG <TOOL>_VERSION=<version>` next to the others in the `Dockerfile`.
 2. One install block: `curl -fsSL` to a temp dir, verify the published checksum, `install -m 0755` into
    `/usr/local/bin`.
-3. Add a probe to `doctor`'s list in `cli/lib/doctor_host.sh` if the version matters, then run `bashly generate`
-   and commit `cli/` with the regenerated `bin/devbox`.
+3. Add a probe to `doctor`'s list in `cli/lib/doctor_host.sh` if the version matters, then run `bashly generate &&
+   shfmt -i 2 -w bin/devbox` and commit `cli/` with the regenerated `bin/devbox`.
 4. `./bin/devbox deploy <workstation> && ssh <workstation> 'cd ~/devbox && ./bin/devbox rebuild'`.
 
 Never invent a hash: without a published checksum file (`herdr`), pinned version plus TLS is the contract.

@@ -276,8 +276,10 @@ run, while the ones that do not depend on it (private keys, launcher symlinks) s
   agent.
 - **`~/.ssh/config`** - per forge host, the plain connection selecting the host's default key and each
   identity's tagged connection (`ssh -P <slug>`) selecting its own, with no leftover SSH-alias `Host` block.
-- **git** - every identity's gitconfig signing through `op-ssh-sign` with its own `signing_*.pub` key and an
-  `allowed_signers` file covering all of them; each `orgs` pattern probed as a `hasconfig:` remote from `/` -
+- **git** - the base `user.name`/`user.email`/`user.signingkey` matching the default identity (what every
+  repo no include claims commits as), every identity's gitconfig signing through `op-ssh-sign` with its own
+  `signing_*.pub` key and an `allowed_signers` file covering all of them; each `gitdir:` include setting its
+  identity's name, email and signing key; each `orgs` pattern probed as a `hasconfig:` remote from `/` -
   email, signing key and `core.sshCommand` matching what `org-<slug>.gitconfig` should set, and no `gitdir:`
   include left rewriting URLs; no clone still pointed at a stale SSH-alias remote (`devbox-identities alias-remotes`).
 - **Agent git override** - `omp` and `claude` resolving to their launchers through symlinks in
@@ -353,7 +355,9 @@ bin/devbox            the generated script
 ```
 
 To change a command, edit `cli/bashly.yml` (interface), `cli/commands/` (body) or `cli/lib/` (shared code), then
-run `bashly generate` from the repo root and **commit both** `cli/` and `bin/devbox`. The generated script is
+run `bashly generate && shfmt -i 2 -w bin/devbox` from the repo root and **commit both** `cli/` and `bin/devbox`.
+The `shfmt` pass is part of generating, not a hand edit: the committed script is in its format, and bashly's raw
+output differs from it by some 1,500 lines of indentation, burying the real change. The generated script is
 committed because the workstation has no Ruby; only a contributor who regenerates needs bashly (`brew install bashly` or
 `gem install bashly`). The side guard is a bashly `filters:` entry on each command (`filter_host` / `filter_laptop` in
 `cli/lib/machine.sh`), so a new command declares its side there.

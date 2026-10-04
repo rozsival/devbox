@@ -1637,6 +1637,9 @@ doctor_laptop() {
   check_git 'commit.gpgsign' true "$(git config --global commit.gpgsign || true)"
   check_git 'gpg.ssh.allowedSignersFile' "${SSH_DIR}/allowed_signers" "$(git config --global gpg.ssh.allowedSignersFile || true)"
   if ((identities_ok)); then
+    # The base [user] is what every repo no includeIf claims commits as.
+    check_git 'user.name' "$(di_get "${default_slug}" name)" "$(git config --global user.name || true)"
+    check_git 'user.email' "$(di_get "${default_slug}" email)" "$(git config --global user.email || true)"
     check_git 'user.signingkey' "${SSH_DIR}/signing_${default_slug}.pub" "$(git config --global user.signingkey || true)"
     for slug in ${slugs}; do
       [[ ${slug} != "${default_slug}" ]] || continue
@@ -1650,6 +1653,9 @@ doctor_laptop() {
         fail "includeIf gitdir:${dir_raw}/ is not configured in ~/.gitconfig"
       else
         include_file="${include_cfg/#\~/${HOME}}"
+        for field in name email; do
+          check_git "[${slug}] user.${field}" "$(di_get "${slug}" "${field}")" "$(git config --file "${include_file}" "user.${field}" || true)"
+        done
         check_git "[${slug}] user.signingkey" "${SSH_DIR}/signing_${slug}.pub" "$(git config --file "${include_file}" user.signingkey || true)"
         if git config --file "${include_file}" --get-regexp '^url\..*\.insteadof$' >/dev/null 2>&1; then
           fail "${include_file} still rewrites remote URLs (url.*.insteadOf) - aliases are gone; replace it with: devbox-identities render user-gitconfig ${slug}"
