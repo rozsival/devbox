@@ -7,7 +7,8 @@ in this repository.
 
 `devbox` provisions a containerised remote development environment on the AI coding workstation: one
 Docker container running an unprivileged `sshd` published only on the node's Tailscale address, so a herdr
-client can attach to it as a saved machine and run OMP and Claude Code agents inside it. The container is the agent sandbox -
+client can attach to it as a saved machine and run OMP and Claude Code agents inside it. The container is the agent
+sandbox -
 it reaches the project tree, the internet and a rootless project Docker daemon, never the host filesystem or
 the host's root Docker daemon.
 
@@ -54,8 +55,10 @@ the host's root Docker daemon.
   - `docs/setup.md` - prerequisites, laptop key, `~/.ssh/config`, first deploy, `.env` reference
   - `docs/connecting.md` - herdr panes, `ssh devbox`, Moshi on a phone, `./bin/devbox shell`, cloning, port forwarding
   - `docs/git.md` - the identity registry, manual vs agent git, the credential helper, signing, laptop install
-  - `docs/toolchain.md` - pinned versions, install locations, OMP, Claude Code, Moshi/`moshi-hook`, agent skills, adding a tool
-  - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, the Claude Code login, GCP ADC, App credentials
+  - `docs/toolchain.md` - pinned versions, install locations, OMP, Claude Code, Moshi/`moshi-hook`, agent skills, adding
+    a tool
+  - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, the Claude Code login, GCP ADC, App
+    credentials
   - `docs/cli.md` - the `bin/devbox` reference (workstation, laptop and `doctor` commands), `devbox-identities`,
     and editing the CLI
   - `docs/networking.md` - exposure model, why UFW cannot block a published port, tunnels
@@ -81,8 +84,8 @@ the host's root Docker daemon.
   recreate, and both it and the hook daemon are best-effort because neither an unreachable project daemon
   nor a missing hook daemon may cost SSH access. `moshi-hook serve` is backgrounded rather than supervised
   because there is no systemd here: it becomes a child of `sshd` and is reaped by tini
-- `container/bootstrap.sh` - idempotent user setup, sixteen individually-guarded sections: 1 the agents
-  (OMP, plus Claude Code via its native installer - non-fatal, and its one-time `/login` registered as a
+- `container/bootstrap.sh` - idempotent user setup, sixteen individually-guarded sections: 1 the agents (OMP, plus
+  Claude Code via its native installer - non-fatal, and its one-time `/login` registered as a
   manual step until `~/.claude/.credentials.json` exists); 2 the
   identity registry (installs `devbox-identities` in `~/.local/libexec` and symlinks it into
   `~/.local/bin`, since `devbox.sh` puts only the latter on the PATH and every checklist tells people to
@@ -107,8 +110,8 @@ the host's root Docker daemon.
   every one of them, inherited authors included, since git applies every matching `includeIf` and a nested
   tree would otherwise keep the outer author; the includes are emitted shortest `dir` first so the longest
   match is read last and wins); 14 OMP config (seeded if absent with `secrets` and the `bash.patterns`
-  guardrail, an existing file lacking a `bash:` block reported, never merged into); 15 `moshi-hook` plus its OMP extension and Claude Code hooks
-  (`--target omp,claude`); 16 the printed manual checklist
+  guardrail, an existing file lacking a `bash:` block reported, never merged into); 15 `moshi-hook` plus its OMP
+  extension and Claude Code hooks (`--target omp,claude`); 16 the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels), `AllowAgentForwarding yes` (the `ssh -A devbox` escape hatch only - the
   container holds no private key of its own) and `MaxSessions 32` (herdr channels)
@@ -126,8 +129,8 @@ the host's root Docker daemon.
   reader, used by `container/bootstrap.sh`, the launchers and the CLI (`di_slugs`, `di_get`, `di_for`,
   `di_check`, the `di_render_*` functions) and installed as the `devbox-identities` CLI; deliberately bash 3.2
   compatible, since the laptop-side launchers and shims run under whatever `/usr/bin/env bash` macOS provides.
-  `home/.local/libexec/devbox-agent/` holds `agent-launch`, the one body both launchers source
-  (`omp-launcher`, `claude-launcher` are three lines each): it exports `GIT_CONFIG_GLOBAL`, the SSH fence,
+  `home/.local/libexec/devbox-agent/` holds `agent-launch`, the one body both launchers source (`omp-launcher`,
+  `claude-launcher` are three lines each): it exports `GIT_CONFIG_GLOBAL`, the SSH fence,
   `GIT_TERMINAL_PROMPT=0` and a login-less `GH_CONFIG_DIR` for its own process tree only - on the laptop,
   bare `gh` would otherwise fall back to your OAuth login. Each launcher is reached as `omp`/`claude` only
   through a symlink and never as a file named after its tool, because `omp update` resolves its install
@@ -196,8 +199,8 @@ the host's root Docker daemon.
     file catches up; validates locally with `devbox-identities check` first, the same reader that runs on both
     sides, so a broken registry never becomes the one the devbox boots from. `sync` host: argument, then
     `DEVBOX_SSH_HOST` (environment or `.push.env`), then `devbox`
-  - `devbox agent install` - idempotent: installs the same agent git override the devbox bootstraps
-    (`agent-launch`, `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence,
+  - `devbox agent install` - idempotent: installs the same agent git override the devbox bootstraps (`agent-launch`,
+    `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence,
     `devbox-gh-token`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin` symlink so it answers
     by name, the read-only *rendered* `git/agent*.gitconfig`, and `omp`/`claude` symlinks to the launchers in
     `~/.local/libexec/devbox-agent/launchers` - removing the pre-Claude `~/.local/bin/omp` symlink only once

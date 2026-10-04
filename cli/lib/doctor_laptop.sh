@@ -466,6 +466,5 @@ doctor_laptop() {
     fail 'ssh devbox failed - is 1Password unlocked and the Devbox Laptop key approved?'
   fi
 
-
   finish_checks
 }

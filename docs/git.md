@@ -371,7 +371,8 @@ given on the command line, so `ssh -i id_work.pub` still answers as whichever ac
 offers first - measured, not theoretical. A `Match … tagged` block is the only thing that overrides it.
 
 The laptop side of the *manual* identity isn't installed by this repo either - it's your own `~/.gitconfig` -
-but `devbox doctor laptop` holds it to the same layout the devbox bootstraps: one `includeIf "gitdir:…"` per tree (author and
+but `devbox doctor laptop` holds it to the same layout the devbox bootstraps: one `includeIf "gitdir:…"` per tree
+(author and
 signing key only - the SSH key follows the repository's owner, not the tree), and one triple of
 `includeIf "hasconfig:remote.*.url:…"` per identity with `orgs` (author, signing key, and the ssh tag):
 

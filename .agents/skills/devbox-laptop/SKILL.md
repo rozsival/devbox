@@ -32,8 +32,8 @@ Auth/signing are separate files: GitHub registers each separately, per account -
 verifies locally, shows *Unverified* on GitHub.
 
 `ssh-keygen -t …` is wrong: it creates a private key on disk - exactly what this layout removes.
-`devbox doctor laptop` reporting `private key(s) on disk`: delete if already a 1Password item, else import
-(1Password → New item → SSH Key → import), then delete.
+`devbox doctor laptop` reporting `private key(s) on disk`: delete if already a 1Password item, else import (1Password →
+New item → SSH Key → import), then delete.
 
 The same public keys go into `~/.config/devbox/identities.conf` as `pubkey`/`signing_pubkey` on each
 identity's block - see `devbox-setup`, phase 5.
@@ -174,7 +174,7 @@ repo.
 | `clones still on an SSH alias`                         | Run the printed `git remote set-url` commands (`devbox-identities alias-remotes` lists them again)                                     |
 | `omp`/`claude resolves to …, not the launcher`         | `./bin/devbox agent install`; add its `export PATH=…/devbox-agent/launchers:$PATH` line after whatever puts `~/.local/bin` first       |
 | `… is not a symlink to …/<agent>-launcher`             | A release binary replaced a launcher symlink; `./bin/devbox agent install`, then `omp update`/`claude update` again                    |
-| `differ from a fresh render of the templates`          | `./bin/devbox agent install` (templates or `identities.conf` changed since last install)                                              |
+| `differ from a fresh render of the templates`          | `./bin/devbox agent install` (templates or `identities.conf` changed since last install)                                               |
 | `the keychain holds an agent token`                    | Homebrew's `osxkeychain` preempted the helper; erase via `git credential-osxkeychain erase`, reinstall                                 |
 | `no <slug> token` / `token is rejected`                | Fill/re-issue `GH_TOKEN_<SLUG>` in `secrets.env` (phase 5)                                                                             |
 | `ssh devbox failed`                                    | 1Password locked, or Devbox Laptop key unapproved for this app                                                                         |

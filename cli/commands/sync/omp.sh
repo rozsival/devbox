@@ -5,7 +5,7 @@ src="${OMP_CONFIG:-${HOME}/.omp/agent/config.yml}"
 # preset without that block would remove it there without a trace. Only the
 # preset travels: agent.db, history.db, sessions, memories and models.yml are
 # per-machine state.
-if [[ -z "${args[--allow-unguarded]:-}" ]] && ! grep -qE '^bash:' "${src}"; then
+if [[ -z "${args[--allow - unguarded]:-}" ]] && ! grep -qE '^bash:' "${src}"; then
   log_error "${src} has no bash: block - syncing it would drop the devbox's OMP guardrail. Copy the block from home/.omp/agent/config.yml into it first, or pass --allow-unguarded."
 fi
 

@@ -70,18 +70,18 @@ connection. Two commands make the laptop match:
 
 ## 📚 Documentation
 
-| Doc                                | Read it when                                                                                                            |
-|------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
-| [Setup](docs/setup.md)             | First deploy, `.env` reference, laptop key, `~/.ssh/config`, laptop agent install                                       |
-| [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, Moshi, `devbox shell`                                                       |
-| [Git identities](docs/git.md)      | Cloning repos, the identity registry, manual vs agent git, signing, laptop install                                      |
-| [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Claude Code, Moshi hooks, agent skills                                                |
-| [Secrets](docs/secrets.md)         | Box-wide vs per-project, per-identity `gh` tokens, GCP ADC, App creds                                                   |
-| [CLI reference](docs/cli.md)       | Every `bin/devbox` command and flag - workstation, laptop and `doctor` - and how to edit the CLI                        |
-| [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding                                                                    |
-| [Docker](docs/docker.md)           | Project containers, the rootless daemon, `devbox-ports`                                                                 |
-| [Operations](docs/operations.md)   | Redeploy, restart, backup, `doctor`, troubleshooting                                                                    |
-| [Security model](docs/security.md) | Boundaries, trust assumptions, what an escaped agent reaches                                                            |
+| Doc                                | Read it when                                                                                     |
+|------------------------------------|--------------------------------------------------------------------------------------------------|
+| [Setup](docs/setup.md)             | First deploy, `.env` reference, laptop key, `~/.ssh/config`, laptop agent install                |
+| [Connecting](docs/connecting.md)   | Getting a shell: herdr panes, `ssh devbox`, Moshi, `devbox shell`                                |
+| [Git identities](docs/git.md)      | Cloning repos, the identity registry, manual vs agent git, signing, laptop install               |
+| [Toolchain](docs/toolchain.md)     | What is installed, versions, OMP, Claude Code, Moshi hooks, agent skills                         |
+| [Secrets](docs/secrets.md)         | Box-wide vs per-project, per-identity `gh` tokens, GCP ADC, App creds                            |
+| [CLI reference](docs/cli.md)       | Every `bin/devbox` command and flag - workstation, laptop and `doctor` - and how to edit the CLI |
+| [Networking](docs/networking.md)   | Exposure model, why UFW cannot help, port forwarding                                             |
+| [Docker](docs/docker.md)           | Project containers, the rootless daemon, `devbox-ports`                                          |
+| [Operations](docs/operations.md)   | Redeploy, restart, backup, `doctor`, troubleshooting                                             |
+| [Security model](docs/security.md) | Boundaries, trust assumptions, what an escaped agent reaches                                     |
 
 ## ⚡ Cheat sheet
 

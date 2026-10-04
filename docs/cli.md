@@ -210,8 +210,8 @@ Usage: ./bin/devbox agent install
 ```
 
 Idempotent: installs the same agent git override the devbox bootstraps - `agent-launch` (the
-shared launcher body), `omp-launcher`, `claude-launcher`, `gh` shim, credential helper
-(`devbox-git-credential`), SSH fence (`devbox-git-no-ssh`) in `~/.local/libexec/devbox-agent`;
+shared launcher body), `omp-launcher`, `claude-launcher`, `gh` shim, credential helper (`devbox-git-credential`), SSH
+fence (`devbox-git-no-ssh`) in `~/.local/libexec/devbox-agent`;
 `devbox-gh-token` in `~/.local/bin`; `omp` and `claude` symlinks to their launchers in
 `~/.local/libexec/devbox-agent/launchers` (the pre-Claude `~/.local/bin/omp` symlink is removed once `omp`
 resolves through that directory, kept until then);
@@ -223,7 +223,8 @@ touched. `~/.config/devbox/identities.conf` is *not* created for you - the examp
 seeding it would render agent gitconfigs authoring as `your-agent`; a missing registry fails the check and
 the run prints the `cp` command instead. `~/.config/devbox/secrets.env` and `~/.omp/agent/config.yml` (the
 OMP guardrail, [Toolchain](toolchain.md#omp)) are created from their templates if absent, then left
-alone - an existing OMP config without a `bash:` block becomes a manual step. Reports whether `omp` and `claude` resolve to their launchers - printing the `PATH` line for your
+alone - an existing OMP config without a `bash:` block becomes a manual step. Reports whether `omp` and `claude` resolve
+to their launchers - printing the `PATH` line for your
 shell rc as a manual step until they do - plus the remaining manual steps per registry
 identity: a `GH_TOKEN_<SLUG>` line in `secrets.env`, and - for any identity with an `app` directory set -
 its `{app-id,app.pem}` (mode 600) there. See [Git identities](git.md#laptop-install).
@@ -248,8 +249,8 @@ other side-guarded command.
 5. PID 1 runs as `dev` (no root process)
 6. Twelve toolchain probes, real exit codes: `herdr`, `omp`, `claude`, `node`, `pnpm`, `gh`, `lazygit`,
    `wt`, `terraform`, `git`, `docker`, `docker compose`
-7. Agent git override intact: `omp` and `claude` each resolve through a symlink to their launcher
-   (`omp-launcher`, `claude-launcher`), never a plain file an update could have replaced
+7. Agent git override intact: `omp` and `claude` each resolve through a symlink to their launcher (`omp-launcher`,
+   `claude-launcher`), never a plain file an update could have replaced
    ([Git identities](git.md#updates-omp-update-claude-update))
 8. `~/.config/devbox/identities.conf` passes `devbox-identities check` - a failing registry is reported
    here with the reader's own message, and skips every identity-derived check below rather than failing
@@ -278,8 +279,7 @@ run, while the ones that do not depend on it (private keys, launcher symlinks) s
 - **git** - every identity's gitconfig signing through `op-ssh-sign` with its own `signing_*.pub` key and an
   `allowed_signers` file covering all of them; each `orgs` pattern probed as a `hasconfig:` remote from `/` -
   email, signing key and `core.sshCommand` matching what `org-<slug>.gitconfig` should set, and no `gitdir:`
-  include left rewriting URLs; no clone still pointed at a stale SSH-alias remote
-  (`devbox-identities alias-remotes`).
+  include left rewriting URLs; no clone still pointed at a stale SSH-alias remote (`devbox-identities alias-remotes`).
 - **Agent git override** - `omp` and `claude` resolving to their launchers through symlinks in
   `~/.local/libexec/devbox-agent/launchers` (a plain file is what an `omp update` takes over);
   `~/.local/bin/devbox-identities` still a symlink onto the libexec reader - the hop that makes the name
@@ -354,9 +354,9 @@ bin/devbox            the generated script
 
 To change a command, edit `cli/bashly.yml` (interface), `cli/commands/` (body) or `cli/lib/` (shared code), then
 run `bashly generate` from the repo root and **commit both** `cli/` and `bin/devbox`. The generated script is
-committed because the workstation has no Ruby; only a contributor who regenerates needs bashly
-(`brew install bashly` or `gem install bashly`). The side guard is a bashly `filters:` entry on each command
-(`filter_host` / `filter_laptop` in `cli/lib/machine.sh`), so a new command declares its side there.
+committed because the workstation has no Ruby; only a contributor who regenerates needs bashly (`brew install bashly` or
+`gem install bashly`). The side guard is a bashly `filters:` entry on each command (`filter_host` / `filter_laptop` in
+`cli/lib/machine.sh`), so a new command declares its side there.
 
 ## ❓ FAQ
 

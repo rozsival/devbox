@@ -84,8 +84,10 @@ devbox, by `./bin/devbox agent install` on the laptop - with `secrets: { enabled
 the environment (`~/.config/devbox/secrets.env` or a project `.env`) before it reaches a provider, and a
 `bash.patterns` guardrail: `deny` for reaching past the agent's scoped tokens (`gh auth token|login|…`, an
 absolute-path `gh`, `env -u`, unsetting or reassigning `GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND`,
-`GH_CONFIG_DIR`, `GIT_TERMINAL_PROMPT`, keychain reads, `gh secret`/`variable`/`repo delete`) and for history rewrites (`--no-verify`, force push),
-`prompt` for `env -i` (this repo's smoke tests use it), `op`, `gcloud`, `terraform apply`. Your edits are never overwritten; an existing file without
+`GH_CONFIG_DIR`, `GIT_TERMINAL_PROMPT`, keychain reads, `gh secret`/`variable`/`repo delete`) and for history rewrites
+(`--no-verify`, force push),
+`prompt` for `env -i` (this repo's smoke tests use it), `op`, `gcloud`, `terraform apply`. Your edits are never
+overwritten; an existing file without
 a `bash:` block is reported by both installers so you can copy the block in. A project's own
 `bash.patterns` replaces this list entirely - arrays don't merge across settings layers. What it does and
 does not stop: [Security](security.md#accepted-limits).
@@ -163,7 +165,8 @@ No systemd means `moshi-hook service install` can't be used - `container/entrypo
 tying its lifetime to the container's. Restart a crashed/hand-killed one with `./bin/devbox hook` (a
 detached `docker compose exec`: no recreate, no dropped SSH sessions); `./bin/devbox up` alone won't revive
 it unless compose recreates the container. A new release is `./bin/devbox hook --update`: `moshi-hook
-update`, the OMP extension and the Claude hooks rewritten, then the same restart - `update` alone leaves the old version serving.
+update`, the OMP extension and the Claude hooks rewritten, then the same restart - `update` alone leaves the old version
+serving.
 
 A second daemon is harmless: `serve` exits with `another moshi-hook serve is already running (pid N, lock
 …)`, and a killed daemon's lock never blocks the next start, even across PID reuse.

@@ -5,8 +5,8 @@ description: Pushes repo changes out to the devbox and applies them - ./bin/devb
 
 # devbox deploy
 
-Deploying is two easily-conflated steps: **sync the repo** to the workstation (`devbox deploy`, laptop side),
-**apply it** to the running container (`devbox up` and friends, workstation side) - picking the wrong one is
+Deploying is two easily-conflated steps: **sync the repo** to the workstation (`devbox deploy`, laptop side), **apply
+it** to the running container (`devbox up` and friends, workstation side) - picking the wrong one is
 usually why a change seems to do nothing. Syncing the *identity registry* is a separate, third step
 (`devbox sync identities`): it never travels with `devbox deploy`, since `identities.conf` is gitignored,
 hand-held state, not repo content.

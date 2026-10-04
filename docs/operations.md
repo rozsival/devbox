@@ -164,6 +164,7 @@ Docker's json-file log for the `devbox` service - `./bin/devbox logs`. sshd logs
 authentication failures appear there.
 
 **How do I move the devbox to another workstation?**
-`./bin/devbox deploy <new-workstation>`, then `./bin/devbox env` there, restore the data tarball (or start fresh, re-running the
+`./bin/devbox deploy <new-workstation>`, then `./bin/devbox env` there, restore the data tarball (or start fresh,
+re-running the
 [manual checklist](secrets.md#manual-checklist)), then `./bin/devbox up`. The SSH host key comes from the
 data dir, so a restore keeps the laptop's `known_hosts` valid.

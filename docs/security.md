@@ -109,8 +109,8 @@ An agent's own command allowlist - forbidding `op`, `gcloud` and similar - is a 
 control: a subverted agent can call the same APIs through an SDK without either binary. The boundary is
 what each credential can do. `home/.omp/agent/config.yml` ships exactly such a guardrail for OMP, seeded
 when absent by `bootstrap` and `./bin/devbox agent install`: `bash.patterns` that deny `gh auth token|login|…`,
-an absolute-path `gh` (`*/bin/gh *` - past the shim), unsetting or reassigning the launcher's exports
-(`env -u`, `unset GIT_CONFIG_GLOBAL`, `GH_CONFIG_DIR=…`; reading them stays allowed; `env -i` prompts instead,
+an absolute-path `gh` (`*/bin/gh *` - past the shim), unsetting or reassigning the launcher's exports (`env -u`,
+`unset GIT_CONFIG_GLOBAL`, `GH_CONFIG_DIR=…`; reading them stays allowed; `env -i` prompts instead,
 since this repo's own smoke tests use it), keychain reads,
 `gh secret`/`variable`/`repo delete`, `--no-verify` and force pushes, and prompt for `op`,
 `gcloud` and `terraform apply`. `deny` holds even under yolo, but the rules match command text in the

@@ -11,12 +11,12 @@ commands:
   - name: env
     group: Workstation
     help: Create .env from .env.example and sync BIND_ADDR, HOST_UID and HOST_GID
-    filters: [host]
+    filters: [ host ]
 
   - name: up
     group: Workstation
     help: Preflight, then build and start the container
-    filters: [host]
+    filters: [ host ]
     flags: &force
       - long: --force
         short: -f
@@ -25,39 +25,39 @@ commands:
   - name: down
     group: Workstation
     help: Stop and remove the container
-    filters: [host]
+    filters: [ host ]
     flags: *force
 
   - name: rebuild
     group: Workstation
     help: Rebuild the image from scratch and restart
-    filters: [host]
+    filters: [ host ]
     flags: *force
 
   - name: bootstrap
     group: Workstation
     help: Re-run the in-container user setup
-    filters: [host]
+    filters: [ host ]
 
   - name: skills
     group: Workstation
     help: Install the optional agent skills and agent-browser
-    filters: [host]
+    filters: [ host ]
 
   - name: shell
     group: Workstation
     help: Open a login shell inside the container
-    filters: [host]
+    filters: [ host ]
 
   - name: sessions
     group: Workstation
     help: List the SSH sessions connected to the container
-    filters: [host]
+    filters: [ host ]
 
   - name: logs
     group: Workstation
     help: Show the container logs (last 100 lines)
-    filters: [host]
+    filters: [ host ]
     flags:
       - long: --follow
         short: -f
@@ -66,7 +66,7 @@ commands:
   - name: hook
     group: Workstation
     help: Restart the moshi-hook daemon in place, without touching SSH sessions
-    filters: [host]
+    filters: [ host ]
     flags:
       - long: --update
         short: -u
@@ -75,7 +75,7 @@ commands:
   - name: keys
     group: Workstation
     help: Print the installed identity public keys and the sshd host-key fingerprint
-    filters: [host]
+    filters: [ host ]
 
   - name: docker
     group: Workstation
@@ -95,7 +95,7 @@ commands:
           - points .env at the new uid, data dir and socket
 
           Finish with './bin/devbox rebuild' as your own user.
-        filters: [host]
+        filters: [ host ]
         flags:
           - long: --check
             help: Report what is missing and change nothing
@@ -107,7 +107,7 @@ commands:
   - name: deploy
     group: Laptop
     help: Sync this repo to the workstation, optionally bringing the container up
-    filters: [laptop]
+    filters: [ laptop ]
     dependencies:
       rsync: brew install rsync
       ssh:
@@ -120,7 +120,7 @@ commands:
       - long: --force
         short: -f
         help: Pass --force to that 'up' - recreate even with live SSH sessions
-        needs: [--up]
+        needs: [ --up ]
     environment_variables:
       - name: devbox_host
         help: Default workstation SSH host; may also be set in .push.env (gitignored)
@@ -140,7 +140,7 @@ commands:
           Copies ~/.omp/agent/config.yml, keeping one config.yml.bak there. Refuses a
           file without a top-level 'bash:' block: the devbox's seeded guardrail would
           be silently replaced.
-        filters: [laptop]
+        filters: [ laptop ]
         dependencies: &sync_deps
           rsync: brew install rsync
           ssh:
@@ -164,7 +164,7 @@ commands:
           Validates ~/.config/devbox/identities.conf, copies it (keeping one
           identities.conf.bak there), then re-runs bootstrap so every
           identity-derived file catches up.
-        filters: [laptop]
+        filters: [ laptop ]
         dependencies: *sync_deps
         args: *ssh_host
         environment_variables:
@@ -184,7 +184,7 @@ commands:
           From home/: the omp and claude launchers, the gh shim, the credential
           helper, the SSH fence and the read-only rendered agent gitconfigs.
           Idempotent; prints the manual steps that remain.
-        filters: [laptop]
+        filters: [ laptop ]
 
   # -- Both ---------------------------------------------------------------------
   - name: doctor
@@ -193,7 +193,7 @@ commands:
     args:
       - name: side
         help: Which checks to run (default - the side this machine is)
-        allowed: [host, laptop]
+        allowed: [ host, laptop ]
     examples:
       - ./bin/devbox doctor
       - ./bin/devbox doctor laptop

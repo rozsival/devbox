@@ -155,7 +155,8 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # agent skills + agent-
 ```
 
 `skills` installs `agent-browser`, `skill-creator`, `find-skills` into `~/.agents/skills` (OMP's skills
-dir) and symlinks each into `~/.claude/skills` (Claude Code's), plus its CLI and Chrome build. Separate from bootstrap since the first run downloads ~180 MB, needs
+dir) and symlinks each into `~/.claude/skills` (Claude Code's), plus its CLI and Chrome build. Separate from bootstrap
+since the first run downloads ~180 MB, needs
 Chrome shared libraries the `Dockerfile` provides - run after an `up` on the current image, not stale. Both
 idempotent; details: `docs/toolchain.md#agent-skills-and-browser-automation`.
 

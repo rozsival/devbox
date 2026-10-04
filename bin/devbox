@@ -2352,7 +2352,7 @@ devbox_sync_omp_command() {
   # preset without that block would remove it there without a trace. Only the
   # preset travels: agent.db, history.db, sessions, memories and models.yml are
   # per-machine state.
-  if [[ -z "${args[--allow-unguarded]:-}" ]] && ! grep -qE '^bash:' "${src}"; then
+  if [[ -z "${args[--allow - unguarded]:-}" ]] && ! grep -qE '^bash:' "${src}"; then
     log_error "${src} has no bash: block - syncing it would drop the devbox's OMP guardrail. Copy the block from home/.omp/agent/config.yml into it first, or pass --allow-unguarded."
   fi
 
@@ -2626,20 +2626,20 @@ parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --version | -v)
-        version_command
-        exit
-        ;;
+    --version | -v)
+      version_command
+      exit
+      ;;
 
-      --help | -h)
-        long_usage=yes
-        devbox_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -2647,129 +2647,129 @@ parse_requirements() {
   action=${1:-}
 
   case $action in
-    -*) ;;
+  -*) ;;
 
-    env)
-      action="env"
-      shift
-      devbox_env_parse_requirements "$@"
-      shift $#
-      ;;
+  env)
+    action="env"
+    shift
+    devbox_env_parse_requirements "$@"
+    shift $#
+    ;;
 
-    up)
-      action="up"
-      shift
-      devbox_up_parse_requirements "$@"
-      shift $#
-      ;;
+  up)
+    action="up"
+    shift
+    devbox_up_parse_requirements "$@"
+    shift $#
+    ;;
 
-    down)
-      action="down"
-      shift
-      devbox_down_parse_requirements "$@"
-      shift $#
-      ;;
+  down)
+    action="down"
+    shift
+    devbox_down_parse_requirements "$@"
+    shift $#
+    ;;
 
-    rebuild)
-      action="rebuild"
-      shift
-      devbox_rebuild_parse_requirements "$@"
-      shift $#
-      ;;
+  rebuild)
+    action="rebuild"
+    shift
+    devbox_rebuild_parse_requirements "$@"
+    shift $#
+    ;;
 
-    bootstrap)
-      action="bootstrap"
-      shift
-      devbox_bootstrap_parse_requirements "$@"
-      shift $#
-      ;;
+  bootstrap)
+    action="bootstrap"
+    shift
+    devbox_bootstrap_parse_requirements "$@"
+    shift $#
+    ;;
 
-    skills)
-      action="skills"
-      shift
-      devbox_skills_parse_requirements "$@"
-      shift $#
-      ;;
+  skills)
+    action="skills"
+    shift
+    devbox_skills_parse_requirements "$@"
+    shift $#
+    ;;
 
-    shell)
-      action="shell"
-      shift
-      devbox_shell_parse_requirements "$@"
-      shift $#
-      ;;
+  shell)
+    action="shell"
+    shift
+    devbox_shell_parse_requirements "$@"
+    shift $#
+    ;;
 
-    sessions)
-      action="sessions"
-      shift
-      devbox_sessions_parse_requirements "$@"
-      shift $#
-      ;;
+  sessions)
+    action="sessions"
+    shift
+    devbox_sessions_parse_requirements "$@"
+    shift $#
+    ;;
 
-    logs)
-      action="logs"
-      shift
-      devbox_logs_parse_requirements "$@"
-      shift $#
-      ;;
+  logs)
+    action="logs"
+    shift
+    devbox_logs_parse_requirements "$@"
+    shift $#
+    ;;
 
-    hook)
-      action="hook"
-      shift
-      devbox_hook_parse_requirements "$@"
-      shift $#
-      ;;
+  hook)
+    action="hook"
+    shift
+    devbox_hook_parse_requirements "$@"
+    shift $#
+    ;;
 
-    keys)
-      action="keys"
-      shift
-      devbox_keys_parse_requirements "$@"
-      shift $#
-      ;;
+  keys)
+    action="keys"
+    shift
+    devbox_keys_parse_requirements "$@"
+    shift $#
+    ;;
 
-    docker)
-      action="docker"
-      shift
-      devbox_docker_parse_requirements "$@"
-      shift $#
-      ;;
+  docker)
+    action="docker"
+    shift
+    devbox_docker_parse_requirements "$@"
+    shift $#
+    ;;
 
-    deploy)
-      action="deploy"
-      shift
-      devbox_deploy_parse_requirements "$@"
-      shift $#
-      ;;
+  deploy)
+    action="deploy"
+    shift
+    devbox_deploy_parse_requirements "$@"
+    shift $#
+    ;;
 
-    sync)
-      action="sync"
-      shift
-      devbox_sync_parse_requirements "$@"
-      shift $#
-      ;;
+  sync)
+    action="sync"
+    shift
+    devbox_sync_parse_requirements "$@"
+    shift $#
+    ;;
 
-    agent)
-      action="agent"
-      shift
-      devbox_agent_parse_requirements "$@"
-      shift $#
-      ;;
+  agent)
+    action="agent"
+    shift
+    devbox_agent_parse_requirements "$@"
+    shift $#
+    ;;
 
-    doctor)
-      action="doctor"
-      shift
-      devbox_doctor_parse_requirements "$@"
-      shift $#
-      ;;
+  doctor)
+    action="doctor"
+    shift
+    devbox_doctor_parse_requirements "$@"
+    shift $#
+    ;;
 
-    "")
-      devbox_usage >&2
-      exit 1
-      ;;
+  "")
+    devbox_usage >&2
+    exit 1
+    ;;
 
-    *)
-      printf "invalid command: %s\n" "$action" >&2
-      exit 1
-      ;;
+  *)
+    printf "invalid command: %s\n" "$action" >&2
+    exit 1
+    ;;
 
   esac
 
@@ -2777,29 +2777,29 @@ parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -2812,15 +2812,15 @@ devbox_env_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_env_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_env_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -2831,29 +2831,29 @@ devbox_env_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -2872,15 +2872,15 @@ devbox_up_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_up_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_up_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -2891,35 +2891,35 @@ devbox_up_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --force | -f)
+    --force | -f)
 
-        args['--force']=1
-        shift
-        ;;
+      args['--force']=1
+      shift
+      ;;
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -2938,15 +2938,15 @@ devbox_down_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_down_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_down_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -2957,35 +2957,35 @@ devbox_down_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --force | -f)
+    --force | -f)
 
-        args['--force']=1
-        shift
-        ;;
+      args['--force']=1
+      shift
+      ;;
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3004,15 +3004,15 @@ devbox_rebuild_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_rebuild_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_rebuild_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3023,35 +3023,35 @@ devbox_rebuild_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --force | -f)
+    --force | -f)
 
-        args['--force']=1
-        shift
-        ;;
+      args['--force']=1
+      shift
+      ;;
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3070,15 +3070,15 @@ devbox_bootstrap_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_bootstrap_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_bootstrap_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3089,29 +3089,29 @@ devbox_bootstrap_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3130,15 +3130,15 @@ devbox_skills_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_skills_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_skills_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3149,29 +3149,29 @@ devbox_skills_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3190,15 +3190,15 @@ devbox_shell_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_shell_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_shell_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3209,29 +3209,29 @@ devbox_shell_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3250,15 +3250,15 @@ devbox_sessions_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_sessions_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_sessions_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3269,29 +3269,29 @@ devbox_sessions_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3310,15 +3310,15 @@ devbox_logs_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_logs_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_logs_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3329,35 +3329,35 @@ devbox_logs_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --follow | -f)
+    --follow | -f)
 
-        args['--follow']=1
-        shift
-        ;;
+      args['--follow']=1
+      shift
+      ;;
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3376,15 +3376,15 @@ devbox_hook_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_hook_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_hook_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3395,35 +3395,35 @@ devbox_hook_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --update | -u)
+    --update | -u)
 
-        args['--update']=1
-        shift
-        ;;
+      args['--update']=1
+      shift
+      ;;
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3442,15 +3442,15 @@ devbox_keys_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_keys_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_keys_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3461,29 +3461,29 @@ devbox_keys_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3502,15 +3502,15 @@ devbox_docker_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_docker_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_docker_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3518,24 +3518,24 @@ devbox_docker_parse_requirements() {
   action=${1:-}
 
   case $action in
-    -*) ;;
+  -*) ;;
 
-    setup)
-      action="setup"
-      shift
-      devbox_docker_setup_parse_requirements "$@"
-      shift $#
-      ;;
+  setup)
+    action="setup"
+    shift
+    devbox_docker_setup_parse_requirements "$@"
+    shift $#
+    ;;
 
-    "")
-      devbox_docker_usage >&2
-      exit 1
-      ;;
+  "")
+    devbox_docker_usage >&2
+    exit 1
+    ;;
 
-    *)
-      printf "invalid command: %s\n" "$action" >&2
-      exit 1
-      ;;
+  *)
+    printf "invalid command: %s\n" "$action" >&2
+    exit 1
+    ;;
 
   esac
 
@@ -3543,29 +3543,29 @@ devbox_docker_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3578,15 +3578,15 @@ devbox_docker_setup_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_docker_setup_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_docker_setup_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3597,35 +3597,35 @@ devbox_docker_setup_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --check)
+    --check)
 
-        args['--check']=1
-        shift
-        ;;
+      args['--check']=1
+      shift
+      ;;
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3644,15 +3644,15 @@ devbox_deploy_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_deploy_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_deploy_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3682,41 +3682,22 @@ devbox_deploy_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --up)
+    --up)
 
-        args['--up']=1
-        shift
-        ;;
+      args['--up']=1
+      shift
+      ;;
 
-      --force | -f)
+    --force | -f)
 
-        args['--force']=1
-        shift
-        ;;
+      args['--force']=1
+      shift
+      ;;
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          if [[ -z ${args['host']+x} ]]; then
-            args['host']=$1
-            shift
-          else
-            printf "invalid argument: %s\n" "$key" >&2
-            exit 1
-          fi
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         if [[ -z ${args['host']+x} ]]; then
           args['host']=$1
@@ -3726,7 +3707,26 @@ devbox_deploy_parse_requirements() {
           exit 1
         fi
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      if [[ -z ${args['host']+x} ]]; then
+        args['host']=$1
+        shift
+      else
+        printf "invalid argument: %s\n" "$key" >&2
+        exit 1
+      fi
+
+      ;;
 
     esac
   done
@@ -3750,15 +3750,15 @@ devbox_sync_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_sync_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_sync_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3766,31 +3766,31 @@ devbox_sync_parse_requirements() {
   action=${1:-}
 
   case $action in
-    -*) ;;
+  -*) ;;
 
-    omp)
-      action="omp"
-      shift
-      devbox_sync_omp_parse_requirements "$@"
-      shift $#
-      ;;
+  omp)
+    action="omp"
+    shift
+    devbox_sync_omp_parse_requirements "$@"
+    shift $#
+    ;;
 
-    identities)
-      action="identities"
-      shift
-      devbox_sync_identities_parse_requirements "$@"
-      shift $#
-      ;;
+  identities)
+    action="identities"
+    shift
+    devbox_sync_identities_parse_requirements "$@"
+    shift $#
+    ;;
 
-    "")
-      devbox_sync_usage >&2
-      exit 1
-      ;;
+  "")
+    devbox_sync_usage >&2
+    exit 1
+    ;;
 
-    *)
-      printf "invalid command: %s\n" "$action" >&2
-      exit 1
-      ;;
+  *)
+    printf "invalid command: %s\n" "$action" >&2
+    exit 1
+    ;;
 
   esac
 
@@ -3798,29 +3798,29 @@ devbox_sync_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -3833,15 +3833,15 @@ devbox_sync_omp_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_sync_omp_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_sync_omp_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3869,35 +3869,16 @@ devbox_sync_omp_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --allow-unguarded)
+    --allow-unguarded)
 
-        args['--allow-unguarded']=1
-        shift
-        ;;
+      args['--allow-unguarded']=1
+      shift
+      ;;
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          if [[ -z ${args['host']+x} ]]; then
-            args['host']=$1
-            shift
-          else
-            printf "invalid argument: %s\n" "$key" >&2
-            exit 1
-          fi
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         if [[ -z ${args['host']+x} ]]; then
           args['host']=$1
@@ -3907,7 +3888,26 @@ devbox_sync_omp_parse_requirements() {
           exit 1
         fi
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      if [[ -z ${args['host']+x} ]]; then
+        args['host']=$1
+        shift
+      else
+        printf "invalid argument: %s\n" "$key" >&2
+        exit 1
+      fi
+
+      ;;
 
     esac
   done
@@ -3926,15 +3926,15 @@ devbox_sync_identities_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_sync_identities_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_sync_identities_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -3962,29 +3962,10 @@ devbox_sync_identities_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          if [[ -z ${args['host']+x} ]]; then
-            args['host']=$1
-            shift
-          else
-            printf "invalid argument: %s\n" "$key" >&2
-            exit 1
-          fi
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         if [[ -z ${args['host']+x} ]]; then
           args['host']=$1
@@ -3994,7 +3975,26 @@ devbox_sync_identities_parse_requirements() {
           exit 1
         fi
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      if [[ -z ${args['host']+x} ]]; then
+        args['host']=$1
+        shift
+      else
+        printf "invalid argument: %s\n" "$key" >&2
+        exit 1
+      fi
+
+      ;;
 
     esac
   done
@@ -4013,15 +4013,15 @@ devbox_agent_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_agent_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_agent_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -4029,24 +4029,24 @@ devbox_agent_parse_requirements() {
   action=${1:-}
 
   case $action in
-    -*) ;;
+  -*) ;;
 
-    install)
-      action="install"
-      shift
-      devbox_agent_install_parse_requirements "$@"
-      shift $#
-      ;;
+  install)
+    action="install"
+    shift
+    devbox_agent_install_parse_requirements "$@"
+    shift $#
+    ;;
 
-    "")
-      devbox_agent_usage >&2
-      exit 1
-      ;;
+  "")
+    devbox_agent_usage >&2
+    exit 1
+    ;;
 
-    *)
-      printf "invalid command: %s\n" "$action" >&2
-      exit 1
-      ;;
+  *)
+    printf "invalid command: %s\n" "$action" >&2
+    exit 1
+    ;;
 
   esac
 
@@ -4054,29 +4054,29 @@ devbox_agent_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -4089,15 +4089,15 @@ devbox_agent_install_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_agent_install_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_agent_install_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -4108,29 +4108,29 @@ devbox_agent_install_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          printf "invalid argument: %s\n" "$key" >&2
-          exit 1
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         printf "invalid argument: %s\n" "$key" >&2
         exit 1
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
 
     esac
   done
@@ -4149,15 +4149,15 @@ devbox_doctor_parse_requirements() {
   while [[ $# -gt 0 ]]; do
     key="$1"
     case "$key" in
-      --help | -h)
-        long_usage=yes
-        devbox_doctor_usage
-        exit
-        ;;
+    --help | -h)
+      long_usage=yes
+      devbox_doctor_usage
+      exit
+      ;;
 
-      *)
-        break
-        ;;
+    *)
+      break
+      ;;
 
     esac
   done
@@ -4168,29 +4168,10 @@ devbox_doctor_parse_requirements() {
     key="$1"
     case "$key" in
 
-      --)
-        shift
-        while [[ $# -gt 0 ]]; do
-          key="$1"
-
-          if [[ -z ${args['side']+x} ]]; then
-            args['side']=$1
-            shift
-          else
-            printf "invalid argument: %s\n" "$key" >&2
-            exit 1
-          fi
-
-        done
-        break
-        ;;
-
-      -?*)
-        printf "invalid option: %s\n" "$key" >&2
-        exit 1
-        ;;
-
-      *)
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
 
         if [[ -z ${args['side']+x} ]]; then
           args['side']=$1
@@ -4200,7 +4181,26 @@ devbox_doctor_parse_requirements() {
           exit 1
         fi
 
-        ;;
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      if [[ -z ${args['side']+x} ]]; then
+        args['side']=$1
+        shift
+      else
+        printf "invalid argument: %s\n" "$key" >&2
+        exit 1
+      fi
+
+      ;;
 
     esac
   done
@@ -4251,26 +4251,26 @@ run() {
   parse_requirements "${input[@]}"
 
   case "$action" in
-    "env") devbox_env_command ;;
-    "up") devbox_up_command ;;
-    "down") devbox_down_command ;;
-    "rebuild") devbox_rebuild_command ;;
-    "bootstrap") devbox_bootstrap_command ;;
-    "skills") devbox_skills_command ;;
-    "shell") devbox_shell_command ;;
-    "sessions") devbox_sessions_command ;;
-    "logs") devbox_logs_command ;;
-    "hook") devbox_hook_command ;;
-    "keys") devbox_keys_command ;;
-    "docker") devbox_docker_command ;;
-    "docker setup") devbox_docker_setup_command ;;
-    "deploy") devbox_deploy_command ;;
-    "sync") devbox_sync_command ;;
-    "sync omp") devbox_sync_omp_command ;;
-    "sync identities") devbox_sync_identities_command ;;
-    "agent") devbox_agent_command ;;
-    "agent install") devbox_agent_install_command ;;
-    "doctor") devbox_doctor_command ;;
+  "env") devbox_env_command ;;
+  "up") devbox_up_command ;;
+  "down") devbox_down_command ;;
+  "rebuild") devbox_rebuild_command ;;
+  "bootstrap") devbox_bootstrap_command ;;
+  "skills") devbox_skills_command ;;
+  "shell") devbox_shell_command ;;
+  "sessions") devbox_sessions_command ;;
+  "logs") devbox_logs_command ;;
+  "hook") devbox_hook_command ;;
+  "keys") devbox_keys_command ;;
+  "docker") devbox_docker_command ;;
+  "docker setup") devbox_docker_setup_command ;;
+  "deploy") devbox_deploy_command ;;
+  "sync") devbox_sync_command ;;
+  "sync omp") devbox_sync_omp_command ;;
+  "sync identities") devbox_sync_identities_command ;;
+  "agent") devbox_agent_command ;;
+  "agent install") devbox_agent_install_command ;;
+  "doctor") devbox_doctor_command ;;
   esac
 }
 
