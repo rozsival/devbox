@@ -48,7 +48,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
   `agent-launch` body they share), the `gh` shim, and two git-fencing scripts (`devbox-git-credential`,
   `devbox-git-no-ssh`), plus `omp` and `claude` symlinks to the launchers. `home/.bashrc.d/devbox.sh` puts
   it first on every devbox shell's `PATH`, shadowing `gh`, `omp` and `claude`; a launcher does likewise for
-  its own process tree on the laptop (`./bin/install-agent`, where the `omp`/`claude` symlinks sit in a
+  its own process tree on the laptop (`./bin/devbox agent install`, where the `omp`/`claude` symlinks sit in a
   `launchers/` subdirectory of their own). `home/.bash_profile` re-asserts that order for login shells,
   where the distro's `~/.profile` prepends `~/.local/bin` *after* sourcing `~/.bashrc` and would otherwise
   put the real binaries in front. See [Git identities](git.md#agent-sessions).
@@ -58,7 +58,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 ## Project containers
 
 Projects with their own containers reach Docker via a second, rootless host daemon, never one nested here -
-see [Docker](docker.md) for the model and `sudo ./bin/rootless-docker` setup.
+see [Docker](docker.md) for the model and the one-time `sudo ./bin/devbox docker setup`.
 
 ```bash
 docker compose up -d
@@ -80,7 +80,7 @@ it shadows, which is why the launcher survives an update. See
 [Git identities](git.md#updates-omp-update-claude-update).
 
 `~/.omp/agent/config.yml` seeds from `home/.omp/agent/config.yml` only if absent - by `bootstrap` on the
-devbox, by `./bin/install-agent` on the laptop - with `secrets: { enabled: true }` obfuscating an API key in
+devbox, by `./bin/devbox agent install` on the laptop - with `secrets: { enabled: true }` obfuscating an API key in
 the environment (`~/.config/devbox/secrets.env` or a project `.env`) before it reaches a provider, and a
 `bash.patterns` guardrail: `deny` for reaching past the agent's scoped tokens (`gh auth token|login|…`, an
 absolute-path `gh`, `env -u`, unsetting or reassigning `GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND`,
@@ -96,13 +96,14 @@ Local workstation-served models are opt-in: copy your model-serving repo's `harn
 Sync the laptop's preset so devbox panes share model roles, theme and feature flags:
 
 ```bash
-./bin/sync-omp              # laptop → devbox:~/.omp/agent/config.yml
-./bin/sync-omp devbox-2     # a different ~/.ssh/config host
+./bin/devbox sync omp              # laptop → devbox:~/.omp/agent/config.yml
+./bin/devbox sync omp devbox-2     # a different ~/.ssh/config host
 ```
 
 Only `config.yml` moves; `agent.db`, `history.db`, `sessions/`, `memories/` and `models.yml` stay
 per-machine, untouched. The prior file is kept as `config.yml.bak`; a running session needs a restart for
-the new preset.
+the new preset. A preset without a top-level `bash:` block is refused - it would silently replace the devbox's
+seeded guardrail - unless you pass `--allow-unguarded`.
 
 ## Claude Code
 
@@ -247,8 +248,9 @@ shell.
 1. Add `ARG <TOOL>_VERSION=<version>` next to the others in the `Dockerfile`.
 2. One install block: `curl -fsSL` to a temp dir, verify the published checksum, `install -m 0755` into
    `/usr/local/bin`.
-3. Add a probe to `doctor`'s list in `bin/devbox` if the version matters.
-4. `./bin/push <workstation> && ssh <workstation> 'cd ~/devbox && ./bin/devbox rebuild'`.
+3. Add a probe to `doctor`'s list in `cli/lib/doctor_host.sh` if the version matters, then run `bashly generate`
+   and commit `cli/` with the regenerated `bin/devbox`.
+4. `./bin/devbox deploy <workstation> && ssh <workstation> 'cd ~/devbox && ./bin/devbox rebuild'`.
 
 Never invent a hash: without a published checksum file (`herdr`), pinned version plus TLS is the contract.
 

@@ -33,10 +33,10 @@ applies - is read last and wins.
 (`DEVBOX_IDENTITIES_FILE` overrides the path) is its one reader on both machines: `~/.ssh/config`,
 `~/.gitconfig`'s `includeIf` chain, `allowed_signers`, both agent gitconfigs, and which GitHub token or App
 a directory gets all come out of it. You create it by copying
-`home/.config/devbox/identities.conf.example`; neither `container/bootstrap.sh` nor `./bin/install-agent`
+`home/.config/devbox/identities.conf.example`; neither `container/bootstrap.sh` nor `./bin/devbox agent install`
 writes it for you - the example is a *valid* file, so seeding it would quietly make `Your Name
 <you@example.com>` this machine's identity instead of failing the check. Both print the `cp` command while
-it is missing. Both machines need the *same* file; `./bin/sync-identities` copies the laptop's copy to
+it is missing. Both machines need the *same* file; `./bin/devbox sync identities` copies the laptop's copy to
 the devbox and re-runs bootstrap so everything derived from it catches up (see
 [Laptop install](#laptop-install)).
 
@@ -179,11 +179,11 @@ so *every login bash started inside a session* stamped the owner's name and emai
 file beside the config it rewrites, so a directory without write permission turns that into an immediate
 `error: could not lock config file` - loud, at the offending call, instead of silent drift. Reading is
 unaffected. Fix the dotfile too (the `GIT_AUTHOR_*`/`GIT_COMMITTER_*` assignments above those lines serve
-your own shell perfectly well); `./bin/laptop-doctor` flags the pattern. The launcher additionally
+your own shell perfectly well); `./bin/devbox doctor laptop` flags the pattern. The launcher additionally
 `unset`s `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL`, which
 outrank every configuration file, and refuses to start at all if the gitconfig is missing - no session may
-run without an identity, because that is what invites something to set one. Both doctors check the mode
-and compare the files against the repo templates; the installers (`./bin/install-agent`,
+run without an identity, because that is what invites something to set one. Both sides of `doctor` check the mode
+and compare the files against the repo templates; the installers (`./bin/devbox agent install`,
 `./bin/devbox bootstrap`) lift the mode, regenerate, and lock it again.
 
 ### Updates: `omp update`, `claude update`
@@ -201,7 +201,7 @@ Belt and braces, because the failure was silent: `omp` and `claude` are **symlin
 the laptop), never files named after the tool. An argv shape the passthrough does not recognise therefore
 hits omp's own refusal to replace a script behind a symlink - a one-line error - instead of a release binary
 landing on top of the launcher, which leaves agent sessions on your `~/.gitconfig`, with SSH remotes and
-your keys. `./bin/laptop-doctor` and `./bin/devbox doctor` check that the symlinks are still symlinks.
+your keys. `./bin/devbox doctor` checks, on either side, that the symlinks are still symlinks.
 
 ### `agent.gitconfig`
 
@@ -305,11 +305,11 @@ gh api repos/<owner>/<repo>/commits/<sha> --jq .commit.verification  # verified:
 
 ## Laptop install
 
-`./bin/install-agent` installs the identical mechanism on the laptop, from the `home/` templates the devbox
+`./bin/devbox agent install` installs the identical mechanism on the laptop, from the `home/` templates the devbox
 bootstraps from:
 
 ```bash
-./bin/install-agent
+./bin/devbox agent install
 ```
 
 It installs `agent-launch`, `omp-launcher`, `claude-launcher`, the `gh` shim, `devbox-git-credential`, and
@@ -343,11 +343,11 @@ Remaining manual steps, printed by the installer: fill in each identity's block 
 `~/.config/devbox/identities.conf` (at minimum `name`/`email`, plus `agent_name`/`agent_email` on the
 default identity - see [The identity registry](#the-identity-registry)), a `GH_TOKEN_<SLUG>` per identity in
 `~/.config/devbox/secrets.env`, and any configured `app` directory's GitHub App credentials. See
-[Secrets](secrets.md). `./bin/laptop-doctor` then checks this with the rest of the laptop side - keys,
-`~/.ssh/config`, signing, tokens, connections ([CLI reference](cli.md#binlaptop-doctor)).
+[Secrets](secrets.md). `./bin/devbox doctor laptop` then checks this with the rest of the laptop side - keys,
+`~/.ssh/config`, signing, tokens, connections ([CLI reference](cli.md#devbox-doctor)).
 
 `~/.ssh/config` isn't installed by this repo either - `devbox-identities render ssh-config` prints exactly
-what it should contain, to copy in by hand (`laptop-doctor` checks the result, not what produced it). One
+what it should contain, to copy in by hand (`devbox doctor laptop` checks the result, not what produced it). One
 plain `Host <host>` block per forge, one `Match host <host> tagged <slug>` per identity whose key differs
 from the plain one, `IdentityAgent` on `Host *` pointing at 1Password:
 
@@ -371,7 +371,7 @@ given on the command line, so `ssh -i id_work.pub` still answers as whichever ac
 offers first - measured, not theoretical. A `Match … tagged` block is the only thing that overrides it.
 
 The laptop side of the *manual* identity isn't installed by this repo either - it's your own `~/.gitconfig` -
-but `laptop-doctor` holds it to the same layout the devbox bootstraps: one `includeIf "gitdir:…"` per tree (author and
+but `devbox doctor laptop` holds it to the same layout the devbox bootstraps: one `includeIf "gitdir:…"` per tree (author and
 signing key only - the SSH key follows the repository's owner, not the tree), and one triple of
 `includeIf "hasconfig:remote.*.url:…"` per identity with `orgs` (author, signing key, and the ssh tag):
 
@@ -408,12 +408,12 @@ personal repository cloned into a work tree still has to push with your own key.
 verifies all of them - `devbox-identities render allowed-signers` builds it from whichever
 `signing_<slug>.pub` files exist on disk.
 
-Both machines hold the same `identities.conf`. `./bin/sync-identities [ssh-host]` copies the laptop's copy
+Both machines hold the same `identities.conf`. `./bin/devbox sync identities [ssh-host]` copies the laptop's copy
 to the devbox (keeping one `identities.conf.bak` there), validates it locally with `devbox-identities check`
 first so a broken file never lands, then re-runs `container/bootstrap.sh` so `~/.ssh/config`, `~/.gitconfig`'s
 `user-*`/`org-*` includes, the agent gitconfigs and `allowed_signers` catch up - the same regeneration
 `./bin/devbox bootstrap` does on its own, and just as idempotent. The laptop's own `~/.ssh/config` and
-`~/.gitconfig` are yours to keep in sync by hand; `laptop-doctor` is what notices drift.
+`~/.gitconfig` are yours to keep in sync by hand; `devbox doctor laptop` is what notices drift.
 
 ## Verify
 
@@ -466,14 +466,14 @@ picking the *key*: a `Match host <host> tagged <slug>` block, not `ssh -i` - ssh
 lists them, not the order given on the command line, so `ssh -i id_work.pub` still answered as
 whichever account the forwarded agent offered first, measured on this repo before tags existed. Old clones
 left on a `git@<slug>.<host>:` remote resolve nothing now (`devbox-identities alias-remotes` lists them;
-`laptop-doctor` and `bootstrap` print the `git remote set-url` commands to fix each one).
+`devbox doctor laptop` and `bootstrap` print the `git remote set-url` commands to fix each one).
 
 **After `omp update`, my agent tried to use my SSH keys.**
 Fixed in the launcher, and worth recognising: before the `update` passthrough existed, the updater resolved
 `omp` on the launcher's own `PATH` and wrote the release binary straight over the launcher script, so later
 sessions read `~/.gitconfig` - SSH remotes, your keys, 1Password prompting. Repair is
-`./bin/install-agent` on the laptop, `./bin/devbox bootstrap` on the devbox; both are idempotent and the
-update itself is not lost (re-run `omp update`). Recognition cue: `./bin/laptop-doctor` reports the
+`./bin/devbox agent install` on the laptop, `./bin/devbox bootstrap` on the devbox; both are idempotent and the
+update itself is not lost (re-run `omp update`). Recognition cue: `./bin/devbox doctor laptop` reports the
 installed launcher no longer matching the repo template - the `omp` symlink stays intact, it is the file
 behind it that became a ~180 MB binary. Inside a session, `echo $GIT_CONFIG_GLOBAL` printing nothing says
 the same thing.
@@ -497,8 +497,8 @@ unsigned commit - only the author was wrong. The `[user]` section of the install
 …` inside a session does: `GIT_CONFIG_GLOBAL` points at that file. On this laptop the caller was not an
 agent at all but `~/.extra`, sourced by `~/.bash_profile`, so any login bash a session started did it.
 Delete those two lines from the dotfile. The directory is mode 500 now, so the
-same call fails with `could not lock config file`; repair a drifted copy with `./bin/install-agent`
-(laptop) or `./bin/devbox bootstrap` (devbox). Both doctors compare the two files against the templates
+same call fails with `could not lock config file`; repair a drifted copy with `./bin/devbox agent install`
+(laptop) or `./bin/devbox bootstrap` (devbox). Both sides of `doctor` compare the two files against the templates
 and check the mode. Commits already made are only fixable by rewriting history, and `--reset-author` is
 the wrong tool: it takes the author from the shell doing the rewrite, so from your own terminal it stamps
 you again. Name the author instead, per commit to rewrite, and leave your own commits alone:
@@ -547,7 +547,7 @@ commits. Your own `gh`, and account-wide agent commands (`gh repo list`, `gh api
 **How do I add a third account?**
 One `[slug]` block in `~/.config/devbox/identities.conf`, a `GH_TOKEN_<SLUG>` in
 `~/.config/devbox/secrets.env`, and the identity's two public keys, already on GitHub. Apply with
-`./bin/sync-identities` from the laptop, or `./bin/devbox bootstrap` on the devbox alone - no code change,
+`./bin/devbox sync identities` from the laptop, or `./bin/devbox bootstrap` on the devbox alone - no code change,
 nowhere. See [The identity registry](#the-identity-registry).
 
 **Can two identities be the same GitHub account?**
@@ -555,15 +555,15 @@ Yes - the way to give an organization of your own its own token, since a fine-gr
 resource owner (your user *or* one org). Copy the default block under a new slug with its own `dir` and
 `orgs` naming that org, the same `pubkey`/`signing_pubkey` as the default (so it gets no tag - the key
 already matches the plain one), and copy `id_<default>.pub`/`signing_<default>.pub` to the new slug's names
-on the laptop. `laptop-doctor` normally fails two identities' connections greeting one login as a wrong key;
+on the laptop. `devbox doctor laptop` normally fails two identities' connections greeting one login as a wrong key;
 identical `pubkey` lines in the registry declare it deliberate, so that check skips the pair.
 
 **Both machines hold `identities.conf` - which one wins?**
-Neither is authoritative by itself; they're expected to agree. `./bin/sync-identities` always copies
+Neither is authoritative by itself; they're expected to agree. `./bin/devbox sync identities` always copies
 laptop → devbox (validating with `devbox-identities check` before it copies), because the laptop is where
 you hand-edit the file and where 1Password holds the private keys it names. Editing the devbox's copy
 directly works too - `./bin/devbox bootstrap` re-derives everything from whichever copy is on disk there -
-but the next `sync-identities` overwrites it with the laptop's, so a devbox-only edit should be mirrored
+but the next `sync identities` overwrites it with the laptop's, so a devbox-only edit should be mirrored
 back by hand or it will be lost on the next sync.
 
 **Can two identities share one GitHub App?**

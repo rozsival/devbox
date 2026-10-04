@@ -40,7 +40,7 @@ services:
       # one. This is a sibling rootless daemon owned by the unprivileged `dev`
       # host user - never the host's root /var/run/docker.sock.
       #
-      # Defaulted so an .env written before `sudo ./bin/rootless-docker` ran
+      # Defaulted so an .env written before `sudo ./bin/devbox docker setup` ran
       # still parses; an unset variable would make every compose command fail
       # with "empty section between colons". Docker creates the directory
       # root-owned if it is missing, which the tmpfiles.d rule then re-owns -

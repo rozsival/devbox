@@ -17,7 +17,7 @@ rootless project Docker daemon - never the host filesystem or its root Docker da
 ```
 laptop                    <workstation> (host)              container "devbox"
 herdr client   --ssh-->   BIND_ADDR:2223  --DNAT-->          :2222  sshd running as dev
-./bin/push     --rsync->  ~/devbox (the repo)                /home/dev  <- bind mount of
+devbox deploy  --rsync->  ~/devbox (the repo)                /home/dev  <- bind mount of
                           ${DEVBOX_DATA_DIR}                 ${DEVBOX_DATA_DIR}
 ```
 
@@ -35,7 +35,7 @@ Four facts:
 4. **No root, no root socket.** `USER dev`, PID 1 `dev`, `cap_drop: [ALL]`, `no-new-privileges`; the host's
    root Docker socket is never mounted. Project containers come from a *second* daemon: a rootless
    `dockerd` owned by the dedicated host user `dev`, socket `/run/devbox/docker.sock`, provisioned once by
-   `sudo ./bin/rootless-docker` - after which `docker` and `docker compose` work in the box. That daemon
+   `sudo ./bin/devbox docker setup` - after which `docker` and `docker compose` work in the box. That daemon
    publishes project ports on the devbox bridge gateway (`--ip` plus `--default-network-opt`, since `--ip`
    alone covers only the default bridge). `devbox-docker-firewall` - nftables matching the daemon's socket
    cgroup - holds the line regardless: even an explicit `0.0.0.0:` port never reaches the Tailnet or the
@@ -63,7 +63,7 @@ Dev servers are never published. Forward them: `ssh -N -L 5173:localhost:5173 de
 ## Identity registry: any number of accounts, one file
 
 `~/.config/devbox/identities.conf` is the single source of identity truth, held on both machines
-(`./bin/sync-identities` copies the laptop's copy to the devbox). One `[slug]` block per account, routed by
+(`./bin/devbox sync identities` copies the laptop's copy to the devbox). One `[slug]` block per account, routed by
 directory prefix - the longest match wins, and exactly one block with no `dir` is the default that catches
 every tree no other block claims:
 
@@ -86,7 +86,7 @@ PRs carry the bot author too. Full mechanism: `docs/git.md`.
 
 `./bin/devbox skills` (workstation) installs `agent-browser`, `skill-creator`, `find-skills` into
 `~/.agents/skills` (OMP) with a symlink each in `~/.claude/skills` (Claude Code), plus its CLI and a Chrome
-build, so panes can drive a headless browser. `./bin/sync-omp` (laptop) copies `~/.omp/agent/config.yml`
+build, so panes can drive a headless browser. `./bin/devbox sync omp` (laptop) copies `~/.omp/agent/config.yml`
 into the devbox so panes share the laptop's OMP preset. Neither runs during bootstrap; both are idempotent.
 Claude Code itself is installed by bootstrap and needs one `/login` in a pane (`docs/toolchain.md#claude-code`).
 
@@ -121,7 +121,7 @@ Answer from these files, not memory - each ends with an FAQ of real failures.
 | Identity split, signing, verification                | `docs/git.md`        |
 | Installed tools, pinned versions, agent skills       | `docs/toolchain.md`  |
 | Secret layers, `secrets.env`, `gh` tokens, GCP ADC   | `docs/secrets.md`    |
-| Every `bin/devbox` / `bin/push` / `bin/sync-omp` cmd | `docs/cli.md`        |
+| Every `bin/devbox` command (workstation + laptop)    | `docs/cli.md`        |
 | Exposure model, why UFW cannot help                  | `docs/networking.md` |
 | Redeploy, restart, backup, `doctor`, troubleshooting | `docs/operations.md` |
 | Project containers, path identity, `devbox-ports`    | `docs/docker.md`     |

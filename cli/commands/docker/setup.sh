@@ -1,0 +1,29 @@
+[[ -n "${args[--check]:-}" ]] && CHECK_ONLY='true'
+
+[[ -f "${ENV_FILE}" ]] || log_error "Missing ${ENV_FILE} - run './bin/devbox env' first"
+# --check probes as the daemon's user and reads root-owned units, so it needs
+# the same privileges as the apply path; it simply changes nothing.
+[[ "${EUID}" -eq 0 ]] ||
+  log_error 'This command inspects and provisions a host user, a systemd unit and /run - run it with sudo.'
+
+step_packages
+step_user
+step_data_dir
+step_firewall
+step_netfilter
+if getent passwd "${DEV_USER}" >/dev/null; then
+  step_socket_dir
+  step_daemon
+  [[ "${CHECK_ONLY}" == 'true' ]] || step_smoke
+elif [[ "${CHECK_ONLY}" == 'true' ]]; then
+  fail "remaining steps need the ${DEV_USER} user - re-run without --check to provision"
+fi
+
+upsert_env_key DEVBOX_DOCKER_SOCKET_DIR "${SOCKET_DIR}"
+
+if [[ "${CHECK_ONLY}" == 'true' ]]; then
+  ((failures == 0)) || log_error "${failures} item(s) missing - re-run without --check to provision."
+  log_success 'Rootless project docker is fully provisioned.'
+  exit 0
+fi
+log_success 'Done. Next: ./bin/devbox rebuild (as your own user, not root).'

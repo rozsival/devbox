@@ -18,11 +18,11 @@ daemon owned by a dedicated unprivileged host user** - never the host's root dae
 One command provisions the whole left-hand side, once:
 
 ```bash
-sudo ./bin/rootless-docker      # then, as your own user:
+sudo ./bin/devbox docker setup      # then, as your own user:
 ./bin/devbox rebuild
 ```
 
-`sudo ./bin/rootless-docker --check` reports state, changing nothing. Inside the devbox, `docker` and
+`sudo ./bin/devbox docker setup --check` reports state, changing nothing. Inside the devbox, `docker` and
 `docker compose` work with no flags, no `sudo`, no socket path to remember.
 
 ## Why not the two obvious options
@@ -257,8 +257,8 @@ input to those sockets outside loopback and the bridge, even when a port spec ov
 
 **`doctor` says `devbox-docker-firewall is inactive` after a reboot.**
 `systemctl status devbox-docker-firewall` showing `cgroupv2 path fails: No such file or directory` is the
-unit loading before `user-1001.slice` existed - a unit written by an older `bin/rootless-docker`. Re-run
-`sudo ./bin/rootless-docker`: it rewrites the unit with the ordering above and restarts it.
+unit loading before `user-1001.slice` existed - a unit written by an older `devbox docker setup`. Re-run
+`sudo ./bin/devbox docker setup`: it rewrites the unit with the ordering above and restarts it.
 
 **`docker pull` hangs, then fails with an i/o timeout.**
 Almost certainly the boundary table dropping the daemon's *reply* traffic - check
@@ -267,7 +267,7 @@ table matches the file (`sudo nft list table inet devbox`). The error names whic
 last, looking like an IPv6 problem; it isn't.
 
 **`docker` says "Cannot connect to the Docker daemon".**
-The daemon is down or unprovisioned. On the host: `sudo ./bin/rootless-docker --check`, then
+The daemon is down or unprovisioned. On the host: `sudo ./bin/devbox docker setup --check`, then
 `systemctl --user --machine=dev@.host status docker` for its log.
 
 **A service is running but nothing in the devbox can reach its port.**
@@ -278,10 +278,10 @@ unreachable here - parameterise the address and set `DOCKER_BIND_IP` (see *A com
 
 **A bind mount is empty inside a project container.**
 Path identity was broken - either the project lives outside `/home/dev`, or `DEVBOX_DATA_DIR` isn't
-`/home/dev`. `sudo ./bin/rootless-docker --check` reports the second case.
+`/home/dev`. `sudo ./bin/devbox docker setup --check` reports the second case.
 
 **Does a redeploy wipe images and volumes?**
-No - they live under `/home/dev/.local/share/docker` on the bind mount, which `bin/push` never touches and
+No - they live under `/home/dev/.local/share/docker` on the bind mount, which `devbox deploy` never touches and
 `rebuild` never deletes. Removing them is `docker system prune`, by hand.
 
 **Can I use the host's root daemon for something else?**

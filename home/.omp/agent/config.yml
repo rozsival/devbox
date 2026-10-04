@@ -1,4 +1,4 @@
-# Seeded once by container/bootstrap.sh (devbox) and bin/install-agent (laptop)
+# Seeded once by container/bootstrap.sh (devbox) and `devbox agent install` (laptop)
 # when absent; OMP owns the file afterwards. An existing file is never touched -
 # both installers say so when it lacks the `bash:` block below, so you can copy
 # the block in by hand.

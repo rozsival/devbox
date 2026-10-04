@@ -5,7 +5,7 @@ Day-to-day ops: redeploy, restart, persistence, backup, and the failure modes wo
 ## Redeploy
 
 ```bash
-./bin/push <workstation> --up
+./bin/devbox deploy <workstation> --up
 ```
 
 Repeatable, non-destructive: `.env`, `${DEVBOX_DATA_DIR}`, identity public keys, and the sshd host key
@@ -37,7 +37,7 @@ the sshd host key, `~/.config/gh`, and the whole `~/projects` tree. A bind mount
 Panes survive client loss - herdr's server runs in the container - but not a container restart.
 
 Images, build cache, and named volumes for project containers live on the same bind mount, under
-`/home/dev/.local/share/docker`: survive `rebuild`, excluded from `bin/push` like the rest of the data dir.
+`/home/dev/.local/share/docker`: survive `rebuild`, excluded from `devbox deploy` like the rest of the data dir.
 Prune manually: `docker system prune`.
 
 ## Backup
@@ -110,12 +110,12 @@ The container's writable layer is lost on recreate (`rebuild`, or `down`/`up` on
 Run inside a pipeline, its `cd` happens in a subshell. Run it directly.
 
 **`docker: Cannot connect to the Docker daemon`**
-Project daemon is down or never provisioned. On the host: `sudo ./bin/rootless-docker --check`, then
+Project daemon is down or never provisioned. On the host: `sudo ./bin/devbox docker setup --check`, then
 `systemctl --user --machine=dev@.host status docker` for the daemon's own log.
 
 **A project's bind mount is empty**
 Path identity broke: the project must live under `/home/dev` and `DEVBOX_DATA_DIR` must equal it - the
-daemon resolves bind-mount sources on the host. `sudo ./bin/rootless-docker --check` reports mismatches.
+daemon resolves bind-mount sources on the host. `sudo ./bin/devbox docker setup --check` reports mismatches.
 
 **`ssh devbox` closes mid-session with no error**
 The container went away under the session, killing sshd with it - nothing sent a disconnect, so the client
@@ -164,6 +164,6 @@ Docker's json-file log for the `devbox` service - `./bin/devbox logs`. sshd logs
 authentication failures appear there.
 
 **How do I move the devbox to another workstation?**
-`bin/push` to the new host, `./bin/devbox env`, restore the data tarball (or start fresh, re-running the
+`./bin/devbox deploy <new-workstation>`, then `./bin/devbox env` there, restore the data tarball (or start fresh, re-running the
 [manual checklist](secrets.md#manual-checklist)), then `./bin/devbox up`. The SSH host key comes from the
 data dir, so a restore keeps the laptop's `known_hosts` valid.

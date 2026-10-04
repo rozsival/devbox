@@ -60,10 +60,10 @@ ANTHROPIC_API_KEY=sk-ant-...
 Only credentials **every** project shares belong here - a per-project secret here reaches every agent on
 every other project, defeating the layering.
 
-The same file exists on the laptop once `./bin/install-agent` runs - same template, mode 600, never
+The same file exists on the laptop once `./bin/devbox agent install` runs - same template, mode 600, never
 overwritten - read there only by agent sessions: `devbox-gh-token` for the `gh` shim,
 `devbox-git-credential`'s PAT fallback. Your shell never sources it; your `gh` keeps its OAuth login. Fill
-it with every identity's `GH_TOKEN_<SLUG>` (`laptop-doctor` validates them); model keys stay the devbox's
+it with every identity's `GH_TOKEN_<SLUG>` (`devbox doctor laptop` validates them); model keys stay the devbox's
 concern.
 
 ### `gh`
@@ -183,7 +183,7 @@ Claude's process tree, because Claude otherwise bills such a key instead of the 
 `agent.gitconfig` and `devbox-git-credential`. See
 [Git identities](git.md#agent-sessions) for the mechanism; this page covers only where those secrets live -
 `~/.config/devbox/secrets.env` and each identity's `app` directory (`{app-id,app.pem}`) on the laptop too,
-read there by its copy of the helper (`./bin/install-agent`).
+read there by its copy of the helper (`./bin/devbox agent install`).
 
 ## Per-project secrets
 
@@ -298,7 +298,7 @@ sign at all: `agent.gitconfig` sets `commit.gpgsign = false`, with no key or for
 
 **Why does `.env` on the host hold no secrets?**
 It holds addressing, host-user mapping and SSH-authorization configuration only (`BIND_ADDR`,
-`HOST_UID`/`HOST_GID`, `DEVBOX_GITHUB_USER`) - gitignored and excluded from `bin/push`, but not a secret
+`HOST_UID`/`HOST_GID`, `DEVBOX_GITHUB_USER`) - gitignored and excluded from `devbox deploy`, but not a secret
 store. Git identities - names, emails, public keys, bot authors, GitHub Apps - live in
 `~/.config/devbox/identities.conf` instead, on the bind mount and not tracked by this repo at all; see
 [Git identities](git.md#the-identity-registry).

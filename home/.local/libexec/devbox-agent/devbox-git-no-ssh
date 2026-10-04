@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
+# Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
 # edit home/.local/libexec/devbox-agent/devbox-git-no-ssh in the repo.
 #
 # GIT_SSH_COMMAND for agent sessions (see agent-launch next to this file).

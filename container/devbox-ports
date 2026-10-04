@@ -45,7 +45,7 @@ forward_alive() {
 cmd_sync() {
   command -v socat >/dev/null 2>&1 || log_error 'socat is missing from this image.'
   docker info >/dev/null 2>&1 ||
-    log_error "cannot reach ${DOCKER_HOST:-the docker socket} - on the host: sudo ./bin/rootless-docker --check"
+    log_error "cannot reach ${DOCKER_HOST:-the docker socket} - on the host: sudo ./bin/devbox docker setup --check"
 
   local gateway
   gateway="$(getent hosts "${GATEWAY_HOST}" | awk '{ print $1; exit }')"

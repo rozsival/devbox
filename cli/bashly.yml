@@ -1,0 +1,199 @@
+name: devbox
+help: |-
+  Manage the devbox from the workstation that runs it and the laptop that deploys to it
+
+  Workstation commands refuse to run on the laptop and vice versa.
+version: 1.0.0
+footer: See docs/cli.md for the full reference.
+
+commands:
+  # -- Workstation: the container ------------------------------------------------
+  - name: env
+    group: Workstation
+    help: Create .env from .env.example and sync BIND_ADDR, HOST_UID and HOST_GID
+    filters: [host]
+
+  - name: up
+    group: Workstation
+    help: Preflight, then build and start the container
+    filters: [host]
+    flags: &force
+      - long: --force
+        short: -f
+        help: Skip the prompt when live SSH sessions would be killed
+
+  - name: down
+    group: Workstation
+    help: Stop and remove the container
+    filters: [host]
+    flags: *force
+
+  - name: rebuild
+    group: Workstation
+    help: Rebuild the image from scratch and restart
+    filters: [host]
+    flags: *force
+
+  - name: bootstrap
+    group: Workstation
+    help: Re-run the in-container user setup
+    filters: [host]
+
+  - name: skills
+    group: Workstation
+    help: Install the optional agent skills and agent-browser
+    filters: [host]
+
+  - name: shell
+    group: Workstation
+    help: Open a login shell inside the container
+    filters: [host]
+
+  - name: sessions
+    group: Workstation
+    help: List the SSH sessions connected to the container
+    filters: [host]
+
+  - name: logs
+    group: Workstation
+    help: Show the container logs (last 100 lines)
+    filters: [host]
+    flags:
+      - long: --follow
+        short: -f
+        help: Follow the log
+
+  - name: hook
+    group: Workstation
+    help: Restart the moshi-hook daemon in place, without touching SSH sessions
+    filters: [host]
+    flags:
+      - long: --update
+        short: -u
+        help: Upgrade moshi-hook and rewrite its OMP extension and Claude hooks first
+
+  - name: keys
+    group: Workstation
+    help: Print the installed identity public keys and the sshd host-key fingerprint
+    filters: [host]
+
+  - name: docker
+    group: Workstation
+    help: The rootless project Docker daemon
+    expose: always
+    commands:
+      - name: setup
+        help: |-
+          Provision the rootless project Docker daemon (needs sudo)
+
+          - installs uidmap and slirp4netns
+          - creates the unprivileged host user dev:devbox that owns the daemon
+          - moves DEVBOX_DATA_DIR to /home/dev, so container and host paths match
+          - keeps published project ports off every interface but the devbox bridge
+          - lets the devbox bridge reach the address ports are published on
+          - enables the lingering rootless dockerd on /run/devbox/docker.sock
+          - points .env at the new uid, data dir and socket
+
+          Finish with './bin/devbox rebuild' as your own user.
+        filters: [host]
+        flags:
+          - long: --check
+            help: Report what is missing and change nothing
+        examples:
+          - sudo ./bin/devbox docker setup
+          - sudo ./bin/devbox docker setup --check
+
+  # -- Laptop -------------------------------------------------------------------
+  - name: deploy
+    group: Laptop
+    help: Sync this repo to the workstation, optionally bringing the container up
+    filters: [laptop]
+    dependencies:
+      rsync: brew install rsync
+      ssh:
+    args:
+      - name: host
+        help: Workstation SSH host (default DEVBOX_HOST, from the environment or .push.env)
+    flags:
+      - long: --up
+        help: Run './bin/devbox up' on the workstation after syncing
+      - long: --force
+        short: -f
+        help: Pass --force to that 'up' - recreate even with live SSH sessions
+        needs: [--up]
+    environment_variables:
+      - name: devbox_host
+        help: Default workstation SSH host; may also be set in .push.env (gitignored)
+      - name: devbox_remote_path
+        help: Repo path on the workstation
+        default: ~/devbox
+
+  - name: sync
+    group: Laptop
+    help: Copy laptop configuration into the devbox container
+    expose: always
+    commands:
+      - name: omp
+        help: |-
+          Copy the laptop's OMP preset into the devbox
+
+          Copies ~/.omp/agent/config.yml, keeping one config.yml.bak there. Refuses a
+          file without a top-level 'bash:' block: the devbox's seeded guardrail would
+          be silently replaced.
+        filters: [laptop]
+        dependencies: &sync_deps
+          rsync: brew install rsync
+          ssh:
+        args: &ssh_host
+          - name: host
+            help: Devbox SSH host (default DEVBOX_SSH_HOST, from the environment or .push.env, then 'devbox')
+        flags:
+          - long: --allow-unguarded
+            help: Sync a config without the bash guardrail anyway
+        environment_variables:
+          - &devbox_ssh_host
+            name: devbox_ssh_host
+            help: Default devbox SSH host; may also be set in .push.env
+          - name: omp_config
+            help: Source file (default ~/.omp/agent/config.yml)
+
+      - name: identities
+        help: |-
+          Copy the laptop's identity registry into the devbox and apply it
+
+          Validates ~/.config/devbox/identities.conf, copies it (keeping one
+          identities.conf.bak there), then re-runs bootstrap so every
+          identity-derived file catches up.
+        filters: [laptop]
+        dependencies: *sync_deps
+        args: *ssh_host
+        environment_variables:
+          - *devbox_ssh_host
+          - name: devbox_identities
+            help: Source file (default ~/.config/devbox/identities.conf)
+
+  - name: agent
+    group: Laptop
+    help: The agent git override on this laptop
+    expose: always
+    commands:
+      - name: install
+        help: |-
+          Install the agent git override on this laptop
+
+          From home/: the omp and claude launchers, the gh shim, the credential
+          helper, the SSH fence and the read-only rendered agent gitconfigs.
+          Idempotent; prints the manual steps that remain.
+        filters: [laptop]
+
+  # -- Both ---------------------------------------------------------------------
+  - name: doctor
+    group: Both
+    help: Check this machine's side of the devbox
+    args:
+      - name: side
+        help: Which checks to run (default - the side this machine is)
+        allowed: [host, laptop]
+    examples:
+      - ./bin/devbox doctor
+      - ./bin/devbox doctor laptop

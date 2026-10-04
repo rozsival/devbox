@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
+# Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
 # edit home/.local/libexec/devbox-agent/agent-launch in the repo.
 #
 # The body every agent launcher shares (omp-launcher, claude-launcher): sourced,
@@ -56,7 +56,7 @@ agent_launch() {
   # agent commits came to be authored by the laptop's owner.
   export GIT_CONFIG_GLOBAL="${HOME}/.config/devbox/git/agent.gitconfig"
   if [[ ! -r ${GIT_CONFIG_GLOBAL} ]]; then
-    printf 'devbox: %s is missing - run ./bin/install-agent (laptop) or ./bin/devbox bootstrap (devbox)\n' \
+    printf 'devbox: %s is missing - run ./bin/devbox agent install (laptop) or ./bin/devbox bootstrap (devbox)\n' \
       "${GIT_CONFIG_GLOBAL}" >&2
     exit 1
   fi

@@ -8,6 +8,10 @@ First deploy, per-host config, laptop SSH wiring, in order - each step verifiabl
 |-------------|------------------------------------------------------------------------------|
 | Workstation | Ubuntu 26.04, Docker with compose v2, Tailscale up, `rsync`, a known UID/GID |
 | Laptop      | `rsync`, an SSH client, and a [herdr](https://herdr.dev) client              |
+|             | bash ≥ 4.2 (`brew install bash`) - macOS's 3.2 can't run `./bin/devbox`      |
+
+`./bin/devbox` is bashly-generated and refuses older bash; Homebrew's bash, first on the `PATH`, is the one
+`#!/usr/bin/env bash` finds. The workstation's Ubuntu bash is new enough.
 
 Check the workstation in one call:
 
@@ -30,7 +34,7 @@ at `~/.ssh/config`; `IdentityFile` picks it there.
 Authorize it in both places:
 
 ```bash
-# workstation host (needed by ./bin/push)
+# workstation host (needed by ./bin/devbox deploy)
 ssh-copy-id -i ~/.ssh/devbox.pub -p 2222 <user>@<workstation>
 
 # devbox container: paste the same public key into DEVBOX_EXTRA_AUTHORIZED_KEYS in .env (step 3)
@@ -86,9 +90,12 @@ ssh <workstation> true
 ## 3. Deploy and configure
 
 ```bash
-./bin/push <workstation>                             # or: echo 'DEVBOX_HOST=<workstation>' >.push.env && ./bin/push
+./bin/devbox deploy <workstation>                   # or: echo 'DEVBOX_HOST=<workstation>' >.push.env && ./bin/devbox deploy
 ssh <workstation> 'cd ~/devbox && ./bin/devbox env'
 ```
+
+`.push.env` (gitignored) holds `DEVBOX_HOST`, the default for `deploy`'s `<workstation>` argument, and optionally
+`DEVBOX_SSH_HOST`, the `~/.ssh/config` host `sync omp` and `sync identities` use for the container (default `devbox`).
 
 `env` creates `.env` from `.env.example`: `BIND_ADDR` from `tailscale ip -4`, `HOST_UID`/`HOST_GID` from
 `dev` (else current user). Edit `~/devbox/.env`, at minimum `DEVBOX_EXTRA_AUTHORIZED_KEYS` with step 1's
@@ -98,7 +105,7 @@ Provision the project Docker daemon once: needs `.env` present, moves `DEVBOX_DA
 under `dev`, refusing while the container runs (before the first `up`):
 
 ```bash
-ssh -t <workstation> 'cd ~/devbox && sudo ./bin/rootless-docker'
+ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'
 ```
 
 `--check` reports what's missing, unchanged otherwise; see [Docker](docker.md). Then start the container:
@@ -116,10 +123,10 @@ Fill it in from a shell in the container (`ssh <workstation> 'cd ~/devbox && ./b
 login shell there): one `[slug]` block per account - name, email, the laptop's public keys - with exactly
 one block omitting `dir` to become the default identity. Then re-run `./bin/devbox bootstrap` to derive
 `~/.ssh/config`, `~/.gitconfig`, the agent gitconfigs and `allowed_signers` from it. It lives on the bind
-mount, so it survives every rebuild; `./bin/sync-identities` copies the laptop's own copy over instead of
+mount, so it survives every rebuild; `./bin/devbox sync identities` copies the laptop's own copy over instead of
 retyping it. See [Git identities](git.md).
 
-`.env` is gitignored **and** excluded from `bin/push` - deploys leave it untouched.
+`.env` is gitignored **and** excluded from `devbox deploy` - deploys leave it untouched.
 
 ## 4. Attach herdr
 
@@ -135,7 +142,7 @@ Extras outside `bootstrap`, keeping first starts fast, offline-safe:
 
 ```bash
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # 3 global agent skills + agent-browser + Chrome
-./bin/sync-omp                                           # laptop OMP preset → devbox
+./bin/devbox sync omp                                    # laptop OMP preset → devbox
 ssh -t devbox claude                                     # once: /login for Claude Code on the devbox
 ```
 
@@ -147,7 +154,7 @@ All idempotent, rerunnable anytime. Details: [Toolchain](toolchain.md#agent-skil
 Agents run on the laptop too - OMP and Claude Code, same launchers, same mechanism:
 
 ```bash
-./bin/install-agent
+./bin/devbox agent install
 ```
 
 Installs `agent-launch`, `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence in
@@ -169,10 +176,10 @@ Reports whether `omp` and `claude` resolve to their launchers, and prints the re
 identity: a `GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env`, and - for any identity with an `app`
 directory set - its GitHub App credentials there. See [Git identities](git.md#laptop-install).
 
-`./bin/laptop-doctor` is the laptop's acceptance test. It covers steps 1, 2 and 6 plus the GitHub `Host`
+`./bin/devbox doctor laptop` is the laptop's acceptance test. It covers steps 1, 2 and 6 plus the GitHub `Host`
 blocks and the signing config: keys held by 1Password with none on disk, every `Host` selecting one `.pub`
 per registry identity, every gitconfig signing via `op-ssh-sign`, the override current, every identity's
-token accepted, and all connections authenticating. Details: [CLI reference](cli.md#binlaptop-doctor).
+token accepted, and all connections authenticating. Details: [CLI reference](cli.md#devbox-doctor).
 
 ## `.env` reference
 
@@ -202,7 +209,7 @@ Rebuilt every container start from `https://github.com/<DEVBOX_GITHUB_USER>.keys
 
 **How do I authorize another client - a phone, a second laptop?**
 Append its public key to `DEVBOX_EXTRA_AUTHORIZED_KEYS` in `.env` **on the workstation**
-(`<workstation>:~/devbox/.env`; never synced by `bin/push`), run `./bin/devbox up`. Values newline-separate
+(`<workstation>:~/devbox/.env`; never synced by `devbox deploy`), run `./bin/devbox up`. Values newline-separate
 in one quoted pair - compose passes them intact:
 
 ```bash
@@ -223,13 +230,13 @@ serving the workstation and devbox blocks only.
 No - the preflight is working as intended. Run `./bin/devbox env` (Tailscale up first), or set the address
 by hand. `0.0.0.0` as fallback would expose devbox publicly.
 
-**Does `bin/push` overwrite my host configuration?**
+**Does `devbox deploy` overwrite my host configuration?**
 No - excludes `.git`, `.env`, `data/`, `.DS_Store`; `--delete` hits only synced paths.
 
 **Do I need to re-run `env` after a redeploy?**
 Only if the Tailscale address changed; `doctor` compares `BIND_ADDR` to `tailscale ip -4`, failing on drift.
 
-**I already have a devbox at the old data path. What does `sudo ./bin/rootless-docker` do to it?**
+**I already have a devbox at the old data path. What does `sudo ./bin/devbox docker setup` do to it?**
 Nothing while the container runs - it refuses, pointing to `./bin/devbox down` first. Stopped, it `mv`s the
 old `DEVBOX_DATA_DIR` to `/home/dev`, chowned to `dev`. Keys, cloned repos, `~/.config/devbox/secrets.env`
 survive - a move, not a recreate. Finish with `./bin/devbox rebuild`.

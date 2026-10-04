@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-# Host-side, one-time provisioning for the project Docker daemon.
+# `devbox docker setup`: host-side, one-time provisioning for the project
+# Docker daemon.
 #
 # The devbox container gets Docker by talking to a *second* daemon that runs
 # rootless as a dedicated unprivileged host user (`dev`), never to the host's
@@ -12,11 +12,7 @@
 #
 # Every step is idempotent and logged, so a re-run is a no-op. `--check` reports
 # state and changes nothing.
-set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly REPO_ROOT
-readonly ENV_FILE="${REPO_ROOT}/.env"
 readonly DEV_USER='dev'
 readonly DEV_GROUP='devbox'
 readonly DEV_UID=1001
@@ -36,74 +32,6 @@ readonly NFT_UNIT="/etc/systemd/system/${NFT_SERVICE}"
 readonly DEVBOX_BRIDGE='docker0'
 # 65536 ids is the useradd default and what the daemon maps container uids into.
 readonly SUBID_RANGE='165536-231071'
-
-CHECK_ONLY='false'
-CHECKS_FAILED=0
-
-log_info() { echo -e "\033[0;34m[INFO]\033[0m  $*"; }
-log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
-log_warn() { echo -e "\033[1;33m[WARN]\033[0m  $*" >&2; }
-log_error() {
-  echo -e "\033[0;31m[ERROR]\033[0m $*" >&2
-  exit 1
-}
-
-usage() {
-  cat <<'USAGE'
-Usage: sudo ./bin/rootless-docker [--check]
-
-Provisions the rootless project Docker daemon for the devbox:
-  * installs uidmap and slirp4netns
-  * creates the unprivileged host user dev:devbox that owns the daemon
-  * moves DEVBOX_DATA_DIR to /home/dev so container and host paths are identical
-  * keeps published project ports off every interface but the devbox bridge
-  * allows the devbox bridge to reach the gateway address ports are published on
-  * enables the lingering rootless dockerd on /run/devbox/docker.sock
-  * points .env at the new uid, data dir and socket
-
---check reports what is missing and changes nothing.
-Finish with './bin/devbox rebuild' as your own user.
-USAGE
-}
-
-# Reports a missing piece in --check mode; in apply mode the caller fixes it.
-note_missing() {
-  log_warn "$*"
-  CHECKS_FAILED=$((CHECKS_FAILED + 1))
-}
-
-# Same contract as bin/devbox's helper, duplicated on purpose: this script runs
-# as root and must not source anything out of the repo it is provisioning.
-env_get() {
-  local key="$1" value
-  value="$(grep -E "^${key}=" "${ENV_FILE}" 2>/dev/null | tail -1 || true)"
-  printf '%s' "${value#*=}"
-}
-
-upsert_env_key() {
-  local key="$1" value="$2" tmp
-  [[ "$(env_get "${key}")" == "${value}" ]] && return 0
-  if [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "${ENV_FILE}: ${key} is '$(env_get "${key}")', expected '${value}'"
-    return 0
-  fi
-  tmp="$(mktemp)"
-  if grep -qE "^${key}=" "${ENV_FILE}"; then
-    KEY="${key}" VALUE="${value}" awk -F= '
-      BEGIN { k = ENVIRON["KEY"]; v = ENVIRON["VALUE"] }
-      $1 == k && !replaced { print k "=" v; replaced = 1; next }
-      { print }
-    ' "${ENV_FILE}" >"${tmp}"
-  else
-    cat "${ENV_FILE}" >"${tmp}"
-    printf '%s=%s\n' "${key}" "${value}" >>"${tmp}"
-  fi
-  # .env is owned by the deploying user, not by root; keep it that way.
-  chown --reference="${ENV_FILE}" "${tmp}"
-  chmod --reference="${ENV_FILE}" "${tmp}"
-  mv "${tmp}" "${ENV_FILE}"
-  log_success "${ENV_FILE}: ${key}=${value}"
-}
 
 as_dev() {
   runuser -u "${DEV_USER}" -- env \
@@ -128,7 +56,7 @@ step_packages() {
     return 0
   fi
   if [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "packages missing: ${missing[*]}"
+    fail "packages missing: ${missing[*]}"
     return 0
   fi
   log_info "Installing ${missing[*]}..."
@@ -147,7 +75,7 @@ step_user() {
     [[ "${actual_gid}" == "${DEV_UID}" ]] ||
       log_error "group ${DEV_GROUP} exists with gid ${actual_gid}, expected ${DEV_UID}; fix by hand"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "group ${DEV_GROUP} (gid ${DEV_UID}) missing"
+    fail "group ${DEV_GROUP} (gid ${DEV_UID}) missing"
   else
     # Pinned, not auto-assigned: .env's HOST_GID and the container's own `dev`
     # group must agree with it, and a drifting gid shows up as files the
@@ -165,7 +93,7 @@ step_user() {
       log_error "user ${DEV_USER} exists with uid ${actual_uid}, expected ${DEV_UID}; fix by hand"
     log_success "user ${DEV_USER} present (uid ${DEV_UID})"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "user ${DEV_USER} (uid ${DEV_UID}) missing"
+    fail "user ${DEV_USER} (uid ${DEV_UID}) missing"
   else
     getent passwd "${DEV_UID}" >/dev/null &&
       log_error "uid ${DEV_UID} is already taken by $(getent passwd "${DEV_UID}" | cut -d: -f1)"
@@ -184,7 +112,7 @@ step_user() {
   if grep -q "^${DEV_USER}:" /etc/subuid && grep -q "^${DEV_USER}:" /etc/subgid; then
     log_success "subordinate id ranges present for ${DEV_USER}"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "subuid/subgid ranges missing for ${DEV_USER}"
+    fail "subuid/subgid ranges missing for ${DEV_USER}"
   else
     log_info "Adding subordinate id ranges ${SUBID_RANGE}..."
     usermod --add-subuids "${SUBID_RANGE}" --add-subgids "${SUBID_RANGE}" "${DEV_USER}"
@@ -203,7 +131,7 @@ step_data_dir() {
 
   if [[ "${current}" != "${DEV_HOME}" ]]; then
     if [[ "${CHECK_ONLY}" == 'true' ]]; then
-      note_missing "DEVBOX_DATA_DIR is ${current}, must become ${DEV_HOME}"
+      fail "DEVBOX_DATA_DIR is ${current}, must become ${DEV_HOME}"
     elif [[ -d "${current}" ]]; then
       [[ -e "${DEV_HOME}" ]] &&
         log_error "${DEV_HOME} already exists and ${current} is still in use; merge them by hand"
@@ -216,7 +144,7 @@ step_data_dir() {
   upsert_env_key DEVBOX_DATA_DIR "${DEV_HOME}"
 
   [[ -d "${DEV_HOME}" ]] || {
-    [[ "${CHECK_ONLY}" == 'true' ]] && note_missing "${DEV_HOME} missing" && return 0
+    [[ "${CHECK_ONLY}" == 'true' ]] && fail "${DEV_HOME} missing" && return 0
     install -d -m 750 -o "${DEV_USER}" -g "${DEV_GROUP}" "${DEV_HOME}"
   }
 
@@ -225,7 +153,7 @@ step_data_dir() {
   if [[ "${owner}" == "${DEV_UID}:$(getent group "${DEV_GROUP}" | cut -d: -f3)" ]]; then
     log_success "${DEV_HOME} owned by ${DEV_USER}:${DEV_GROUP}"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "${DEV_HOME} is owned by ${owner}, expected ${DEV_USER}:${DEV_GROUP}"
+    fail "${DEV_HOME} is owned by ${owner}, expected ${DEV_USER}:${DEV_GROUP}"
   else
     log_info "Chowning ${DEV_HOME} to ${DEV_USER}:${DEV_GROUP}..."
     chown -R "${DEV_USER}:${DEV_GROUP}" "${DEV_HOME}"
@@ -270,7 +198,7 @@ step_firewall() {
     return 0
   fi
   if [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "ufw does not allow ${DEVBOX_BRIDGE} -> ${gateway} (project services would be unreachable)"
+    fail "ufw does not allow ${DEVBOX_BRIDGE} -> ${gateway} (project services would be unreachable)"
     return 0
   fi
   # No `from <subnet>` clause: arriving on this interface already means a
@@ -305,7 +233,7 @@ step_netfilter() {
   want="$(
     cat <<NFT_BODY
 #!/usr/sbin/nft -f
-# Managed by bin/rootless-docker - do not edit.
+# Managed by ./bin/devbox docker setup - do not edit.
 #
 # The daemon publishes on the bridge gateway by default, but a port spec can
 # override that, so this table is what actually keeps project ports off the
@@ -332,14 +260,14 @@ NFT_BODY
   )"
 
   if ! command -v nft >/dev/null 2>&1; then
-    note_missing 'nft is not installed - project ports would be published on every interface'
+    fail 'nft is not installed - project ports would be published on every interface'
     return 0
   fi
   local conf_changed='false'
   if [[ -f "${NFT_CONF}" ]] && [[ "$(cat "${NFT_CONF}")" == "${want}" ]]; then
     log_success "${NFT_CONF} current"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "${NFT_CONF} missing or stale - project ports would be published on every interface"
+    fail "${NFT_CONF} missing or stale - project ports would be published on every interface"
   else
     log_info "Writing ${NFT_CONF}..."
     install -d -m 755 "$(dirname "${NFT_CONF}")"
@@ -351,7 +279,7 @@ NFT_BODY
   local want_unit
   want_unit="$(
     cat <<UNIT_BODY
-# Managed by bin/rootless-docker - do not edit.
+# Managed by ./bin/devbox docker setup - do not edit.
 [Unit]
 Description=Netfilter boundary for devbox project docker ports
 Documentation=file://${NFT_CONF}
@@ -387,7 +315,7 @@ UNIT_BODY
     return 0
   fi
   if [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "${NFT_SERVICE} missing or inactive - project ports would be published on every interface"
+    fail "${NFT_SERVICE} missing or inactive - project ports would be published on every interface"
     return 0
   fi
   log_info "Enabling ${NFT_SERVICE}..."
@@ -418,11 +346,11 @@ step_socket_dir() {
   if [[ -f "${TMPFILES_CONF}" ]] && grep -qxF "${want}" "${TMPFILES_CONF}"; then
     log_success "${TMPFILES_CONF} present"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "${TMPFILES_CONF} missing or stale"
+    fail "${TMPFILES_CONF} missing or stale"
   else
     log_info "Writing ${TMPFILES_CONF}..."
     printf '%s\n' \
-      '# Socket directory for the devbox project Docker daemon (bin/rootless-docker).' \
+      '# Socket directory for the devbox project Docker daemon (./bin/devbox docker setup).' \
       "${want}" >"${TMPFILES_CONF}"
     chmod 644 "${TMPFILES_CONF}"
     systemd-tmpfiles --create "${TMPFILES_CONF}"
@@ -430,7 +358,7 @@ step_socket_dir() {
   if [[ -d "${SOCKET_DIR}" ]]; then
     log_success "${SOCKET_DIR} exists"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "${SOCKET_DIR} missing"
+    fail "${SOCKET_DIR} missing"
   fi
 }
 
@@ -439,7 +367,7 @@ step_daemon() {
   if loginctl show-user "${DEV_USER}" -p Linger --value 2>/dev/null | grep -qx yes; then
     log_success "linger enabled for ${DEV_USER}"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "linger disabled for ${DEV_USER} - the daemon would stop on logout"
+    fail "linger disabled for ${DEV_USER} - the daemon would stop on logout"
   else
     # Without linger there is no systemd user manager for a never-logged-in
     # account, so the daemon could neither start at boot nor survive.
@@ -478,7 +406,7 @@ step_daemon() {
   gateway="${gateway%%/*}"
   want_unit="$(
     cat <<UNIT_BODY
-# Managed by bin/rootless-docker - do not edit. Root-owned on purpose: this file
+# Managed by ./bin/devbox docker setup - do not edit. Root-owned on purpose: this file
 # holds the daemon's command line, and /home/dev is writable from inside the
 # devbox container. Modelled on dockerd-rootless-setuptool.sh's own template.
 [Unit]
@@ -513,7 +441,7 @@ UNIT_BODY
   if [[ -f "${UNIT}" ]] && [[ "$(cat "${UNIT}")" == "${want_unit}" ]]; then
     log_success "${UNIT} current (publish address ${gateway})"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "${UNIT} missing or stale (publish address should be ${gateway})"
+    fail "${UNIT} missing or stale (publish address should be ${gateway})"
   else
     log_info "Writing ${UNIT}..."
     install -d -m 755 "$(dirname "${UNIT}")"
@@ -530,7 +458,7 @@ UNIT_BODY
     if [[ -S "${SOCKET}" ]]; then
       log_success "${SOCKET} live"
     else
-      note_missing "${SOCKET} missing"
+      fail "${SOCKET} missing"
     fi
     return 0
   fi
@@ -562,48 +490,3 @@ step_smoke() {
   as_dev env DOCKER_HOST="unix://${SOCKET}" docker run --rm hello-world >/dev/null
   log_success 'container ran and exited cleanly'
 }
-
-main() {
-  case "${1:-}" in
-  --check) CHECK_ONLY='true' ;;
-  '') : ;;
-  -h | --help | help)
-    usage
-    return 0
-    ;;
-  *)
-    usage >&2
-    log_error "Unknown option: $1"
-    ;;
-  esac
-
-  [[ -f "${ENV_FILE}" ]] || log_error "Missing ${ENV_FILE} - run './bin/devbox env' first"
-  # --check probes as the daemon's user and reads root-owned units, so it needs
-  # the same privileges as the apply path; it simply changes nothing.
-  [[ "${EUID}" -eq 0 ]] ||
-    log_error 'This script inspects and provisions a host user, a systemd unit and /run - run it with sudo.'
-
-  step_packages
-  step_user
-  step_data_dir
-  step_firewall
-  step_netfilter
-  if getent passwd "${DEV_USER}" >/dev/null; then
-    step_socket_dir
-    step_daemon
-    [[ "${CHECK_ONLY}" == 'true' ]] || step_smoke
-  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    note_missing "remaining steps need the ${DEV_USER} user - re-run with sudo to provision"
-  fi
-
-  upsert_env_key DEVBOX_DOCKER_SOCKET_DIR "${SOCKET_DIR}"
-
-  if [[ "${CHECK_ONLY}" == 'true' ]]; then
-    ((CHECKS_FAILED > 0)) && log_error "${CHECKS_FAILED} item(s) missing - re-run with sudo to provision."
-    log_success 'Rootless project docker is fully provisioned.'
-    return 0
-  fi
-  log_success 'Done. Next: ./bin/devbox rebuild (as your own user, not root).'
-}
-
-main "$@"

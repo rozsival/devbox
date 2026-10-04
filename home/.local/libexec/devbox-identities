@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
+# Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
 # edit home/.local/libexec/devbox-identities in the repo.
 #
 # The one reader of ~/.config/devbox/identities.conf. Everything identity-shaped
@@ -27,8 +27,9 @@
 #   devbox-identities alias-remotes             # clones still on an old SSH alias
 #   devbox-identities render allowed-signers
 #
-# Deliberately bash 3.2 compatible (no associative arrays, no `${x^^}`): the
-# laptop-side scripts run under whatever `/usr/bin/env bash` finds on macOS.
+# Deliberately bash 3.2 compatible (no associative arrays, no `${x^^}`): this file
+# is sourced by the launchers, the gh shim and the credential helper, which run
+# under whatever bash macOS provides (the generated bin/devbox needs bash >= 4.2).
 set -euo pipefail
 
 DEVBOX_IDENTITIES_FILE="${DEVBOX_IDENTITIES_FILE:-${HOME}/.config/devbox/identities.conf}"

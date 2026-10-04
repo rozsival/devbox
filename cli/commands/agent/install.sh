@@ -1,27 +1,4 @@
-#!/usr/bin/env bash
-# Laptop-side: install the agent git override on this machine, from the same
-# home/ templates the devbox bootstraps from. Afterwards `omp` and `claude`
-# resolve to their launchers, which give every agent session HTTPS remotes,
-# per-operation tokens, a bot author and no signing - while your own shell and
-# IDE keep the SSH remotes, the 1Password agent and signed commits on the very
-# same clones. Idempotent: every file is regenerated, nothing of yours is read
-# or edited - the one PATH line the launchers need is printed, not written.
-# See docs/git.md.
-set -euo pipefail
-
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly REPO_ROOT
-readonly TEMPLATE_DIR="${REPO_ROOT}/home"
-readonly LIBEXEC_DIR="${HOME}/.local/libexec"
-readonly AGENT_DIR="${LIBEXEC_DIR}/devbox-agent"
-readonly BIN_DIR="${HOME}/.local/bin"
-readonly LAUNCHER_DIR="${AGENT_DIR}/launchers"
-readonly AGENTS=(omp claude)
-readonly CONFIG_DIR="${HOME}/.config/devbox"
-
-log_info() { echo -e "\033[0;34m[INFO]\033[0m  $*"; }
-log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
-log_warn() { echo -e "\033[1;33m[WARN]\033[0m  $*" >&2; }
+local -r AGENTS=(omp claude)
 
 # -- Launchers, credential helper, fence, gh shim ------------------------------
 # Kept out of ~/.local/bin on purpose: only a launcher adds this directory to
@@ -74,7 +51,7 @@ fi
 # -- Identity registry -----------------------------------------------------------
 # One file decides who this laptop is per directory tree: ~/.config/devbox/
 # identities.conf, read through devbox-identities and by nothing else. The
-# devbox holds the same file (./bin/sync-identities copies it over), so SSH
+# devbox holds the same file (./bin/devbox sync identities copies it over), so SSH
 # aliases, the agent gitconfigs and the per-account tokens on both machines come
 # from one source - no identity is named anywhere else in this script. Not
 # agent-only, so it is installed in libexec directly rather than under
@@ -126,7 +103,7 @@ fi
 # agent-<slug>.gitconfig per identity that has its own bot author. Stale files
 # from a renamed or dropped identity are deleted rather than left for
 # GIT_CONFIG_GLOBAL to keep including.
-readonly GIT_CONFIG_DIR="${CONFIG_DIR}/git"
+GIT_CONFIG_DIR="${CONFIG_DIR}/git"
 install -d -m 700 "${GIT_CONFIG_DIR}"
 chmod 700 "${GIT_CONFIG_DIR}"
 if ((identities_ok)); then
@@ -200,13 +177,13 @@ echo
 echo 'Remaining manual steps:'
 if ((path_fix)); then
   # shellcheck disable=SC2016 # printed for the user's dotfile, expands there
-  echo '  - Put the launchers first on your PATH - last line of ~/.zshrc / ~/.bashrc, after anything that prepends ~/.local/bin: export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH" - then open a new shell and re-run ./bin/install-agent (it removes the old ~/.local/bin/omp link only once the new directory wins)'
+  echo '  - Put the launchers first on your PATH - last line of ~/.zshrc / ~/.bashrc, after anything that prepends ~/.local/bin: export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH" - then open a new shell and re-run ./bin/devbox agent install (it removes the old ~/.local/bin/omp link only once the new directory wins)'
 fi
 if ((omp_guard_missing)); then
   echo "  - ${omp_config} has no bash: block - copy the guardrail patterns from ${TEMPLATE_DIR}/.omp/agent/config.yml into it (an existing OMP config is never overwritten)"
 fi
 if ((identities_seeded)); then
-  echo "  - Create ${identities_file}: cp ${TEMPLATE_DIR}/.config/devbox/identities.conf.example ${identities_file} and fill in one [slug] block per account (name, email, the laptop's public keys, optionally a GitHub App directory), then re-run ./bin/install-agent"
+  echo "  - Create ${identities_file}: cp ${TEMPLATE_DIR}/.config/devbox/identities.conf.example ${identities_file} and fill in one [slug] block per account (name, email, the laptop's public keys, optionally a GitHub App directory), then re-run ./bin/devbox agent install"
 fi
 if ((identities_ok)); then
   for slug in ${slugs}; do
@@ -220,4 +197,4 @@ if ((identities_ok)); then
 else
   echo "  - Fix ${identities_file} (devbox-identities check reports every problem) - the GH_TOKEN_<SLUG> and App-directory steps follow once it is usable"
 fi
-echo "  - check with: ./bin/laptop-doctor, or cd <repo> && devbox-git-credential explain <owner>/<repo>"
+echo "  - check with: ./bin/devbox doctor laptop, or cd <repo> && devbox-git-credential explain <owner>/<repo>"

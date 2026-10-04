@@ -1,0 +1,16 @@
+# bashly (https://bashly.dev) builds bin/devbox from cli/. Edit cli/, then run
+# `bashly generate` from the repo root and commit both: the workstation has no
+# Ruby, so the generated script is what it runs.
+source_dir: cli
+commands_dir: commands
+target_dir: bin
+strict: true
+env: production
+formatter: internal
+enable_header_comment: always
+enable_bash_version_bouncer: always
+enable_view_markers: never
+enable_inspect_args: never
+enable_sourcing: never
+enable_deps_array: never
+enable_env_var_names_array: never
