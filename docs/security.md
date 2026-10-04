@@ -108,7 +108,7 @@ These are known and deliberate, not gaps to be closed later:
 An agent's own command allowlist - forbidding `op`, `gcloud` and similar - is a useful guardrail, not a
 control: a subverted agent can call the same APIs through an SDK without either binary. The boundary is
 what each credential can do. `home/.omp/agent/config.yml` ships exactly such a guardrail for OMP, seeded
-when absent by `bootstrap` and `./bin/install-agent`: `bash.patterns` that deny `gh auth token|login|…`,
+when absent by `bootstrap` and `./bin/devbox agent install`: `bash.patterns` that deny `gh auth token|login|…`,
 an absolute-path `gh` (`*/bin/gh *` - past the shim), unsetting or reassigning the launcher's exports
 (`env -u`, `unset GIT_CONFIG_GLOBAL`, `GH_CONFIG_DIR=…`; reading them stays allowed; `env -i` prompts instead,
 since this repo's own smoke tests use it), keychain reads,
@@ -179,7 +179,7 @@ on repos that matter instead of adding a deploy key.
 The SSH keys are 1Password items, not files, so the laptop carries no key - but remove the *Devbox
 Laptop* item from GitHub or `DEVBOX_EXTRA_AUTHORIZED_KEYS` anyway, restart the container (`authorized_keys` rebuilds on
 every start), and drop it from the workstation's own
-`~/.ssh/authorized_keys`. What the laptop **does** hold in plaintext, if `./bin/install-agent` ran there,
+`~/.ssh/authorized_keys`. What the laptop **does** hold in plaintext, if `./bin/devbox agent install` ran there,
 is the agent's own credentials: one `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env`, and
 each configured identity's App pem under its own `app` directory. Revoke every identity's PAT, rotate
 every App private key - same list as a container compromise above.

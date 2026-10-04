@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
+# Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
 # edit home/.local/libexec/devbox-agent/gh in the repo.
 #
 # PATH shim in front of the real `gh`. Where this directory sits on the PATH

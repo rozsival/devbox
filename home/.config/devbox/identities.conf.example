@@ -1,11 +1,11 @@
 # Identity registry: who this machine is, per directory tree.
 #
 # Installed as ~/.config/devbox/identities.conf by container/bootstrap.sh (devbox)
-# and bin/install-agent (laptop), then never overwritten - it is yours to edit.
+# and `devbox agent install` (laptop), then never overwritten - it is yours to edit.
 # Both machines need it and both must hold the same file: the devbox derives
 # ~/.ssh/config, ~/.gitconfig, the agent gitconfigs, allowed_signers and the
 # per-account token routing from it, while the laptop's agent override and
-# ./bin/laptop-doctor read it to check the same wiring. ./bin/sync-identities
+# `devbox doctor laptop` read it to check the same wiring. `devbox sync identities`
 # copies the laptop's copy over. Not a secret - no token and no private key
 # belongs here; those live in secrets.env and in 1Password respectively.
 #

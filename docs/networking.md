@@ -32,7 +32,7 @@ scope, so `BIND_ADDR` - not a firewall rule - is the control. That is why it's m
 `./bin/devbox up` refuses to start rather than fall back to `0.0.0.0`.
 
 Conversely, for project containers: traffic *from* the container *to* a host address is delivered locally,
-traversing `INPUT`, which UFW's default deny would drop - why `sudo ./bin/rootless-docker` adds one rule,
+traversing `INPUT`, which UFW's default deny would drop - why `sudo ./bin/devbox docker setup` adds one rule,
 `allow in on docker0 to <gateway>` (no source clause: arriving there means a bridge container). The only
 host service reachable from the container is the workstation's sshd, on `0.0.0.0`.
 

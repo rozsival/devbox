@@ -1,13 +1,17 @@
 ---
 name: devbox-laptop
-description: Sets up and checks the laptop side of the devbox - private keys only in 1Password, one id_<slug>.pub/signing_<slug>.pub pair per identity in ~/.ssh (plus the fixed devbox key), the identity registry at ~/.config/devbox/identities.conf, ~/.ssh/config that selects keys through the 1Password agent, gitconfigs signing through op-ssh-sign, the agent git override (./bin/install-agent - omp and claude launchers and their PATH line, gh shim, credential helper, rendered agent gitconfigs), one fine-grained PAT per identity in ~/.config/devbox/secrets.env, the GitHub App credentials, and ./bin/laptop-doctor as the acceptance test. Use this whenever someone is onboarding a new laptop or Mac, asks where a key, token or config file lives on the laptop, wants OMP or Claude Code on the laptop to stop using their identity, finds a private key on disk, sees commits Unverified on GitHub, is adding a new account to the registry, or gets a laptop-doctor warning.
+description: Sets up and checks the laptop side of the devbox - bash >= 4.2 (brew install bash) for the generated ./bin/devbox, private keys only in 1Password, one id_<slug>.pub/signing_<slug>.pub pair per identity in ~/.ssh (plus the fixed devbox key), the identity registry at ~/.config/devbox/identities.conf, ~/.ssh/config that selects keys through the 1Password agent, gitconfigs signing through op-ssh-sign, the agent git override (./bin/devbox agent install - omp and claude launchers and their PATH line, gh shim, credential helper, rendered agent gitconfigs), one fine-grained PAT per identity in ~/.config/devbox/secrets.env, the GitHub App credentials, and ./bin/devbox doctor laptop as the acceptance test. Use this whenever someone is onboarding a new laptop or Mac, asks where a key, token or config file lives on the laptop, wants OMP or Claude Code on the laptop to stop using their identity, finds a private key on disk, sees commits Unverified on GitHub, is adding a new account to the registry, or gets a devbox doctor laptop warning.
 ---
 
 # devbox laptop
 
 Laptop and devbox share one identity layout; every private half lives on the laptop, in 1Password, served
-by its SSH agent. Everything on disk: public key, config, or token. `./bin/laptop-doctor` is the acceptance
-test - run it, fix what it names, run again; its checks are the phases below.
+by its SSH agent. Everything on disk: public key, config, or token. `./bin/devbox doctor laptop` is the
+acceptance test - run it, fix what it names, run again; its checks are the phases below.
+
+Prerequisite: bash >= 4.2 - `bin/devbox` is bashly-generated and refuses to start under macOS's /bin/bash 3.2.
+`brew install bash`, so `/usr/bin/env bash` finds the Homebrew one first on the PATH. (The launchers, `gh` shim,
+credential helper and `devbox-identities` are not generated and stay bash 3.2 compatible.)
 
 Blocks, rationale: `docs/setup.md` (key, ssh config), `docs/git.md` (identities, agent override, signing).
 Read the needed section, not retyped, so a changed default gets picked up, not reintroduced.
@@ -28,8 +32,8 @@ Auth/signing are separate files: GitHub registers each separately, per account -
 verifies locally, shows *Unverified* on GitHub.
 
 `ssh-keygen -t …` is wrong: it creates a private key on disk - exactly what this layout removes.
-`laptop-doctor` reporting `private key(s) on disk`: delete if already a 1Password item, else import (1Password → New
-item → SSH Key → import), then delete.
+`devbox doctor laptop` reporting `private key(s) on disk`: delete if already a 1Password item, else import
+(1Password → New item → SSH Key → import), then delete.
 
 The same public keys go into `~/.config/devbox/identities.conf` as `pubkey`/`signing_pubkey` on each
 identity's block - see `devbox-setup`, phase 5.
@@ -49,8 +53,8 @@ Check: `ssh -G devbox | grep -E 'identityfile|identitiesonly|identityagent'`, th
 plus `ssh -P <slug> -T git@github.com` per identity with a tag (`devbox-identities get <slug> tag`) - each
 must greet a different account, unless the two blocks deliberately share one `pubkey` (one account split by
 directory, e.g. a private org).
-`laptop-doctor` also checks the `Host <workstation>` block, but the repo names no workstation hostname:
-set `DEVBOX_HOST` (environment, or `DEVBOX_HOST=<alias>` in `.push.env`, which `bin/push` reads too) or
+`devbox doctor laptop` also checks the `Host <workstation>` block, but the repo names no workstation hostname:
+set `DEVBOX_HOST` (environment, or `DEVBOX_HOST=<alias>` in `.push.env`, which `devbox deploy` reads too) or
 that one check is skipped. It also flags any leftover `Host <slug>.<host>` block - aliases are gone; the
 tag replaces it.
 
@@ -58,7 +62,7 @@ tag replaces it.
 
 Commits sign through 1Password (`gpg.ssh.program = op-ssh-sign`), signing key named by file so laptop and
 devbox read it alike. Two kinds of block in `~/.gitconfig`, both hand-maintained, both checked by
-`laptop-doctor` against a fresh `devbox-identities render …`:
+`devbox doctor laptop` against a fresh `devbox-identities render …`:
 
 ```
 ~/.gitconfig                    user.signingkey = ~/.ssh/signing_personal.pub, gpg.format = ssh,
@@ -83,14 +87,14 @@ signature for <email>` with the *signing* key's fingerprint.
 ## Phase 4 - the agent git override
 
 ```bash
-./bin/install-agent
+./bin/devbox agent install
 ```
 
 Installs the devbox's bootstrap override, from `home/` templates: `agent-launch` with `omp-launcher` and
 `claude-launcher` (`~/.local/libexec/devbox-agent/launchers/{omp,claude}` → their launcher), `gh`
 shim, `devbox-git-credential`, `devbox-git-no-ssh`, `devbox-gh-token`, and `devbox-identities` - the
 registry reader, in `~/.local/libexec` with a `~/.local/bin` symlink, since only the latter is on the PATH
-and every checklist tells you to run `devbox-identities check` (`laptop-doctor` checks that hop too).
+and every checklist tells you to run `devbox-identities check` (`devbox doctor laptop` checks that hop too).
 It never writes `~/.config/devbox/identities.conf`: when that file is absent it prints
 the `cp` command for it, because the example is valid and would otherwise become the agent's author. Nor
 does it edit your shell rc: the launchers directory must come before `~/.local/bin` on the PATH - Claude's
@@ -104,7 +108,7 @@ written out explicitly, or a tree nested inside another identity's would keep th
 locked to mode 500 afterwards. Every OMP or Claude Code session through a shell after gets HTTPS
 remotes, per-operation tokens, a bot author, no signing, a `gh` with no stored login - shell/IDE on same
 clones keep SSH remote, 1Password agent, signed commits. Re-run after `git pull` touches `home/` or after
-editing `identities.conf`; `laptop-doctor` reports drift from a fresh render.
+editing `identities.conf`; `devbox doctor laptop` reports drift from a fresh render.
 
 The launchers only cover what resolves `omp`/`claude` via PATH - a herdr pane or alias naming the binary
 by absolute path (`~/.bun/bin/omp`, `~/.local/bin/claude`) bypasses them, as does an app or IDE that starts
@@ -114,10 +118,11 @@ its own Claude; use plain `omp`/`claude` from a terminal. Proof: `echo $GIT_CONF
 `omp update` and `claude update` are safe: the launchers drop their own PATH entries for that subcommand,
 so the updater replaces the real install (bun/npm-managed or `~/.local/bin/omp`, `~/.local/bin/claude`) and
 not the launcher. Before that passthrough, an `omp update` wrote the release binary over the launcher and
-agent sessions silently fell back to `~/.gitconfig` - SSH remotes, your keys. Re-run `./bin/install-agent`
-if a session ever reaches for a key; the symlinks are what `laptop-doctor` checks.
+agent sessions silently fell back to `~/.gitconfig` - SSH remotes, your keys. Re-run
+`./bin/devbox agent install` if a session ever reaches for a key; the symlinks are what `devbox doctor laptop`
+checks.
 
-`install-agent` also seeds `~/.omp/agent/config.yml` when absent - `bash.patterns` denying the obvious
+`devbox agent install` also seeds `~/.omp/agent/config.yml` when absent - `bash.patterns` denying the obvious
 reach past the scoped tokens (`gh auth token|login|…`, keychain reads, force push). An existing config is
 never edited; one without a `bash:` block is listed as a manual step (copy the block from
 `home/.omp/agent/config.yml`). It is a guardrail, not a boundary: on the laptop an agent runs as you and can
@@ -129,13 +134,13 @@ process tree rewrites the agent's own identity. The real caller here was `~/.ext
 started - five agent commits ended up authored by the laptop owner. Remedies, both applied:
 `~/.config/devbox/git/` is mode 500 with 444 files, so such a call now fails with `could not lock config
 file`, and the launcher unsets `GIT_AUTHOR_*`/`GIT_COMMITTER_*` (they outrank every gitconfig) and refuses
-to start without a readable agent gitconfig. `laptop-doctor` checks the mode, the `cmp` against the
-templates, and the `~/.extra` pattern; `./bin/install-agent` repairs a drifted copy. Commits already
+to start without a readable agent gitconfig. `devbox doctor laptop` checks the mode, the `cmp` against the
+templates, and the `~/.extra` pattern; `./bin/devbox agent install` repairs a drifted copy. Commits already
 authored wrongly need `git commit --amend --reset-author` (or `rebase -x`) plus a force-push.
 
 ## Phase 5 - what the override needs
 
-- `~/.config/devbox/secrets.env` (mode 600, from `install-agent`): one `GH_TOKEN_<SLUG>` per identity -
+- `~/.config/devbox/secrets.env` (mode 600, from `devbox agent install`): one `GH_TOKEN_<SLUG>` per identity -
   fine-grained, `contents: write` on repos agents push to without the App, plus `actions`/`checks` read,
   `issues`/`pull-requests` write if agents should post. Used by the credential helper for App-less repos,
   by `gh` in agent sessions. Same file/variables as devbox; only PATs belong here - model keys come from
@@ -146,11 +151,11 @@ authored wrongly need `git commit --amend --reset-author` (or `rebase -x`) plus 
   an agent's `pr`/`issue`/`run`/... on that repo, so its PRs carry the bot author. Without them, that
   identity's repos push, and its PRs open, with the PAT - as you.
 
-Check: `./bin/laptop-doctor` validates every identity's token against GitHub, each `app.pem` as a key;
+Check: `./bin/devbox doctor laptop` validates every identity's token against GitHub, each `app.pem` as a key;
 `devbox-git-credential explain <owner>/<repo>` prints `app:<slug>:<installation>` or `pat:<slug>` for a
 repo.
 
-## When `laptop-doctor` warns
+## When `devbox doctor laptop` warns
 
 | Warning                                                | Meaning and fix                                                                                                                        |
 |--------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
@@ -167,9 +172,9 @@ repo.
 | `… still rewrites remote URLs (url.*.insteadof)`       | Old alias-era file; replace with `devbox-identities render user-gitconfig <slug>` (phase 3)                                            |
 | `a <pattern> remote gets '…'`                          | Missing or wrong `includeIf "hasconfig:remote.*.url:<pattern>"`; add it with `devbox-identities render org-gitconfig <slug>` (phase 3) |
 | `clones still on an SSH alias`                         | Run the printed `git remote set-url` commands (`devbox-identities alias-remotes` lists them again)                                     |
-| `omp`/`claude resolves to …, not the launcher`         | `./bin/install-agent`; add its `export PATH=…/devbox-agent/launchers:$PATH` line after whatever puts `~/.local/bin` first          |
-| `… is not a symlink to …/<agent>-launcher`             | A release binary replaced a launcher symlink; `./bin/install-agent`, then `omp update`/`claude update` again                       |
-| `differ from a fresh render of the templates`          | `./bin/install-agent` (templates or `identities.conf` changed since last install)                                                      |
+| `omp`/`claude resolves to …, not the launcher`         | `./bin/devbox agent install`; add its `export PATH=…/devbox-agent/launchers:$PATH` line after whatever puts `~/.local/bin` first       |
+| `… is not a symlink to …/<agent>-launcher`             | A release binary replaced a launcher symlink; `./bin/devbox agent install`, then `omp update`/`claude update` again                    |
+| `differ from a fresh render of the templates`          | `./bin/devbox agent install` (templates or `identities.conf` changed since last install)                                              |
 | `the keychain holds an agent token`                    | Homebrew's `osxkeychain` preempted the helper; erase via `git credential-osxkeychain erase`, reinstall                                 |
 | `no <slug> token` / `token is rejected`                | Fill/re-issue `GH_TOKEN_<SLUG>` in `secrets.env` (phase 5)                                                                             |
 | `ssh devbox failed`                                    | 1Password locked, or Devbox Laptop key unapproved for this app                                                                         |
@@ -188,10 +193,10 @@ herdr's saved-machine connections are background ssh over that agent - a machine
 
 ## Where the details live
 
-| Topic                                        | File                 |
-|----------------------------------------------|----------------------|
-| Key item, ssh config, herdr, 1Password       | `docs/setup.md`      |
-| Both git modes, launcher, helper, signing    | `docs/git.md`        |
-| Tokens, App credentials, `secrets.env`       | `docs/secrets.md`    |
-| `bin/install-agent`, `bin/laptop-doctor`     | `docs/cli.md`        |
-| Workstation/container side of the same setup | `devbox-setup` skill |
+| Topic                                          | File                 |
+|------------------------------------------------|----------------------|
+| Key item, ssh config, herdr, 1Password         | `docs/setup.md`      |
+| Both git modes, launcher, helper, signing      | `docs/git.md`        |
+| Tokens, App credentials, `secrets.env`         | `docs/secrets.md`    |
+| `devbox agent install`, `devbox doctor laptop` | `docs/cli.md`        |
+| Workstation/container side of the same setup   | `devbox-setup` skill |

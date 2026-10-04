@@ -2,7 +2,7 @@
 # devbox-identities (the @MARKER@ lines below are replaced with the blocks
 # derived from ~/.config/devbox/identities.conf) and installed read-only as
 # ~/.config/devbox/git/agent.gitconfig by container/bootstrap.sh and
-# bin/install-agent. Edit this file in the repo, never the rendered one.
+# `devbox agent install`. Edit this file in the repo, never the rendered one.
 #
 # The `omp` and `claude` launchers in ~/.local/libexec/devbox-agent export
 # GIT_CONFIG_GLOBAL pointing at the rendered file, so every git the agent runs -

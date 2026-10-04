@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
+# Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
 # edit home/.local/libexec/devbox-agent/omp-launcher in the repo.
 #
 # PATH launcher in front of the real `omp`: every OMP session runs under the

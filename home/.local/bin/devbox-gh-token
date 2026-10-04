@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installed by container/bootstrap.sh (devbox) and bin/install-agent (laptop) -
+# Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
 # edit home/.local/bin/devbox-gh-token in the repo.
 #
 # Print the GitHub token that belongs to a working directory, on the same rule

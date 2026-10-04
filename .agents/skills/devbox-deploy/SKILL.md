@@ -1,49 +1,50 @@
 ---
 name: devbox-deploy
-description: Pushes repo changes out to the devbox and applies them - ./bin/push, choosing between up, rebuild and bootstrap for the file you actually changed, ./bin/sync-identities for the identity registry, rehearsing the rsync, and verifying with doctor. Use this whenever someone wants to deploy, redeploy, sync or "push to the devbox", has edited the Dockerfile, docker-compose.yml, container/, home/, .env or identities.conf and wants it live, is bumping a pinned tool version, asks whether a redeploy will wipe their keys or projects, or needs to restart, roll back or back up the devbox.
+description: Pushes repo changes out to the devbox and applies them - ./bin/devbox deploy, choosing between up, rebuild and bootstrap for the file you actually changed, ./bin/devbox sync identities for the identity registry, rehearsing the rsync, and verifying with doctor. Use this whenever someone wants to deploy, redeploy, sync or "push to the devbox", has edited the Dockerfile, docker-compose.yml, container/, home/, .env or identities.conf and wants it live, is bumping a pinned tool version, asks whether a redeploy will wipe their keys or projects, or needs to restart, roll back or back up the devbox.
 ---
 
 # devbox deploy
 
-Deploying is two easily-conflated steps: **sync the repo** to the workstation (`bin/push`, laptop side), **apply it** to
-the running container (`bin/devbox`, workstation side) - picking the wrong one is usually
-why a change seems to do nothing. Syncing the *identity registry* is a separate, third step (`bin/sync-identities`): it
-never travels with `bin/push`, since `identities.conf` is gitignored, hand-held
-state, not repo content.
+Deploying is two easily-conflated steps: **sync the repo** to the workstation (`devbox deploy`, laptop side),
+**apply it** to the running container (`devbox up` and friends, workstation side) - picking the wrong one is
+usually why a change seems to do nothing. Syncing the *identity registry* is a separate, third step
+(`devbox sync identities`): it never travels with `devbox deploy`, since `identities.conf` is gitignored,
+hand-held state, not repo content.
 
 Full reference: `docs/cli.md` (flags), `docs/operations.md` (restart, backup, troubleshooting).
 
 ## The common case
 
 ```bash
-./bin/push <workstation> --up     # rsync, then ./bin/devbox up on the host
+./bin/devbox deploy <workstation> --up     # rsync, then ./bin/devbox up on the host
 ```
 
-`bin/push` is `rsync -az --delete` excluding `.git`, `.env`, `data/`, `.DS_Store` - host defaults to
-`$DEVBOX_HOST` then `<workstation>`, remote to `$DEVBOX_REMOTE_PATH` then `~/devbox`.
+`devbox deploy` is `rsync -az --delete` excluding `.git`, `.env`, `data/`, `.DS_Store` - host defaults to
+`$DEVBOX_HOST` (environment or `.push.env`), remote to `$DEVBOX_REMOTE_PATH` then `~/devbox`.
 
 `--up` runs remote `up` over `ssh -t` so the live-session prompt reaches a human; an agent has none, so
 `up` refuses instead - correct, not an obstacle. Check `./bin/devbox sessions` first; if connected, sync
 files, report the pending step and whose session dies, let the user decide. `--force` needs an explicit
 go-ahead: it kills shells/panes with no client-side message.
 
-`bin/devbox` only runs on the workstation, driving the local Docker daemon. From the laptop that's
-`ssh <workstation> 'cd ~/devbox && ./bin/devbox <cmd>'`, or just `--up`.
+The workstation commands (`up`, `down`, `rebuild`, `bootstrap`, ...) only run on the workstation, driving the
+local Docker daemon, and `deploy`/`sync`/`agent install` only on the laptop. From the laptop that's
+`ssh <workstation> 'cd ~/devbox && ./bin/devbox <cmd>'`, or just `deploy --up`.
 
 ## Which apply step does the change need
 
-| Changed                               | Apply with                       | Why                               |
-|---------------------------------------|----------------------------------|-----------------------------------|
-| `docker-compose.yml`, `.env`          | `up`                             | Config hash change recreates      |
-| `Dockerfile`, apt list, install block | `up`                             | Rebuilds changed layers           |
-| A pinned `ARG <TOOL>_VERSION`         | `up`, or `rebuild` for no cache  | `ARG` invalidates that layer      |
-| `container/*`, `home/*`               | `up`                             | In build context, recreate        |
-| Re-apply user setup only              | `bootstrap`                      | No restart, no lost panes         |
-| Only a `bin/*` script                 | nothing                          | Read at invocation, on host       |
-| `container/skills.sh`                 | `up`, then `./bin/devbox skills` | Only run on demand                |
-| `~/.omp/agent/config.yml` (laptop)    | `./bin/sync-omp`                 | Personal state, not repo content  |
-| `~/.config/devbox/identities.conf`    | `./bin/sync-identities`          | Hand-held state, not repo content |
-| `bin/rootless-docker` on a new host   | `sudo ./bin/rootless-docker`     | Host provisioning, needs sudo     |
+| Changed                                | Apply with                       | Why                               |
+|----------------------------------------|----------------------------------|-----------------------------------|
+| `docker-compose.yml`, `.env`           | `up`                             | Config hash change recreates      |
+| `Dockerfile`, apt list, install block  | `up`                             | Rebuilds changed layers           |
+| A pinned `ARG <TOOL>_VERSION`          | `up`, or `rebuild` for no cache  | `ARG` invalidates that layer      |
+| `container/*`, `home/*`                | `up`                             | In build context, recreate        |
+| Re-apply user setup only               | `bootstrap`                      | No restart, no lost panes         |
+| `bin/devbox` (regenerated from `cli/`) | nothing                          | Read at invocation, on host       |
+| `container/skills.sh`                  | `up`, then `./bin/devbox skills` | Only run on demand                |
+| `~/.omp/agent/config.yml` (laptop)     | `./bin/devbox sync omp`          | Personal state, not repo content  |
+| `~/.config/devbox/identities.conf`     | `./bin/devbox sync identities`   | Hand-held state, not repo content |
+| A new host needing project Docker      | `sudo ./bin/devbox docker setup` | Host provisioning, needs sudo     |
 
 `up` = `docker compose build` then `docker compose up -d` behind a preflight (`BIND_ADDR` non-empty,
 `${DEVBOX_DATA_DIR}` present and owned by `HOST_UID:HOST_GID`); missing project Docker socket only warns -
@@ -70,14 +71,14 @@ One caveat for `home/`: bootstrap rewrites several files unconditionally - `~/.b
 `identities.conf`, locks it again) - all generated, not hand-edited, so template edits land next run.
 `~/.gitconfig`, `~/.config/devbox/secrets.env`, `~/.config/devbox/identities.conf`, OMP config are
 create-if-absent: editing those templates doesn't reach an existing home - delete the file under
-`${DEVBOX_DATA_DIR}`, or apply by hand (`identities.conf` specifically: edit it, or `./bin/sync-identities`
-from the laptop). Git identity re-applies via `git config --global` regardless.
+`${DEVBOX_DATA_DIR}`, or apply by hand (`identities.conf` specifically: edit it, or
+`./bin/devbox sync identities` from the laptop). Git identity re-applies via `git config --global` regardless.
 
 ## What a redeploy cannot destroy
 
 This matters: "will I lose my keys / repos / gh login" is a flat no, by construction:
 
-- `.env` is gitignored **and** rsync-excluded, so host-local config survives every push.
+- `.env` is gitignored **and** rsync-excluded, so host-local config survives every deploy.
 - `${DEVBOX_DATA_DIR}` is a host bind mount, not the image: `~/.ssh/id_*.pub`,
   `~/.ssh/signing_*.pub` (public keys only - devbox holds no private key), sshd host key under
   `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/identities.conf`, `~/.config/devbox/secrets.env`,
@@ -118,17 +119,17 @@ resolving to publish address, and `devbox-docker-firewall` active.
 If `doctor` reports `BIND_ADDR is X but Tailscale reports Y`, the node's address changed:
 `./bin/devbox env && ./bin/devbox up`.
 
-For a failed start, `./bin/devbox logs` (100 lines, `-f` follows) shows the entrypoint's output:
+For a failed start, `./bin/devbox logs` (100 lines, `--follow`/`-f` follows) shows the entrypoint's output:
 host-key generation, `authorized_keys` assembly, bootstrap, then `Server listening on 0.0.0.0 port 2222`.
 
 ## Rolling back and backing up
 
 A rollback is just deploying an earlier commit - the image builds from the repo, no separate artifact to
-revert. `bin/push` syncs the working tree; commit or stash first, or in-flight edits ship instead:
+revert. `devbox deploy` syncs the working tree; commit or stash first, or in-flight edits ship instead:
 
 ```bash
 git stash                                                      # or commit
-git switch --detach <good-commit> && ./bin/push <workstation> --up
+git switch --detach <good-commit> && ./bin/devbox deploy <workstation> --up
 git switch - && git stash pop                                  # back to where you were
 ```
 

@@ -11,15 +11,19 @@ phases later is almost always an earlier phase left unverified.
 
 Command/config blocks live in `docs/setup.md` - read the section pointed to, not from memory, so a changed
 default gets picked up. Phases 1-2 are the laptop's share of a larger layout (GitHub keys, gitconfigs, the
-agent git override, tokens) owned by `devbox-laptop`; `./bin/laptop-doctor` checks it.
+agent git override, tokens) owned by `devbox-laptop`; `./bin/devbox doctor laptop` checks it.
 
 ## Phase 1 - the laptop key (on the laptop)
+
+Laptop prerequisite: bash >= 4.2 (`brew install bash`) - `bin/devbox` is bashly-generated and refuses to
+start under macOS's /bin/bash 3.2, so `/usr/bin/env bash` must find the Homebrew one first on the PATH.
+The workstation's Ubuntu bash is fine.
 
 The key is a 1Password SSH item served by its agent; only the public half lands in `~/.ssh/devbox.pub`,
 which `IdentityFile` selects. Steps: `docs/setup.md#1-create-the-laptop-key`:
 
 ```bash
-ssh-copy-id -i ~/.ssh/devbox.pub -p 2222 <user>@<workstation>  # host sshd, needed by ./bin/push
+ssh-copy-id -i ~/.ssh/devbox.pub -p 2222 <user>@<workstation>  # host sshd, needed by deploy
 cat ~/.ssh/devbox.pub                                        # goes into .env in phase 3
 ```
 
@@ -30,7 +34,7 @@ unworkable: a dedicated passphrase-less file key (documented).
 ## Phase 2 - `~/.ssh/config` (on the laptop)
 
 Two `Host` entries, same machine, different ports: `2222` the workstation's sshd (needed by
-`bin/push`), `2223` the container's. Copy both blocks verbatim from
+`devbox deploy`), `2223` the container's. Copy both blocks verbatim from
 `docs/setup.md#2-add-the-sshconfig-blocks`; the field people drop and debug for an hour is
 `IdentitiesOnly yes` - without it the agent offers every key it holds and the server rejects with
 `Too many authentication failures` before the right one.
@@ -41,7 +45,7 @@ Check: `ssh -G devbox | grep -E '^(hostname|port|user|identityfile|identitiesonl
 ## Phase 3 - deploy and configure (from the laptop)
 
 ```bash
-./bin/push <workstation>
+./bin/devbox deploy <workstation>
 ssh <workstation> 'cd ~/devbox && ./bin/devbox env'
 ```
 
@@ -62,7 +66,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
 daemon answering, rootless; `host.docker.internal` resolving; project-port boundary service active; toolchain
 probes - exits non-zero on any failure.
 
-`.env` is gitignored **and** excluded from `bin/push`, so later deploys never touch it.
+`.env` is gitignored **and** excluded from `devbox deploy`, so later deploys never touch it.
 
 If the node's Tailscale address changes later, `doctor` reports `BIND_ADDR is X but Tailscale reports Y`;
 re-run `./bin/devbox env && ./bin/devbox up`.
@@ -70,7 +74,7 @@ re-run `./bin/devbox env && ./bin/devbox up`.
 ## Phase 4 - project Docker (on the workstation, once)
 
 ```bash
-ssh -t <workstation> 'cd ~/devbox && sudo ./bin/rootless-docker'
+ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'
 ```
 
 Needs `sudo`, idempotent; `--check` reports state, no changes made. Installs `uidmap`, `slirp4netns`;
@@ -147,7 +151,7 @@ sessions (`omp`/`claude` launchers) skip this, pushing HTTPS with a token minted
 
 ```bash
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # agent skills + agent-browser + Chrome
-./bin/sync-omp                                           # laptop ~/.omp/agent/config.yml → devbox
+./bin/devbox sync omp                                    # laptop ~/.omp/agent/config.yml → devbox
 ```
 
 `skills` installs `agent-browser`, `skill-creator`, `find-skills` into `~/.agents/skills` (OMP's skills
