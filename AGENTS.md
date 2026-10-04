@@ -179,7 +179,8 @@ the host's root Docker daemon.
   - **Workstation** (Linux host outside a container only): `env`, `up`, `down`, `rebuild`, `bootstrap`,
     `skills`, `shell`, `sessions`, `logs`, `hook`, `keys`, `docker setup`
   - **Laptop** (macOS only): `deploy`, `sync omp`, `sync identities`, `agent install`
-  - **Both**: `doctor` (`host` or `laptop`, defaulting to the side the machine is)
+  - **Both**: `doctor` (`host` or `laptop`, defaulting to the side the machine is), `completions [bash|zsh]`
+    (`source <(./bin/devbox completions bash)`; the `[host]` of `deploy`/`sync` completes from `~/.ssh/config`)
 
   What the commands carry:
   - `up`/`down`/`rebuild` refuse to drop live SSH sessions without `--force`; `hook` restarts the `moshi-hook`

@@ -114,6 +114,8 @@ commands:
     args:
       - name: host
         help: Workstation SSH host (default DEVBOX_HOST, from the environment or .push.env)
+        completions:
+          dynamic: [ completion_ssh_hosts ]
     flags:
       - long: --up
         help: Run './bin/devbox up' on the workstation after syncing
@@ -147,6 +149,8 @@ commands:
         args: &ssh_host
           - name: host
             help: Devbox SSH host (default DEVBOX_SSH_HOST, from the environment or .push.env, then 'devbox')
+            completions:
+              dynamic: [ completion_ssh_hosts ]
         flags:
           - long: --allow-unguarded
             help: Sync a config without the bash guardrail anyway
@@ -197,3 +201,15 @@ commands:
     examples:
       - ./bin/devbox doctor
       - ./bin/devbox doctor laptop
+
+  - name: completions
+    group: Both
+    help: Print the shell completion script for bash or zsh
+    args:
+      - name: shell
+        help: Shell to complete in
+        allowed: [ bash, zsh ]
+        default: bash
+    examples:
+      - source <(./bin/devbox completions bash)
+      - source <(./bin/devbox completions zsh)
