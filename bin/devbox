@@ -633,10 +633,12 @@ ssh_sessions() {
 # safe, so ask compose instead of guessing. The plan is captured before it is
 # matched: piped into `grep -q`, compose takes SIGPIPE on the line after the
 # match, and under pipefail that 141 reads as "nothing to recreate" - which
-# skipped the guard and dropped live sessions.
+# skipped the guard and dropped live sessions. A dry run that fails (transient
+# error, a compose without --dry-run) is no answer at all, so it counts as a
+# recreate: the guard only prompts when sessions are actually connected.
 compose_would_recreate() {
   local plan
-  plan="$(compose up -d --dry-run 2>&1)" || true
+  plan="$(compose up -d --dry-run 2>&1)" || return 0
   grep -qE 'Recreate|Starting|Created' <<<"${plan}"
 }
 
@@ -1223,9 +1225,13 @@ doctor_host() {
   ssh_port="$(env_get DEVBOX_SSH_PORT)"
   addr="$(tailscale_addr)"
 
+  # BIND_ADDR is what keeps sshd off the public internet; without a Tailscale
+  # address there is nothing to compare it with, so that is a failure too.
   if [[ -z "${bind_addr}" ]]; then
     fail 'BIND_ADDR is empty'
-  elif [[ -n "${addr}" && "${bind_addr}" != "${addr}" ]]; then
+  elif [[ -z "${addr}" ]]; then
+    fail "Tailscale reports no IPv4 address - cannot verify BIND_ADDR ${bind_addr} (is tailscale installed and up?)"
+  elif [[ "${bind_addr}" != "${addr}" ]]; then
     fail "BIND_ADDR is ${bind_addr} but Tailscale reports ${addr} - run './bin/devbox env'"
   else
     log_success "BIND_ADDR matches the Tailscale address (${bind_addr})"
@@ -1707,7 +1713,7 @@ doctor_laptop() {
   reader_link="${BIN_DIR}/devbox-identities"
   if [[ ! -L ${reader_link} ]]; then
     fail "${reader_link} is not a symlink to ${identities_lib} - 'devbox-identities' will not resolve by name; run ./bin/devbox agent install"
-  elif [[ "$(readlink -f "${reader_link}")" != "$(readlink -f "${identities_lib}")" ]]; then
+  elif [[ ! ${reader_link} -ef ${identities_lib} ]]; then
     fail "${reader_link} points at $(readlink "${reader_link}"), not ${identities_lib}; run ./bin/devbox agent install"
   else
     log_success 'devbox-identities resolves by name through ~/.local/bin'
