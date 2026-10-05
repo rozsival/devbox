@@ -49,6 +49,7 @@ devbox_usage() {
   printf "  %s   Install the agent git override on this laptop\n" "agent install  "
   echo
   printf "%s\n" "Both Commands:"
+  printf "  %s   Put devbox on this machine's PATH, with bash completion\n" "install        "
   printf "  %s   Check this machine's side of the devbox\n" "doctor         "
   printf "  %s   Print the shell completion script for bash or zsh\n" "completions    "
   echo
@@ -555,6 +556,34 @@ devbox_agent_install_usage() {
   fi
 }
 
+devbox_install_usage() {
+  if [[ -n $long_usage ]]; then
+    printf "devbox install\n\n"
+    printf "  Put devbox on this machine's PATH, with bash completion\n  \n  Symlinks ~/.local/bin/devbox onto this checkout's bin/devbox and writes\n  ~/.local/share/bash-completion/completions/devbox, which bash-completion\n  lazy-loads. Idempotent; then checks that a fresh login shell finds both.\n  'devbox deploy' runs it on the workstation.\n\n"
+  else
+    printf "devbox install - Put devbox on this machine's PATH, with bash completion\n\n"
+  fi
+
+  printf "%s\n" "Usage:"
+  printf "  devbox install\n"
+  printf "  devbox install --help | -h\n"
+  echo
+
+  if [[ -n "$long_usage" ]]; then
+
+    printf "%s\n" "Options:"
+
+    printf "  %s\n" "--help, -h"
+    printf "    Show this help\n"
+    echo
+
+    printf "%s\n" "Examples:"
+    printf "  ./bin/devbox install\n"
+    echo
+
+  fi
+}
+
 devbox_doctor_usage() {
   printf "devbox doctor - Check this machine's side of the devbox\n\n"
 
@@ -774,6 +803,91 @@ preflight() {
   if [[ ! -S "${socket_dir}/docker.sock" ]]; then
     log_warn "No project Docker daemon at ${socket_dir}/docker.sock - 'docker' inside the devbox will not work."
     log_warn 'Provision it with: sudo ./bin/devbox docker setup'
+  fi
+}
+
+# `devbox` by name, on both machines: a symlink in ~/.local/bin onto this
+# checkout's bin/devbox, plus bash completion where bash-completion's lazy
+# loader looks for it (~/.local/share/bash-completion/completions/<command>),
+# so it costs nothing until the first <TAB> after `devbox`.
+
+devbox_link() { printf '%s\n' "${BIN_DIR}/devbox"; }
+devbox_target() { printf '%s\n' "${REPO_ROOT}/bin/devbox"; }
+devbox_completion_file() {
+  printf '%s\n' "${XDG_DATA_HOME:-${HOME}/.local/share}/bash-completion/completions/devbox"
+}
+
+# The completion file's exact content. The bashly script only forwards each
+# <TAB> to `devbox __complete`, so it holds no command list and a re-run is
+# needed only when bashly's own completion function changes.
+devbox_completion_script() {
+  # shellcheck disable=SC2016 # literal backticks
+  printf '# Written by `devbox install` from `devbox completions bash`: re-run it, never edit.\n'
+  send_completions bash
+}
+
+# How a fresh login shell sees `devbox` - what a new herdr pane, `ssh` session
+# or terminal tab gets, independent of the PATH this process inherited (a
+# non-interactive `ssh host cmd`, as `deploy` runs `install`, has neither
+# ~/.local/bin nor bash-completion). Prints `path=<resolved>` and, for a bash
+# login shell, `loader=yes` when bash-completion's lazy loader is defined.
+devbox_fresh_shell() {
+  local shell="${SHELL:-/bin/bash}"
+  # shellcheck disable=SC2016 # expands in the probed shell
+  env -i HOME="${HOME}" USER="${USER:-}" LOGNAME="${LOGNAME:-${USER:-}}" SHELL="${shell}" TERM=dumb \
+    PATH=/usr/bin:/bin:/usr/sbin:/sbin "${shell}" -lic \
+    'printf "path=%s\n" "$(command -v devbox)"
+     [ -n "${BASH_VERSION:-}" ] && declare -F _comp_load __load_completion >/dev/null && echo loader=yes
+     exit 0' </dev/null 2>/dev/null || true
+}
+
+# The bash-completion setup this side needs, for the hints below.
+devbox_completion_hint() {
+  if on_laptop; then
+    # shellcheck disable=SC2016 # a command for the user to run
+    echo 'brew install bash-completion@2, then source "$(brew --prefix)/etc/profile.d/bash_completion.sh" from ~/.bashrc'
+  else
+    echo 'sudo apt-get install -y bash-completion, then source /usr/share/bash-completion/bash_completion from ~/.bashrc (Ubuntu'"'"'s default ~/.bashrc does)'
+  fi
+}
+
+# Reports through `fail`, so `install` and both doctors share one definition
+# of "installed".
+devbox_command_checks() {
+  local link target file probe resolved
+  link="$(devbox_link)"
+  target="$(devbox_target)"
+  file="$(devbox_completion_file)"
+
+  if [[ -L ${link} && "$(readlink "${link}")" == "${target}" ]]; then
+    log_success "${link} -> ${target}"
+  else
+    fail "${link} is not a symlink onto ${target} - run ${target} install"
+  fi
+
+  if [[ -f ${file} ]] && cmp -s "${file}" <(devbox_completion_script); then
+    log_success "bash completion at ${file}"
+  else
+    fail "bash completion at ${file} missing or stale - run ${target} install"
+  fi
+
+  probe="$(devbox_fresh_shell)"
+  resolved="$(sed -n 's/^path=//p' <<<"${probe}")"
+  if [[ ${resolved} == "${link}" ]]; then
+    log_success "a login shell (${SHELL:-/bin/bash}) resolves devbox to ${link}"
+  elif [[ -z ${resolved} ]]; then
+    # shellcheck disable=SC2016 # literal $HOME/$PATH in the hint
+    fail "a login shell (${SHELL:-/bin/bash}) does not find devbox - add ~/.local/bin to its PATH: export PATH=\"\$HOME/.local/bin:\$PATH\""
+  else
+    fail "a login shell resolves devbox to ${resolved}, ahead of ${link} - remove it or put ~/.local/bin first on the PATH"
+  fi
+
+  if [[ ${SHELL:-/bin/bash} != */bash ]]; then
+    log_info "login shell ${SHELL} is not bash: completion is installed for bash only - for zsh, put 'source <(devbox completions zsh)' in ~/.zshrc after compinit"
+  elif grep -qx 'loader=yes' <<<"${probe}"; then
+    log_success 'a login shell loads bash-completion, which lazy-loads devbox completion'
+  else
+    fail "a login shell does not load bash-completion, so devbox completion never loads - $(devbox_completion_hint)"
   fi
 }
 
@@ -1515,13 +1629,17 @@ doctor_host() {
     fail 'devbox-docker-firewall is inactive - project ports would reach the Tailnet and the LAN:'' sudo ./bin/devbox docker setup'
   fi
 
+  log_info 'devbox command'
+  devbox_command_checks
+
   finish_checks
 }
 
 # The laptop half of `devbox doctor`: the identity registry, private keys only
 # in 1Password, the named public halves in ~/.ssh, ssh and git configured to
 # select through them, the agent git override installed and current, the tokens
-# and App credentials it needs, and the connections it makes. Read-only.
+# and App credentials it needs, the connections it makes, and `devbox` itself on
+# the PATH with completion. Read-only.
 doctor_laptop() {
   # Inside an agent session the launcher points git at agent.gitconfig and the
   # SSH fence, and puts the gh shim first on the PATH; this audits your own
@@ -1992,6 +2110,10 @@ doctor_laptop() {
     fail 'ssh devbox failed - is 1Password unlocked and the Devbox Laptop key approved?'
   fi
 
+  # -- 7. The devbox command: on the PATH, with completion ---------------------
+  log_info 'devbox command'
+  devbox_command_checks
+
   finish_checks
 }
 
@@ -2071,6 +2193,10 @@ filter_host() {
 
 filter_laptop() {
   on_laptop || echo 'This is a laptop command: run it on the macOS machine you deploy from.'
+}
+
+filter_machine() {
+  on_host || on_laptop || echo 'Run this on the workstation or the laptop: the container has no bin/devbox of its own.'
 }
 
 # Per-laptop SSH aliases (DEVBOX_HOST, DEVBOX_SSH_HOST) live in the gitignored
@@ -2404,6 +2530,13 @@ devbox_deploy_command() {
     "${REPO_ROOT}/" "${host}:${remote_path}/"
   log_success "Synced to ${host}:${remote_path}."
 
+  # Keeps `devbox` and its completion on the workstation's PATH; idempotent, and
+  # a failure there (a PATH line missing) is reported without stopping the deploy.
+  log_info "Installing the devbox command on ${host}..."
+  # shellcheck disable=SC2029 # remote_path is meant to expand locally
+  ssh "${host}" "${remote_path}/bin/devbox install" ||
+    log_warn "devbox install on ${host} reported problems - see above"
+
   if [[ -n "${args[--up]:-}" ]]; then
     force="${args[--force]:+ --force}"
     log_info "Bringing the devbox up on ${host}..."
@@ -2666,6 +2799,34 @@ devbox_agent_install_command() {
 
 }
 
+devbox_install_command() {
+
+  link="$(devbox_link)"
+  target="$(devbox_target)"
+  file="$(devbox_completion_file)"
+
+  # Only ever replaces a symlink: a real file there is someone else's `devbox`.
+  if [[ -e ${link} && ! -L ${link} ]]; then
+    log_error "${link} exists and is not a symlink - move it aside, then re-run"
+  fi
+  if [[ "$(readlink "${link}" 2>/dev/null)" != "${target}" ]]; then
+    install -d -m 755 "${BIN_DIR}"
+    ln -sfn "${target}" "${link}"
+    log_info "linked ${link} -> ${target}"
+  fi
+
+  if [[ ! -f ${file} ]] || ! cmp -s "${file}" <(devbox_completion_script); then
+    install -d -m 755 "${file%/*}"
+    devbox_completion_script >"${file}.$$"
+    mv "${file}.$$" "${file}"
+    log_info "wrote ${file}"
+  fi
+
+  devbox_command_checks
+  finish_checks
+
+}
+
 devbox_doctor_command() {
 
   side="${args[side]:-}"
@@ -2829,6 +2990,13 @@ parse_requirements() {
     action="agent"
     shift
     devbox_agent_parse_requirements "$@"
+    shift $#
+    ;;
+
+  install)
+    action="install"
+    shift
+    devbox_install_parse_requirements "$@"
     shift $#
     ;;
 
@@ -4228,6 +4396,66 @@ devbox_agent_install_parse_requirements() {
 
 }
 
+devbox_install_parse_requirements() {
+  local key
+
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case "$key" in
+    --help | -h)
+      long_usage=yes
+      devbox_install_usage
+      exit
+      ;;
+
+    *)
+      break
+      ;;
+
+    esac
+  done
+
+  action="install"
+
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case "$key" in
+
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        printf "invalid argument: %s\n" "$key" >&2
+        exit 1
+
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
+
+    esac
+  done
+
+  filter_error=$(filter_machine)
+  if [[ -n $filter_error ]]; then
+    echo "$filter_error" >&2
+    exit 1
+  fi
+
+}
+
 devbox_doctor_parse_requirements() {
   local key
 
@@ -4649,6 +4877,11 @@ devbox_completion() {
       devbox_agent_completion "$completion_current" "$@"
       return
       ;;
+    install)
+      shift
+      devbox_install_completion "$completion_current" "$@"
+      return
+      ;;
     doctor)
       shift
       devbox_doctor_completion "$completion_current" "$@"
@@ -4672,7 +4905,7 @@ devbox_completion() {
       ;;
     esac
   done
-  completion_candidates "$completion_current" env up down rebuild bootstrap skills shell sessions logs hook keys docker deploy sync agent doctor completions
+  completion_candidates "$completion_current" env up down rebuild bootstrap skills shell sessions logs hook keys docker deploy sync agent install doctor completions
 
   if [[ $completion_current == -* ]]; then
     completion_flag_candidates --help "$completion_current" --help -h
@@ -5224,6 +5457,28 @@ devbox_agent_install_completion() {
 
 }
 
+devbox_install_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+}
+
 devbox_doctor_completion() {
   local completion_current="$1"
   local completion_arg_index=0
@@ -5309,8 +5564,9 @@ initialize() {
   set -euo pipefail
 
   # Runs before any command. bin/devbox is generated into the repo's bin/, so the
-  # repo root is one level up from it on both machines.
-  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  # repo root is one level up from it on both machines - from the real file, since
+  # `devbox install` reaches it through a symlink in ~/.local/bin.
+  REPO_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
   readonly REPO_ROOT
   readonly ENV_FILE="${REPO_ROOT}/.env"
   readonly ENV_EXAMPLE="${REPO_ROOT}/.env.example"
@@ -5362,6 +5618,7 @@ run() {
   "sync identities") devbox_sync_identities_command ;;
   "agent") devbox_agent_command ;;
   "agent install") devbox_agent_install_command ;;
+  "install") devbox_install_command ;;
   "doctor") devbox_doctor_command ;;
   "completions") devbox_completions_command ;;
   esac

@@ -13,6 +13,10 @@ filter_laptop() {
   on_laptop || echo 'This is a laptop command: run it on the macOS machine you deploy from.'
 }
 
+filter_machine() {
+  on_host || on_laptop || echo 'Run this on the workstation or the laptop: the container has no bin/devbox of its own.'
+}
+
 # Per-laptop SSH aliases (DEVBOX_HOST, DEVBOX_SSH_HOST) live in the gitignored
 # .push.env rather than in the repo: a literal here would be one machine's name
 # shipped to everyone else.

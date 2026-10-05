@@ -158,29 +158,31 @@ repo.
 
 ## When `devbox doctor laptop` warns
 
-| Warning                                                | Meaning and fix                                                                                                                        |
-|--------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| `private key(s) on disk`                               | Import to 1Password if missing, delete file (phase 1)                                                                                  |
-| `<name>.pub … is not held by the 1Password agent`      | Wrong export, or item disabled; re-export via `ssh-add -L`                                                                             |
-| `1Password SSH agent not reachable`                    | Agent off (1Password → Developer → SSH agent) or locked                                                                                |
-| `identities.conf: …`                                   | Registry does not validate (`devbox-identities check`); fix the named block, phase 1/5                                                 |
-| `~/.ssh/config does not parse: … line N`               | Option-name typo; ssh clients (herdr included) die before the agent, 1Password never prompts                                           |
-| `Host …: IdentityFile is …`                            | Names a private key path or wrong `.pub` (phase 2)                                                                                     |
-| `~/.ssh/config still has the alias Host <slug>.<host>` | Aliases are gone; delete the block - the tag selects the key now (phase 2)                                                             |
-| `Host devbox: ForwardAgent yes`                        | Remove it; forward via `ssh -A devbox` when needed                                                                                     |
-| `user.signingkey is …`                                 | Points at literal or auth key; use `signing_*.pub`                                                                                     |
-| `user.email is …` / `user.name is …`                   | Base `[user]` in `~/.gitconfig` isn't the default identity's; every repo no include claims commits as it - fix it                      |
-| `includeIf gitdir:… is not configured`                 | Add the tree's `includeIf "gitdir:…"` (phase 3)                                                                                        |
-| `… still rewrites remote URLs (url.*.insteadof)`       | Old alias-era file; replace with `devbox-identities render user-gitconfig <slug>` (phase 3)                                            |
-| `a <pattern> remote gets '…'`                          | Missing or wrong `includeIf "hasconfig:remote.*.url:<pattern>"`; add it with `devbox-identities render org-gitconfig <slug>` (phase 3) |
-| `clones still on an SSH alias`                         | Run the printed `git remote set-url` commands (`devbox-identities alias-remotes` lists them again)                                     |
-| `omp`/`claude resolves to …, not the launcher`         | `./bin/devbox agent install`; add its `export PATH=…/devbox-agent/launchers:$PATH` line after whatever puts `~/.local/bin` first       |
-| `… is not a symlink to …/<agent>-launcher`             | A release binary replaced a launcher symlink; `./bin/devbox agent install`, then `omp update`/`claude update` again                    |
-| `differ from a fresh render of the templates`          | `./bin/devbox agent install` (templates or `identities.conf` changed since last install)                                               |
-| `the keychain holds an agent token`                    | Homebrew's `osxkeychain` preempted the helper; erase via `git credential-osxkeychain erase`, reinstall                                 |
-| `no <slug> token` / `token is rejected`                | Fill/re-issue `GH_TOKEN_<SLUG>` in `secrets.env` (phase 5)                                                                             |
-| `ssh devbox failed`                                    | 1Password locked, or Devbox Laptop key unapproved for this app                                                                         |
-| `[<slug>] and [<slug>] both reach <login>`             | Two identities' `id_<slug>.pub` files hold the same key while their registry `pubkey`s differ; re-export the wrong one (phase 1)       |
+| Warning                                                                       | Meaning and fix                                                                                                                        |
+|-------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| `private key(s) on disk`                                                      | Import to 1Password if missing, delete file (phase 1)                                                                                  |
+| `<name>.pub … is not held by the 1Password agent`                             | Wrong export, or item disabled; re-export via `ssh-add -L`                                                                             |
+| `1Password SSH agent not reachable`                                           | Agent off (1Password → Developer → SSH agent) or locked                                                                                |
+| `identities.conf: …`                                                          | Registry does not validate (`devbox-identities check`); fix the named block, phase 1/5                                                 |
+| `~/.ssh/config does not parse: … line N`                                      | Option-name typo; ssh clients (herdr included) die before the agent, 1Password never prompts                                           |
+| `Host …: IdentityFile is …`                                                   | Names a private key path or wrong `.pub` (phase 2)                                                                                     |
+| `~/.ssh/config still has the alias Host <slug>.<host>`                        | Aliases are gone; delete the block - the tag selects the key now (phase 2)                                                             |
+| `Host devbox: ForwardAgent yes`                                               | Remove it; forward via `ssh -A devbox` when needed                                                                                     |
+| `user.signingkey is …`                                                        | Points at literal or auth key; use `signing_*.pub`                                                                                     |
+| `user.email is …` / `user.name is …`                                          | Base `[user]` in `~/.gitconfig` isn't the default identity's; every repo no include claims commits as it - fix it                      |
+| `includeIf gitdir:… is not configured`                                        | Add the tree's `includeIf "gitdir:…"` (phase 3)                                                                                        |
+| `… still rewrites remote URLs (url.*.insteadof)`                              | Old alias-era file; replace with `devbox-identities render user-gitconfig <slug>` (phase 3)                                            |
+| `a <pattern> remote gets '…'`                                                 | Missing or wrong `includeIf "hasconfig:remote.*.url:<pattern>"`; add it with `devbox-identities render org-gitconfig <slug>` (phase 3) |
+| `clones still on an SSH alias`                                                | Run the printed `git remote set-url` commands (`devbox-identities alias-remotes` lists them again)                                     |
+| `omp`/`claude resolves to …, not the launcher`                                | `./bin/devbox agent install`; add its `export PATH=…/devbox-agent/launchers:$PATH` line after whatever puts `~/.local/bin` first       |
+| `… is not a symlink to …/<agent>-launcher`                                    | A release binary replaced a launcher symlink; `./bin/devbox agent install`, then `omp update`/`claude update` again                    |
+| `differ from a fresh render of the templates`                                 | `./bin/devbox agent install` (templates or `identities.conf` changed since last install)                                               |
+| `the keychain holds an agent token`                                           | Homebrew's `osxkeychain` preempted the helper; erase via `git credential-osxkeychain erase`, reinstall                                 |
+| `no <slug> token` / `token is rejected`                                       | Fill/re-issue `GH_TOKEN_<SLUG>` in `secrets.env` (phase 5)                                                                             |
+| `ssh devbox failed`                                                           | 1Password locked, or Devbox Laptop key unapproved for this app                                                                         |
+| `[<slug>] and [<slug>] both reach <login>`                                    | Two identities' `id_<slug>.pub` files hold the same key while their registry `pubkey`s differ; re-export the wrong one (phase 1)       |
+| `… is not a symlink onto …/bin/devbox` / `bash completion … missing or stale` | `./bin/devbox install` from the checkout you want `devbox` to run                                                                      |
+| `a login shell does not find devbox` / `… does not load bash-completion`      | Add the printed `PATH` line, or `brew install bash-completion@2` and source it from `~/.bashrc`                                        |
 
 herdr's saved-machine connections are background ssh over that agent - a machine flapping between
 `connecting`/`offline` while 1Password is locked is that, not a devbox fault.

@@ -1,7 +1,8 @@
 # The laptop half of `devbox doctor`: the identity registry, private keys only
 # in 1Password, the named public halves in ~/.ssh, ssh and git configured to
 # select through them, the agent git override installed and current, the tokens
-# and App credentials it needs, and the connections it makes. Read-only.
+# and App credentials it needs, the connections it makes, and `devbox` itself on
+# the PATH with completion. Read-only.
 doctor_laptop() {
   # Inside an agent session the launcher points git at agent.gitconfig and the
   # SSH fence, and puts the gh shim first on the PATH; this audits your own
@@ -471,6 +472,10 @@ doctor_laptop() {
   else
     fail 'ssh devbox failed - is 1Password unlocked and the Devbox Laptop key approved?'
   fi
+
+  # -- 7. The devbox command: on the PATH, with completion ---------------------
+  log_info 'devbox command'
+  devbox_command_checks
 
   finish_checks
 }

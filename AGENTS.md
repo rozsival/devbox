@@ -179,10 +179,16 @@ the host's root Docker daemon.
   - **Workstation** (Linux host outside a container only): `env`, `up`, `down`, `rebuild`, `bootstrap`,
     `skills`, `shell`, `sessions`, `logs`, `hook`, `keys`, `docker setup`
   - **Laptop** (macOS only): `deploy`, `sync omp`, `sync identities`, `agent install`
-  - **Both**: `doctor` (`host` or `laptop`, defaulting to the side the machine is), `completions [bash|zsh]`
-    (`source <(./bin/devbox completions bash)`; the `[host]` of `deploy`/`sync` completes from `~/.ssh/config`)
+  - **Both**: `install`, `doctor` (`host` or `laptop`, defaulting to the side the machine is), `completions
+    [bash|zsh]` (the `[host]` of `deploy`/`sync` completes from `~/.ssh/config`)
 
   What the commands carry:
+  - `devbox install` - the `dot` model from the dotfiles: symlinks `~/.local/bin/devbox` onto this checkout's
+    `bin/devbox` (never over a real file) and writes the bash completion to
+    `~/.local/share/bash-completion/completions/devbox`, which bash-completion lazy-loads - no rc line. Then
+    `devbox_command_checks` (`cli/lib/devbox_command.sh`, also run by both doctors) probes a *fresh* login
+    shell under `env -i`, because the calling one proves nothing: `deploy` runs `install` over a
+    non-interactive `ssh`. `cli/initialize.sh` resolves `REPO_ROOT` through `readlink -f` for the symlink
   - `up`/`down`/`rebuild` refuse to drop live SSH sessions without `--force`; `hook` restarts the `moshi-hook`
     daemon with a detached `exec` precisely so it does not have to (`--update` runs `moshi-hook update` and
     rewrites the OMP extension and Claude hooks first, aborting before the old daemon is stopped if the update
@@ -237,7 +243,8 @@ the host's root Docker daemon.
     the launcher's exports and strips its PATH entry first, so it is meaningful from inside an agent session.
     `file_mode` (`cli/lib/machine.sh`) uses perl because BSD and GNU `stat` disagree and both can be on a macOS
     PATH
-  - `devbox deploy` - rsync deploy; excludes `.git`, `.env`, `data/` and `.DS_Store`. `--up` runs the remote
+  - `devbox deploy` - rsync deploy; excludes `.git`, `.env`, `data/` and `.DS_Store`, then runs `bin/devbox
+    install` on the workstation (a failure there warns, never aborts). `--up` runs the remote
     `up` over `ssh -t` so the live-session prompt is answerable; `--force` (which needs `--up`) forwards past
     it. No default host: it takes the argument, then `DEVBOX_HOST` from the environment or `.push.env`
     (gitignored), then fails - a repo going public must not ship one machine's alias as everyone's default

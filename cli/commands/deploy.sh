@@ -16,6 +16,13 @@ rsync -az --delete \
   "${REPO_ROOT}/" "${host}:${remote_path}/"
 log_success "Synced to ${host}:${remote_path}."
 
+# Keeps `devbox` and its completion on the workstation's PATH; idempotent, and
+# a failure there (a PATH line missing) is reported without stopping the deploy.
+log_info "Installing the devbox command on ${host}..."
+# shellcheck disable=SC2029 # remote_path is meant to expand locally
+ssh "${host}" "${remote_path}/bin/devbox install" ||
+  log_warn "devbox install on ${host} reported problems - see above"
+
 if [[ -n "${args[--up]:-}" ]]; then
   force="${args[--force]:+ --force}"
   log_info "Bringing the devbox up on ${host}..."

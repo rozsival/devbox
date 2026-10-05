@@ -102,9 +102,14 @@ ssh <workstation> true
 ### 3. Deploy and configure
 
 ```bash
+./bin/devbox install                                # `devbox` on this laptop's PATH, with bash completion
 ./bin/devbox deploy <workstation>                   # or: echo 'DEVBOX_HOST=<workstation>' >.push.env && ./bin/devbox deploy
 ssh <workstation> 'cd ~/devbox && ./bin/devbox env'
 ```
+
+`install` symlinks `~/.local/bin/devbox` onto this checkout and installs its bash completion; every `deploy` does the
+same on the workstation, so from then on `devbox <TAB>` works in any new shell on either machine. See
+[`devbox install`](cli.md#-devbox-install).
 
 `.push.env` (gitignored) holds `DEVBOX_HOST`, the default for `deploy`'s `<workstation>` argument, and optionally
 `DEVBOX_SSH_HOST`, the `~/.ssh/config` host `sync omp` and `sync identities` use for the container (default `devbox`).

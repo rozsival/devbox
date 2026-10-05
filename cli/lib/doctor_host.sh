@@ -243,5 +243,8 @@ doctor_host() {
     fail 'devbox-docker-firewall is inactive - project ports would reach the Tailnet and the LAN:'' sudo ./bin/devbox docker setup'
   fi
 
+  log_info 'devbox command'
+  devbox_command_checks
+
   finish_checks
 }
