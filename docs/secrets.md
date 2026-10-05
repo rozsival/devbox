@@ -90,6 +90,7 @@ Minimum useful permissions:
 | `contents`             | **write** | repos agents push to without the GitHub App installed — agent git falls back to this PAT (see [Git Identities](git.md#-agent-sessions)) |
 | `actions` / `checks`   | **read**  | always (the minimum useful set)                                                                                                         |
 | issues / pull-requests | **write** | only if agents should post                                                                                                              |
+| `workflows`            | **write** | only if agents should push `.github/workflows/` changes — without it GitHub rejects the push, and you push yourself                     |
 
 Where the identity's App is installed, agent `gh` about that repository uses the App instead (next section), so the PAT
 then serves only your own `gh`, account-wide commands and repos without the App.
@@ -152,7 +153,8 @@ repository bypasses the App with `GH_TOKEN=$(devbox-gh-token) gh ...`.
 > someone else — the helper's rule.
 
 The App needs the permissions those commands use — `pull_requests`/`issues` **write** to post, `checks` and `statuses`
-**read** for `gh pr checks`.
+**read** for `gh pr checks` — and, like the PAT, `workflows` **write** before its git pushes may change
+`.github/workflows/`.
 
 Minting costs ~0.75 s (two API calls), so the helper caches the answer per repository — see [Git
 Identities](git.md#devbox-git-credential); a cached call costs what the PAT does.

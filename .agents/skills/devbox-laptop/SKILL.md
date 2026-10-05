@@ -142,7 +142,8 @@ authored wrongly need `git commit --amend --reset-author` (or `rebase -x`) plus 
 
 - `~/.config/devbox/secrets.env` (mode 600, from `devbox agent install`): one `GH_TOKEN_<SLUG>` per identity -
   fine-grained, `contents: write` on repos agents push to without the App, plus `actions`/`checks` read,
-  `issues`/`pull-requests` write if agents should post. Used by the credential helper for App-less repos,
+  `issues`/`pull-requests` write if agents should post, `workflows` write only if agents should push
+  `.github/workflows/` changes (otherwise GitHub rejects that push). Used by the credential helper for App-less repos,
   by `gh` in agent sessions. Same file/variables as devbox; only PATs belong here - model keys come from
   OMP's own config, Claude Code from its login.
 - Per identity with an `app` field in `identities.conf`: `<app-dir>/app-id`, `<app-dir>/app.pem`

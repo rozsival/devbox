@@ -121,7 +121,8 @@ register on GitHub - already your normal, registered laptop keys.
    revoke.
 2. Put one fine-grained GitHub token per identity in `~/.config/devbox/secrets.env`: `GH_TOKEN_<SLUG>`
    (e.g. `GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK`) - `contents: write` on repos agents push to without the
-   GitHub App, plus `actions`/`checks` read, `issues`/`pull-requests` write only if agents should post.
+   GitHub App, plus `actions`/`checks` read, `issues`/`pull-requests` write only if agents should post,
+   `workflows` write only if agents should push `.github/workflows/` changes (otherwise GitHub rejects that push).
    Working directory picks which (the `dir` prefixes in `identities.conf`, same rule as git identities);
    `devbox-gh-token --account` reports it. Skip `gh auth login`: its web flow can't scope below `repo` +
    `read:org` + `gist` - non-expiring, account-wide, plaintext (no keyring here). A box-wide `GH_TOKEN`
