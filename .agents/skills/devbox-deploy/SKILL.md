@@ -20,7 +20,8 @@ Full reference: `docs/cli.md` (flags), `docs/operations.md` (restart, backup, tr
 ```
 
 `devbox deploy` is `rsync -az --delete` excluding `.git`, `.env`, `data/`, `.DS_Store` - host defaults to
-`$DEVBOX_HOST` (environment or `.push.env`), remote to `$DEVBOX_REMOTE_PATH` then `~/devbox`.
+`$DEVBOX_HOST` (environment or `.push.env`), remote to `$DEVBOX_REMOTE_PATH` then `~/devbox`. After the sync it runs
+`bin/devbox install` there, keeping `devbox` and its bash completion on the workstation's PATH.
 
 `--up` runs remote `up` over `ssh -t` so the live-session prompt reaches a human; an agent has none, so
 `up` refuses instead - correct, not an obstacle. Check `./bin/devbox sessions` first; if connected, sync

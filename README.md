@@ -47,7 +47,8 @@ on the laptop** (`brew install bash`; macOS ships 3.2, which the generated `bin/
 From the laptop:
 
 ```bash
-./bin/devbox deploy <workstation>                                     # sync the repo to ~/devbox
+./bin/devbox install                                                  # devbox + bash completion on this laptop's PATH
+./bin/devbox deploy <workstation>                                     # sync the repo to ~/devbox (and `devbox` there too)
 ssh <workstation> 'cd ~/devbox && ./bin/devbox env'                   # .env from .env.example, BIND_ADDR from Tailscale
 ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'  # once: project Docker, asks for a password
 ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'

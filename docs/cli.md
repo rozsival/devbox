@@ -11,11 +11,11 @@
 
 ## 📍 At a glance
 
-| Audience           | Use this                                                                           |
-|--------------------|------------------------------------------------------------------------------------|
-| CLI users          | Run `./bin/devbox` from the repo root                                              |
-| CLI maintainers    | Edit authored sources in `cli/` (see [Maintainer workflow](#-maintainer-workflow)) |
-| Generated artifact | `bin/devbox` is generated, committed build output, not the source of truth         |
+| Audience           | Use this                                                                                           |
+|--------------------|----------------------------------------------------------------------------------------------------|
+| CLI users          | `./bin/devbox` from the repo root, or `devbox` anywhere after [`devbox install`](#-devbox-install) |
+| CLI maintainers    | Edit authored sources in `cli/` (see [Maintainer workflow](#-maintainer-workflow))                 |
+| Generated artifact | `bin/devbox` is generated, committed build output, not the source of truth                         |
 
 > [!IMPORTANT]
 > Never hand-edit `bin/devbox`. Update the authored bashly sources in `cli/` and regenerate it instead.
@@ -32,6 +32,7 @@ ssh devbox 'cd projects/app && docker compose up -d && devbox-ports'  # project 
 ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 ssh <workstation> 'cd ~/devbox && ./bin/devbox sessions'   # who is connected (a recreate kills them)
 ./bin/devbox sync omp                # push this laptop's OMP preset into the devbox
+./bin/devbox install                 # devbox on the PATH, with bash completion (deploy does the workstation)
 ./bin/devbox agent install           # laptop-side: same agent git override as the devbox
 ./bin/devbox doctor laptop           # laptop-side acceptance test: keys, configs, override, tokens
 ./bin/devbox sync identities         # push this laptop's identity registry into the devbox
@@ -40,15 +41,15 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox sessions'   # who is connected (a
 ## 🗂️ Command groups
 
 Every command is side-guarded: **workstation** commands run only on the Linux host that runs the container (not inside
-it), **laptop** commands only on macOS, and `doctor` and `completions` on either. Running a command on the wrong side
-exits with a one-line message naming the right one. Log prefixes `[INFO]`, `[OK]`, `[WARN]`, `[ERROR]` are the same on
-both.
+it), **laptop** commands only on macOS, and `install`, `doctor` and `completions` on either. Running a command on the
+wrong side exits with a one-line message naming the right one. Log prefixes `[INFO]`, `[OK]`, `[WARN]`, `[ERROR]` are
+the same on both.
 
 | Group       | Commands                                                                                                           | Side guard                                        |
 |-------------|--------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
 | Workstation | `env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`, `logs`, `hook`, `keys`, `docker setup` | Linux host that runs the container, not inside it |
 | Laptop      | `deploy`, `sync omp`, `sync identities`, `agent install`                                                           | macOS only                                        |
-| Both        | `doctor`, `completions`                                                                                            | Either side                                       |
+| Both        | `install`, `doctor`, `completions`                                                                                 | Either side                                       |
 
 `./bin/devbox --help` lists them, `./bin/devbox <command> --help` shows one command's flags, and `--version`/`-v` prints
 the version. `docker`, `sync` and `agent` are only groups: bare, they print their subcommands.
@@ -198,8 +199,10 @@ set errors out naming all three ways to fix it.
 Sync: `rsync -az --delete` excluding `.git`, `.env`, `data/` and `.DS_Store`. Checks for `rsync` on the laptop (via the
 command's dependency check) and on the workstation first, printing the exact remedy if missing.
 
-`--up` runs the remote `up` over `ssh -t`, so a recreate-with-sessions prompt reaches your terminal instead of failing
-the deploy; `--force` answers it up front, and is rejected without `--up`.
+After the sync it runs `bin/devbox install` on the workstation, so `devbox` and its completion stay on its PATH; a
+problem there is reported without failing the deploy. `--up` then runs the remote `up` over `ssh -t`, so a
+recreate-with-sessions prompt reaches your terminal instead of failing the deploy; `--force` answers it up front, and is
+rejected without `--up`.
 
 ```bash
 echo 'DEVBOX_HOST=<workstation>' >.push.env   # once, so every bare ./bin/devbox deploy below resolves it
@@ -295,6 +298,34 @@ step until they do — plus the remaining manual steps per registry identity: a 
 and — for any identity with an `app` directory set — its `{app-id,app.pem}` (mode 600) there. See [Git
 Identities](git.md#-laptop-install).
 
+## 🔗 `devbox install`
+
+```
+Usage: ./bin/devbox install
+```
+
+Makes `devbox` a command on this machine, the way `dot` is in the dotfiles: a symlink `~/.local/bin/devbox` onto this
+checkout's `bin/devbox`, and the bash completion script at `~/.local/share/bash-completion/completions/devbox`
+(`$XDG_DATA_HOME` respected), where bash-completion's lazy loader finds it on the first `<TAB>` after `devbox` — no rc
+line, no startup cost. Idempotent: it touches only what differs, and refuses a `~/.local/bin/devbox` that is a real
+file rather than replace someone else's command. A symlink onto another checkout is repointed at this one.
+
+It finishes with the same checks `doctor` runs on both sides, exiting non-zero if one fails:
+
+| Check           | Fix it reports                                                                                                                                                                              |
+|-----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Symlink         | `bin/devbox install`                                                                                                                                                                        |
+| Completion file | Missing, or not what this `bin/devbox` writes: `bin/devbox install`                                                                                                                         |
+| PATH            | A fresh login shell (`$SHELL -lic`, clean environment) must resolve `devbox` to the symlink: the `PATH` line to add, or what shadows it                                                     |
+| bash-completion | That shell must define bash-completion's lazy loader: `apt-get install bash-completion` (Ubuntu's default `~/.bashrc` loads it), or `brew install bash-completion@2` plus its `source` line |
+
+The probe uses a fresh login shell because the calling one proves nothing: `devbox deploy` runs `install` over a
+non-interactive `ssh`, which has neither `~/.local/bin` nor bash-completion. A login shell other than bash skips the
+bash-completion check and prints the zsh line from [`devbox completions`](#-devbox-completions) instead.
+
+`bin/devbox` finds its repo through the symlink (`readlink -f`, in macOS since 12.3), so every command behaves the same
+whether you type `devbox` or `./bin/devbox`.
+
 ## 🩺 `devbox doctor`
 
 ```
@@ -307,21 +338,22 @@ container has no docker and no keys). Naming a side the machine is not is refuse
 
 ### What `doctor host` checks
 
-| #  | Check                                                                                                                                                                                                                                                                                                                                                                                                                      |
-|----|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1  | `docker` and `docker compose` v2 present                                                                                                                                                                                                                                                                                                                                                                                   |
-| 2  | `BIND_ADDR` non-empty and equal to `tailscale ip -4`                                                                                                                                                                                                                                                                                                                                                                       |
-| 3  | Something listening on `BIND_ADDR:${DEVBOX_SSH_PORT}`, and **nothing** on `0.0.0.0`                                                                                                                                                                                                                                                                                                                                        |
-| 4  | Container health status is `healthy`                                                                                                                                                                                                                                                                                                                                                                                       |
-| 5  | PID 1 runs as `dev` (no root process)                                                                                                                                                                                                                                                                                                                                                                                      |
-| 6  | Twelve toolchain probes, real exit codes: `herdr`, `omp`, `claude`, `node`, `pnpm`, `gh`, `lazygit`, `wt`, `terraform`, `git`, `docker`, `docker compose`                                                                                                                                                                                                                                                                  |
-| 7  | Agent git override intact: `omp` and `claude` each resolve through a symlink to their launcher (`omp-launcher`, `claude-launcher`), never a plain file an update could have replaced ([Git Identities](git.md#updates-omp-update-claude-update))                                                                                                                                                                           |
-| 8  | `~/.config/devbox/identities.conf` passes `devbox-identities check` — a failing registry is reported here with the reader's own message, and skips every identity-derived check below rather than failing them individually                                                                                                                                                                                                |
-| 9  | `~/.config/devbox/git/agent.gitconfig` plus one `agent-<slug>.gitconfig` per registry identity that claims a `dir`, each matching a fresh render, in a directory still read-only — a `git config --global` in a session writes there, and once put the user's own identity on agent commits; an `agent-*.gitconfig` left over from a renamed or dropped identity is flagged too ([Git Identities](git.md#-agent-sessions)) |
-| 10 | `moshi-hook` daemon installed and running — unpaired warns, doesn't fail                                                                                                                                                                                                                                                                                                                                                   |
-| 11 | Project Docker daemon reachable from the container, reporting `rootless`                                                                                                                                                                                                                                                                                                                                                   |
-| 12 | `host.docker.internal` resolves inside the container to the project daemon's published address (`--ip` in `/etc/systemd/user/docker.service`) — a mismatch strands every published project port                                                                                                                                                                                                                            |
-| 13 | `devbox-docker-firewall` service active — without it, published project ports reach the Tailnet and LAN                                                                                                                                                                                                                                                                                                                    |
+| #   | Check                                                                                                                                                                                                                                                                                                                                                                                                                      |
+|-----|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1   | `docker` and `docker compose` v2 present                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2   | `BIND_ADDR` non-empty and equal to `tailscale ip -4`                                                                                                                                                                                                                                                                                                                                                                       |
+| 3   | Something listening on `BIND_ADDR:${DEVBOX_SSH_PORT}`, and **nothing** on `0.0.0.0`                                                                                                                                                                                                                                                                                                                                        |
+| 4   | Container health status is `healthy`                                                                                                                                                                                                                                                                                                                                                                                       |
+| 5   | PID 1 runs as `dev` (no root process)                                                                                                                                                                                                                                                                                                                                                                                      |
+| 6   | Twelve toolchain probes, real exit codes: `herdr`, `omp`, `claude`, `node`, `pnpm`, `gh`, `lazygit`, `wt`, `terraform`, `git`, `docker`, `docker compose`                                                                                                                                                                                                                                                                  |
+| 7   | Agent git override intact: `omp` and `claude` each resolve through a symlink to their launcher (`omp-launcher`, `claude-launcher`), never a plain file an update could have replaced ([Git Identities](git.md#updates-omp-update-claude-update))                                                                                                                                                                           |
+| 8   | `~/.config/devbox/identities.conf` passes `devbox-identities check` — a failing registry is reported here with the reader's own message, and skips every identity-derived check below rather than failing them individually                                                                                                                                                                                                |
+| 9   | `~/.config/devbox/git/agent.gitconfig` plus one `agent-<slug>.gitconfig` per registry identity that claims a `dir`, each matching a fresh render, in a directory still read-only — a `git config --global` in a session writes there, and once put the user's own identity on agent commits; an `agent-*.gitconfig` left over from a renamed or dropped identity is flagged too ([Git Identities](git.md#-agent-sessions)) |
+| 10  | `moshi-hook` daemon installed and running — unpaired warns, doesn't fail                                                                                                                                                                                                                                                                                                                                                   |
+| 11  | Project Docker daemon reachable from the container, reporting `rootless`                                                                                                                                                                                                                                                                                                                                                   |
+| 12  | `host.docker.internal` resolves inside the container to the project daemon's published address (`--ip` in `/etc/systemd/user/docker.service`) — a mismatch strands every published project port                                                                                                                                                                                                                            |
+| 13  | `devbox-docker-firewall` service active — without it, published project ports reach the Tailnet and LAN                                                                                                                                                                                                                                                                                                                    |
+| 14  | `devbox` on the PATH with bash completion — the [`devbox install`](#-devbox-install) checks                                                                                                                                                                                                                                                                                                                                |
 
 ### What `doctor laptop` checks
 
@@ -337,6 +369,7 @@ ones that do not depend on it (private keys, launcher symlinks) still run. The c
 | Agent git override | `omp` and `claude` resolving to their launchers through symlinks in `~/.local/libexec/devbox-agent/launchers` (a plain file is what an `omp update` takes over); `~/.local/bin/devbox-identities` still a symlink onto the libexec reader — the hop that makes the name resolve at all, since only `~/.local/bin` is on the PATH; every installed agent file matching the repo template (the agent gitconfigs matching a fresh `devbox-identities render agent-gitconfig`); `~/.config/devbox/git/` still read-only and no login shell writing a git identity into it; no agent token (`x-access-token`) in the macOS keychain — a sign a system credential helper preempted `devbox-git-credential` |
 | Credentials        | `secrets.env` at mode 600, every identity's `GH_TOKEN_<SLUG>` accepted by `gh`, each configured App's pem readable as a key                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Connections        | Every configured connection authenticating: each registry identity (tagged where it has one, plain otherwise), `devbox`, and the workstation if `DEVBOX_HOST` (in the environment or in `.push.env`, the same value `devbox deploy` reads) names its `~/.ssh/config` alias — unset just logs that the check is opt-in. Two identities' connections must map to distinct accounts, unless two blocks share one `pubkey` on purpose ([Git Identities](git.md#-faq))                                                                                                                                                                                                                                    |
+| devbox command     | `devbox` on the PATH with bash completion — the [`devbox install`](#-devbox-install) checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 Safe inside an agent session: it drops the launcher's exports and PATH entry first, auditing your own config. The
 `devbox-laptop` skill walks the fixes.
@@ -347,12 +380,11 @@ Safe inside an agent session: it drops the launcher's exports and PATH entry fir
 Usage: ./bin/devbox completions [bash|zsh]
 ```
 
-Prints a completion script for bash (the default) or zsh. Load it from your shell rc on the laptop and on the
-workstation:
+Prints a completion script for bash (the default) or zsh. For bash, [`devbox install`](#-devbox-install) writes it
+where bash-completion lazy-loads it, on both machines; zsh needs one line in `~/.zshrc`, after `compinit`:
 
 ```bash
-source <(~/devbox/bin/devbox completions bash)   # ~/.bashrc - use your checkout's path
-source <(~/devbox/bin/devbox completions zsh)    # ~/.zshrc, after compinit
+source <(devbox completions zsh)
 ```
 
 It completes commands, subcommands, flags, `doctor`'s side and the `[HOST]` of `deploy` and `sync`, the last from the

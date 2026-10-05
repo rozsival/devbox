@@ -191,6 +191,19 @@ commands:
         filters: [ laptop ]
 
   # -- Both ---------------------------------------------------------------------
+  - name: install
+    group: Both
+    help: |-
+      Put devbox on this machine's PATH, with bash completion
+
+      Symlinks ~/.local/bin/devbox onto this checkout's bin/devbox and writes
+      ~/.local/share/bash-completion/completions/devbox, which bash-completion
+      lazy-loads. Idempotent; then checks that a fresh login shell finds both.
+      'devbox deploy' runs it on the workstation.
+    filters: [ machine ]
+    examples:
+      - ./bin/devbox install
+
   - name: doctor
     group: Both
     help: Check this machine's side of the devbox

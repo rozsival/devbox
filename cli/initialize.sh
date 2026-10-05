@@ -1,6 +1,7 @@
 # Runs before any command. bin/devbox is generated into the repo's bin/, so the
-# repo root is one level up from it on both machines.
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# repo root is one level up from it on both machines - from the real file, since
+# `devbox install` reaches it through a symlink in ~/.local/bin.
+REPO_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 readonly REPO_ROOT
 readonly ENV_FILE="${REPO_ROOT}/.env"
 readonly ENV_EXAMPLE="${REPO_ROOT}/.env.example"
