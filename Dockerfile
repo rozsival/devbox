@@ -117,18 +117,40 @@ RUN if getent passwd "${HOST_UID}" >/dev/null; then userdel -r "$(getent passwd 
 # on the remote PATH and non-interactive runs fail rather than installing one, which
 # is exactly how saved-machine background connections run.
 #
-# Checksums are verified wherever upstream publishes a checksum file; `herdr`
-# and Docker's static CLI tarball publish none, so those rely on the pinned
-# version plus TLS. The compose and buildx plugins do publish checksums.txt -
-# with the name marked for binary mode (`*name`), hence the extra `sub()` those
-# two awk filters carry and the others do not.
+# Every download is verified: against upstream's checksum file where it
+# publishes one, else against the SHA-256 GitHub records for the release asset
+# (herdr publishes no checksum file; its release API carries the asset digest).
+# The compose and buildx plugins' checksums.txt mark the name for binary mode
+# (`*name`), hence the extra `sub()` those two awk filters carry and the others
+# do not.
 #
 # No `op` here on purpose: the container holds no 1Password account. Secrets are
 # rendered on the laptop and pushed in - see docs/secrets.md.
+#
+# The Docker CLI comes from Docker's apt repository, not the static tarball:
+# download.docker.com publishes no checksum for the tarball, while apt checks
+# every package against the repository's signed Release file. The key is
+# fetched from the same host, so its fingerprint - the one Docker's install
+# docs publish - is pinned here; a key that does not match fails the build.
+# /usr/bin/docker is on the non-interactive PATH like /usr/local/bin.
+RUN set -eux; \
+  . /etc/os-release; \
+  install -m 0755 -d /etc/apt/keyrings; \
+  curl -fsSL -o /etc/apt/keyrings/docker.asc https://download.docker.com/linux/ubuntu/gpg; \
+  fpr="$(gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | awk -F: '/^fpr:/ { print $10; exit }')"; \
+  test "${fpr}" = 9DC858229FC7DD38854AE2D88D81803C0EBFCD88; \
+  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" \
+    >/etc/apt/sources.list.d/docker.list; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends "docker-ce-cli=5:${DOCKER_CLI_VERSION}-1~ubuntu.${VERSION_ID}~${VERSION_CODENAME}"; \
+  rm -rf /var/lib/apt/lists/*
+
 RUN set -eux; \
   tmp="$(mktemp -d)"; cd "$tmp"; \
   \
   curl -fsSL -o herdr "https://github.com/herdrdev/herdr/releases/download/v${HERDR_VERSION}/herdr-linux-x86_64"; \
+  curl -fsSL -o herdr.json "https://api.github.com/repos/herdrdev/herdr/releases/tags/v${HERDR_VERSION}"; \
+  jq -r '.assets[] | select(.name == "herdr-linux-x86_64") | .digest | select(startswith("sha256:")) | ltrimstr("sha256:") + "  herdr"' herdr.json | sha256sum -c -; \
   install -m 0755 herdr /usr/local/bin/herdr; \
   \
   curl -fsSL -o gh.deb "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.deb"; \
@@ -154,10 +176,6 @@ RUN set -eux; \
   awk -v f="terraform_${TERRAFORM_VERSION}_linux_amd64.zip" '$2 == f { print $1 "  terraform.zip" }' terraform.sums | sha256sum -c -; \
   unzip -q terraform.zip terraform; \
   install -m 0755 terraform /usr/local/bin/terraform; \
-  \
-  curl -fsSL -o docker.tgz "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_CLI_VERSION}.tgz"; \
-  tar -xzf docker.tgz docker/docker; \
-  install -m 0755 docker/docker /usr/local/bin/docker; \
   \
   mkdir -p /usr/local/lib/docker/cli-plugins; \
   curl -fsSL -o compose "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-linux-x86_64"; \

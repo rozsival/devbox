@@ -263,12 +263,12 @@ file.
 
 ## 📌 Versions
 
-| Piece          | Pin                                   | Where                        |
-| -------------- | ------------------------------------- | ---------------------------- |
-| Docker CLI     | `DOCKER_CLI_VERSION` (static tarball) | `Dockerfile`                 |
-| Compose plugin | `DOCKER_COMPOSE_VERSION` (+ checksum) | `Dockerfile`                 |
-| Buildx plugin  | `DOCKER_BUILDX_VERSION` (+ checksum)  | `Dockerfile`                 |
-| Daemon         | The host's `docker-ce`                | `apt-get` on the workstation |
+| Piece          | Pin                                    | Where                        |
+| -------------- | -------------------------------------- | ---------------------------- |
+| Docker CLI     | `DOCKER_CLI_VERSION` (signed apt repo) | `Dockerfile`                 |
+| Compose plugin | `DOCKER_COMPOSE_VERSION` (+ checksum)  | `Dockerfile`                 |
+| Buildx plugin  | `DOCKER_BUILDX_VERSION` (+ checksum)   | `Dockerfile`                 |
+| Daemon         | The host's `docker-ce`                 | `apt-get` on the workstation |
 
 > [!NOTE]
 > Keep `DOCKER_CLI_VERSION` equal to the host daemon's (`docker version` on the host). An older CLI is fine; compose

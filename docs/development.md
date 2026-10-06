@@ -40,8 +40,9 @@ There is no CI and no test suite: `make check` proves the source, and a change i
    [maintainer workflow](cli.md#-maintainer-workflow). `container/` scripts stay hand-written bash with
    `set -euo pipefail`; CLI bodies keep the `log_info`/`log_success`/`log_warn`/`log_error` helpers from
    `cli/lib/log.sh`.
-3. **Pinned versions only** — every external binary comes from an explicit `ARG <TOOL>_VERSION` and is
-   checksum-verified where upstream publishes a checksum file. Never invent a hash — see
+3. **Pinned versions only** — every external binary comes from an explicit `ARG <TOOL>_VERSION` and is verified:
+   upstream's checksum file where it publishes one, else the SHA-256 GitHub records for the release asset, else a signed
+   package repository with its key fingerprint pinned. Never invent a hash — see
    [Adding a tool](toolchain.md#-adding-a-tool).
 4. **No root in the container** — no `privileged`, no `cap_add`, no `/var/run/docker.sock` mount; `sshd` runs as
    `dev`. Project containers come from the rootless sibling daemon, never the host's root daemon and never a nested

@@ -154,7 +154,7 @@ key _is_ in the archive, so restore keeps the laptop's `known_hosts` valid.
 ## Repo conventions when the change is yours
 
 `AGENTS.md` is authoritative. Parts biting most often: `apt-get` only, never `apt`; every external binary
-comes from an explicit `ARG <TOOL>_VERSION`, checksum-verified where upstream publishes one (never invent a
-hash); no root, no `cap_add`, no Docker socket; `BIND_ADDR` on every published port;
+comes from an explicit `ARG <TOOL>_VERSION` and is verified - upstream's checksum file, else GitHub's recorded
+asset digest, else a signed repository with its key fingerprint pinned (never invent a hash); no root, no `cap_add`, no Docker socket; `BIND_ADDR` on every published port;
 bootstrap steps stay individually guarded, so re-runs are no-ops; commits are lowercase Conventional
 Commits, no final punctuation, 100 characters max.

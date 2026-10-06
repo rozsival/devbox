@@ -39,7 +39,9 @@ the host's root Docker daemon.
    whose name has an inner dash with a quoted key, `${args['--allow-unguarded']}`: shfmt reads an unquoted
    subscript as arithmetic and rewrites it to `--allow - unguarded`, a key bashly never sets
 3. **Pinned versions only** - every external binary comes from an explicit `ARG <TOOL>_VERSION` and is
-   checksum-verified where upstream publishes a checksum file. Never invent a hash
+   verified: against upstream's checksum file where it publishes one, else against the SHA-256 GitHub records
+   for the release asset (its release API's `digest`), else through a signed package repository whose key
+   fingerprint is pinned (the Docker CLI). Never invent a hash
 4. **No root in the container** - no `privileged`, no `cap_add`, no `/var/run/docker.sock` mount. `sshd` runs
    as `dev`. Project containers come from the *rootless sibling* daemon, never from the host's root daemon and
    never from a nested one: nesting needs setuid `newuidmap`, which `cap_drop: ALL` plus `no-new-privileges`

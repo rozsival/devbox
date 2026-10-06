@@ -1,7 +1,8 @@
 # 🧰 Toolchain
 
 > `ubuntu:26.04` plus a pinned toolchain: every external binary has an explicit `ARG <TOOL>_VERSION` in the
-> `Dockerfile`, checksum-verified where upstream publishes one. This page covers the pinned versions, where each tool
+> `Dockerfile` and is verified — upstream's checksum file, else GitHub's recorded asset digest, else a signed package
+> repository. This page covers the pinned versions, where each tool
 > lives, the agents (OMP, Claude Code, Moshi), skills and browser automation, and how to add a tool.
 
 **Related:** [Installation](installation.md) · [Docker](docker.md) · [Secrets](secrets.md) ·
@@ -11,19 +12,19 @@
 
 ## 📌 Pinned versions
 
-| Tool             | Version   | Installed as                                       |
-| ---------------- | --------- | -------------------------------------------------- |
-| `herdr`          | `0.9.3`   | `/usr/local/bin/herdr`                             |
-| `node`           | `24.21.0` | nvm in `/opt/nvm`, symlinked into `/usr/local/bin` |
-| `pnpm`           | `12.9.1`  | `npm install -g`, symlinked into `/usr/local/bin`  |
-| `gh`             | `2.102.0` | pinned `.deb`                                      |
-| `lazygit`        | `0.66.0`  | `/usr/local/bin/lazygit` (alias `lg`)              |
-| `wt` (worktrunk) | `0.80.0`  | `/usr/local/bin/wt` + `git-wt`                     |
-| `terraform`      | `1.16.5`  | `/usr/local/bin/terraform`                         |
-| `nvm`            | `0.40.8`  | `/opt/nvm`                                         |
-| Docker CLI       | `29.8.2`  | `/usr/local/bin/docker`                            |
-| Compose plugin   | `5.6.0`   | `/usr/local/lib/docker/cli-plugins/docker-compose` |
-| Buildx plugin    | `0.37.2`  | `/usr/local/lib/docker/cli-plugins/docker-buildx`  |
+| Tool             | Version   | Installed as                                                           |
+| ---------------- | --------- | ---------------------------------------------------------------------- |
+| `herdr`          | `0.9.3`   | `/usr/local/bin/herdr`                                                 |
+| `node`           | `24.21.0` | nvm in `/opt/nvm`, symlinked into `/usr/local/bin`                     |
+| `pnpm`           | `12.9.1`  | `npm install -g`, symlinked into `/usr/local/bin`                      |
+| `gh`             | `2.102.0` | pinned `.deb`                                                          |
+| `lazygit`        | `0.66.0`  | `/usr/local/bin/lazygit` (alias `lg`)                                  |
+| `wt` (worktrunk) | `0.80.0`  | `/usr/local/bin/wt` + `git-wt`                                         |
+| `terraform`      | `1.16.5`  | `/usr/local/bin/terraform`                                             |
+| `nvm`            | `0.40.8`  | `/opt/nvm`                                                             |
+| Docker CLI       | `29.8.2`  | `docker-ce-cli` from Docker's signed apt repository, `/usr/bin/docker` |
+| Compose plugin   | `5.6.0`   | `/usr/local/lib/docker/cli-plugins/docker-compose`                     |
+| Buildx plugin    | `0.37.2`  | `/usr/local/lib/docker/cli-plugins/docker-buildx`                      |
 
 Also from the Ubuntu archive: `git`, `git-lfs`, `starship`, `ripgrep`, `fd` (symlinked from `fdfind`), `jq`, `curl`,
 `rsync`, `build-essential`, `python3`, `openssh-server`/`-client`, `nano`, `less`, `procps`, `iproute2`, `socat` (backs
@@ -250,10 +251,14 @@ Add `ARG <TOOL>_VERSION=<version>` next to the others in the `Dockerfile`.
 
 ### 2. Add one install block
 
-`curl -fsSL` to a temp dir, verify the published checksum, `install -m 0755` into `/usr/local/bin`.
+`curl -fsSL` to a temp dir, verify it, `install -m 0755` into `/usr/local/bin`. In order of preference: upstream's
+checksum file (`sha256sum -c`); else, for a GitHub release asset, the SHA-256 GitHub records for it — the release API's
+`digest` field, as `herdr` does; else a signed package repository, its key fingerprint pinned, as the Docker CLI does
+(download.docker.com publishes no checksum for its static tarball).
 
 > [!CAUTION]
-> Never invent a hash: without a published checksum file (`herdr`), pinned version plus TLS is the contract.
+> Never invent a hash: every value checked against comes from upstream or GitHub at build time, or is a fingerprint the
+> vendor publishes.
 
 ### 3. Add a doctor probe
 
