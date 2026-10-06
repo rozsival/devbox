@@ -16,6 +16,7 @@
 | CLI users          | `./bin/devbox` from the repo root, or `devbox` anywhere after [`devbox install`](#-devbox-install) |
 | CLI maintainers    | Edit authored sources in `cli/` (see [Maintainer workflow](#-maintainer-workflow))                 |
 | Generated artifact | `bin/devbox` is generated, committed build output, not the source of truth                         |
+| AI agents          | The `devbox-cli` skill: which side runs what, the guards an agent leaves in place                  |
 
 > [!IMPORTANT]
 > Never hand-edit `bin/devbox`. Update the authored bashly sources in `cli/` and regenerate it instead.

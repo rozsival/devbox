@@ -90,7 +90,7 @@ All four land as `dev` in `/home/dev`. Details: [Connecting](connecting.md).
 | `home/.local/libexec/devbox-identities`       | The one reader of `identities.conf`: sourceable library and CLI                                             |
 | `home/.config/devbox/git/agent.gitconfig.tpl` | Template `devbox-identities` renders into the agent gitconfig                                               |
 | `docs/`                                       | This documentation                                                                                          |
-| `.agents/skills/`                             | Agent skills: `devbox-basics`, `devbox-setup`, `devbox-laptop`, `devbox-deploy`                             |
+| `.agents/skills/`                             | Agent skills: `devbox-basics`, `devbox-setup`, `devbox-laptop`, `devbox-deploy`, `devbox-cli`               |
 | `.claude/skills/`                             | Symlinks to `.agents/skills/` — the one skills directory Claude Code reads                                  |
 | `CLAUDE.md`                                   | Imports `AGENTS.md` for Claude Code                                                                         |
 

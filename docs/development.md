@@ -72,6 +72,7 @@ There are no releases: `./bin/devbox deploy` rsyncs the working tree to `~/devbo
 | `.agents/skills/devbox-setup/`  | First install in five ordered phases, plus connection failures                                |
 | `.agents/skills/devbox-laptop/` | Keys in 1Password, ssh/git config, the agent override, tokens; `devbox doctor laptop` accepts |
 | `.agents/skills/devbox-deploy/` | Shipping a change and applying it: sync vs apply, what a redeploy cannot destroy              |
+| `.agents/skills/devbox-cli/`    | Driving `bin/devbox`: which side runs what, guards an agent keeps, changing `cli/`            |
 | `.claude/skills/<name>`         | Relative symlinks to `.agents/skills/<name>` — Claude Code does not read `.agents/skills/`    |
 
 > [!IMPORTANT]

@@ -250,11 +250,12 @@ the host's root Docker daemon.
     `up` over `ssh -t` so the live-session prompt is answerable; `--force` (which needs `--up`) forwards past
     it. No default host: it takes the argument, then `DEVBOX_HOST` from the environment or `.push.env`
     (gitignored), then fails - a repo going public must not ship one machine's alias as everyone's default
-- `.agents/skills/` - four skills mirroring the docs for agents: `devbox-basics` (architecture, boundaries,
+- `.agents/skills/` - five skills mirroring the docs for agents: `devbox-basics` (architecture, boundaries,
   entry routes), `devbox-setup` (five ordered setup phases plus connection failures), `devbox-laptop`
   (keys in 1Password, ssh/git config, the agent override, tokens - `devbox doctor laptop` as the acceptance test),
-  `devbox-deploy` (sync vs apply, what a redeploy cannot destroy). They must stay consistent with `docs/`;
-  when a command or default changes, update both
+  `devbox-deploy` (sync vs apply, what a redeploy cannot destroy), `devbox-cli` (driving `bin/devbox`: which side
+  runs what, the session/sudo guards an agent leaves in place, reading results, changing `cli/`). They must stay
+  consistent with `docs/`; when a command or default changes, update both
 - `CLAUDE.md` and `.claude/skills/` - Claude Code reads neither `AGENTS.md` (before v2.1.277) nor
   `.agents/skills/`, so `CLAUDE.md` is the single line `@AGENTS.md` and `.claude/skills/<name>` are
   relative symlinks to `.agents/skills/<name>`. Edit only the originals; a new skill needs its symlink
