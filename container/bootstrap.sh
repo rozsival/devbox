@@ -46,6 +46,12 @@ else
   # verified: never a half-written or unchecked `omp` on the PATH, and no
   # ~280 MB in /tmp, which is a RAM-backed tmpfs here (and noexec).
   install -d -m 755 "${HOME_DIR}/.local/bin"
+  # A container stop SIGKILLs an in-flight bootstrap, so no cleanup runs, and
+  # each leftover can be the full asset on the bind mount. The glob matches
+  # the mktemp template below exactly.
+  rm -f "${HOME_DIR}/.local/bin"/.omp.??????
+  # The asset download aborts only when it stalls, not after a fixed time: on
+  # a slow link a total cap fails every run, re-runs included.
   omp_tmp="$(mktemp -d)"
   omp_new=''
   if [[ -z "${omp_asset}" ]]; then
@@ -55,7 +61,7 @@ else
     omp_sum="$(jq -r --arg a "${omp_asset}" '.assets[] | select(.name == $a) | .digest // "" | select(startswith("sha256:")) | ltrimstr("sha256:")' "${omp_tmp}/release.json")" &&
     [[ -n "${omp_url}" && -n "${omp_sum}" ]] &&
     omp_new="$(mktemp "${HOME_DIR}/.local/bin/.omp.XXXXXX")" &&
-    curl -fsSL --max-time 300 -o "${omp_new}" "${omp_url}" &&
+    curl -fsSL --connect-timeout 10 --speed-limit 1024 --speed-time 30 -o "${omp_new}" "${omp_url}" &&
     printf '%s  %s\n' "${omp_sum}" "${omp_new}" | sha256sum -c - >/dev/null 2>&1; then
     chmod 0755 "${omp_new}"
     mv -f "${omp_new}" "${HOME_DIR}/.local/bin/omp"

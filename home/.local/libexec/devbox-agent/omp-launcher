@@ -10,4 +10,4 @@ set -euo pipefail
 self="$(readlink -f "${BASH_SOURCE[0]}")"
 # shellcheck source=agent-launch
 . "$(dirname "${self}")/agent-launch"
-agent_launch omp "${self}" 'install OMP (curl -fsSL https://omp.sh/install.sh | sh)' "$@"
+agent_launch omp "${self}" 'install OMP (devbox: ./bin/devbox bootstrap; laptop: curl -fsSL https://omp.sh/install.sh | sh)' "$@"
