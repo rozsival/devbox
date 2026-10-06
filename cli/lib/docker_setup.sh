@@ -674,9 +674,13 @@ UNIT_BODY
   fi
   # Inert once the manager reads elsewhere - removed so nothing suggests
   # otherwise: what the setup tool's own layout and this step's earlier
-  # `systemctl --user enable` left in the bind mount.
-  rm -f "${DEV_HOME}/.config/systemd/user/docker.service" \
-    "${DEV_HOME}/.config/systemd/user/default.target.wants/docker.service"
+  # `systemctl --user enable` left in the bind mount. As dev, never root: the
+  # devbox owns every directory on these paths and can swap one for a symlink,
+  # which a root `rm` would follow out of /home/dev. Cosmetic, so a refusal is
+  # only reported.
+  as_dev rm -f "${DEV_HOME}/.config/systemd/user/docker.service" \
+    "${DEV_HOME}/.config/systemd/user/default.target.wants/docker.service" ||
+    log_warn "could not remove the old docker.service files under ${DEV_HOME}/.config/systemd/user"
   if [[ "${manager_changed}" == 'true' ]]; then
     # Restarts the daemon, and every project container with it (those with a
     # restart policy come back); PartOf= also reloads the step_netfilter table.
@@ -702,13 +706,22 @@ UNIT_BODY
 }
 
 # -- 7. Proof ----------------------------------------------------------------
+# The docker CLI as dev, against the project daemon. runuser leaves HOME at
+# /home/dev - the bind mount - and the CLI would read ~/.docker/config.json
+# (credential helpers, proxies, contexts) and, on `docker info`, execute every
+# ~/.docker/cli-plugins/docker-* on this host: its config directory is pointed
+# at one that cannot exist.
+dev_docker() {
+  as_dev env DOCKER_HOST="unix://${SOCKET}" DOCKER_CONFIG=/nonexistent docker "$@"
+}
+
 step_smoke() {
   local server security
-  server="$(as_dev env DOCKER_HOST="unix://${SOCKET}" docker version -f '{{ .Server.Version }}')"
-  security="$(as_dev env DOCKER_HOST="unix://${SOCKET}" docker info -f '{{ .SecurityOptions }}')"
+  server="$(dev_docker version -f '{{ .Server.Version }}')"
+  security="$(dev_docker info -f '{{ .SecurityOptions }}')"
   grep -q 'rootless' <<<"${security}" || log_error "the daemon is not rootless: ${security}"
   log_success "rootless dockerd ${server} on ${SOCKET}"
   log_info 'Running hello-world as a smoke test...'
-  as_dev env DOCKER_HOST="unix://${SOCKET}" docker run --rm hello-world >/dev/null
+  dev_docker run --rm hello-world >/dev/null
   log_success 'container ran and exited cleanly'
 }
