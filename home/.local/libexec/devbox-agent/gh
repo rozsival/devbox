@@ -125,16 +125,33 @@ repo_scoped() {
   esac
 }
 
+# Which variable the token goes in: gh reads GH_TOKEN for github.com and GHE.com
+# only, and a GitHub Enterprise Server host's token from GH_ENTERPRISE_TOKEN.
+# Exported as GH_TOKEN, a GHES identity's token would go to github.com with
+# every request gh sends there - and never be used for its own host. The
+# registry knows which variable each identity needs (gh_env).
+token_env=GH_TOKEN
+library="${self%/*}/devbox-identities"
+[[ -r ${library} ]] || library="${self%/*}/../devbox-identities"
+[[ -r ${library} ]] || library="${HOME}/.local/libexec/devbox-identities"
+if [[ -r ${library} ]]; then
+  # shellcheck source=../devbox-identities
+  . "${library}"
+  token_env="$(di_get "$(di_for "${PWD}")" gh_env 2>/dev/null)" || token_env=GH_TOKEN
+  [[ ${token_env} == GH_ENTERPRISE_TOKEN ]] || token_env=GH_TOKEN
+fi
+
 # An explicit GH_TOKEN in the environment wins, even an empty one: gh gives the
 # variable top precedence itself, and a caller that set it chose its principal
 # deliberately - a team launcher that starts an unattended shell exports
 # `GH_TOKEN=` so that a shell without its role token has no token at all rather
-# than the one this tree would otherwise resolve to. Otherwise resolve per
-# directory; the resolver explains itself on stderr when no token is configured
-# for this tree - let
-# that through and still run gh, which then acts unauthenticated and fails on
-# its own terms rather than silently using the other account's token.
-if [[ -z ${GH_TOKEN+set} ]]; then
+# than the one this tree would otherwise resolve to. For a GitHub Enterprise
+# identity an explicit GH_ENTERPRISE_TOKEN counts the same. Otherwise resolve
+# per directory; the resolver explains itself on stderr when no token is
+# configured for this tree - let that through and still run gh, which then acts
+# unauthenticated and fails on its own terms rather than silently using the
+# other account's token.
+if [[ -z ${GH_TOKEN+set} && (${token_env} == GH_TOKEN || -z ${GH_ENTERPRISE_TOKEN+set}) ]]; then
   token=''
   if agent_session; then
     repo="$(repo_scoped "$@")"
@@ -149,7 +166,7 @@ if [[ -z ${GH_TOKEN+set} ]]; then
     token="$("${resolver}")" || token=''
   fi
   if [[ -n ${token} ]]; then
-    export GH_TOKEN="${token}"
+    export "${token_env}=${token}"
   fi
 fi
 

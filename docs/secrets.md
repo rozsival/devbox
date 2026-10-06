@@ -111,6 +111,11 @@ result once. `~/.bashrc.d/devbox.sh` exports **no** `GH_TOKEN`. One set in the e
 untouched: the caller chose its principal, and empty means "no token", which is how a launcher that starts an unattended
 shell keeps it from ever acting with your PAT.
 
+The variable follows the identity's host: `GH_TOKEN` for `github.com` (and GHE.com), `GH_ENTERPRISE_TOKEN` for a GitHub
+Enterprise Server `host` — the only one gh reads for such a host. Exported as `GH_TOKEN`, an Enterprise token would go
+to `github.com` with every request gh sends there. `devbox-identities get <slug> gh_env` names it; an explicit
+`GH_ENTERPRISE_TOKEN` passes through like an explicit `GH_TOKEN`.
+
 An agent's directory comes late: the session opens in `$HOME`, then works a project as cwd. A token resolved once at
 startup would pin the default identity for the whole session, including a second identity's tree; resolving per
 invocation makes the account follow the tree.

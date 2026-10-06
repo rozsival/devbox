@@ -388,7 +388,11 @@ if ${identities_ok}; then
     # directly - and needs no assumption about bootstrap's own cwd.
     if ! token="$(devbox-gh-token "${dir:-${HOME_DIR}}" 2>/dev/null)" || [[ -z "${token}" ]]; then
       register_action "Add a fine-grained GitHub token for the ${slug} account to ${secrets_file} as $(di_get "${slug}" token_var) (contents write on the repositories agents push without an App; actions and checks read; issues or pull-requests write only if agents should post)"
-    elif ! GH_TOKEN="${token}" GH_HOST="$(di_get "${slug}" host)" timeout 15 gh auth status >/dev/null 2>&1; then
+    # gh_env: a GitHub Enterprise Server token is read from GH_ENTERPRISE_TOKEN,
+    # and checked against its own host - as GH_TOKEN it would be tried on
+    # github.com and reported rejected. A subshell export keeps it off argv.
+    elif ! (export "$(di_get "${slug}" gh_env)=${token}" &&
+      timeout 15 gh auth status --hostname "$(di_get "${slug}" host)" >/dev/null 2>&1); then
       # Present but rejected - expired, revoked, or the forge unreachable; a
       # variable-is-set check cannot see any of those. `timeout` because this
       # runs from the entrypoint before `exec sshd`: no check may delay SSH

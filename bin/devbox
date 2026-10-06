@@ -2200,9 +2200,17 @@ doctor_laptop() {
   if ((identities_ok)); then
     for slug in ${slugs}; do
       dir="$(di_get "${slug}" dir)"
+      # The variable gh reads the token from follows the identity's host. An
+      # installed reader older than gh_env answers nothing - the template
+      # comparison above reports it stale; github.com is what it meant then.
+      token_env="$(di_get "${slug}" gh_env)"
+      [[ -n ${token_env} ]] || token_env=GH_TOKEN
       if ! token="$("${HOME}/.local/bin/devbox-gh-token" "${dir:-${HOME}}" 2>/dev/null)" || [[ -z ${token} ]]; then
         fail "no ${slug} token: set $(di_get "${slug}" token_var) in ${secrets_file} (fine-grained; contents write on repos agents push without the App)"
-      elif ! GH_TOKEN="${token}" GH_CONFIG_DIR="${CONFIG_DIR}/gh" timeout 15 gh auth status >/dev/null 2>&1; then
+      # A subshell export, not a VAR=value prefix: the variable's name follows
+      # the host, and `env NAME=token` would put the token on a command line.
+      elif ! (export "${token_env}=${token}" GH_CONFIG_DIR="${CONFIG_DIR}/gh" &&
+        timeout 15 gh auth status --hostname "$(di_get "${slug}" host)" >/dev/null 2>&1); then
         fail "the ${slug} token is rejected by gh - expired, revoked, or GitHub unreachable"
       else
         log_success "${slug} token accepted by gh"

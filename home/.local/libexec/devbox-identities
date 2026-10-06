@@ -180,6 +180,16 @@ di_get() {
     printf 'GH_TOKEN_%s\n' "$(di_upper "${slug}")"
     return 0
     ;;
+  gh_env)
+    # The variable gh reads this identity's token from: GH_TOKEN covers
+    # github.com and GHE.com only, a GitHub Enterprise Server host reads
+    # GH_ENTERPRISE_TOKEN - and a GHES token in GH_TOKEN would go to github.com.
+    case "$(di_get "${slug}" host)" in
+    github.com | *.ghe.com) printf 'GH_TOKEN\n' ;;
+    *) printf 'GH_ENTERPRISE_TOKEN\n' ;;
+    esac
+    return 0
+    ;;
   api)
     # api.github.com for github.com, /api/v3 for GitHub Enterprise.
     value="$(di_get "${slug}" host)"
@@ -266,7 +276,7 @@ di_for() {
 
 di_show() {
   local slug="$1" field
-  for field in ${DI_FIELDS} tag token_var api; do
+  for field in ${DI_FIELDS} tag token_var gh_env api; do
     printf '%-15s %s\n' "${field}" "$(di_get "${slug}" "${field}" | tr '\n' ' ' | sed 's/ $//')"
   done
 }
