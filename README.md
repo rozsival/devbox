@@ -22,28 +22,29 @@ agents inside — the container is the agent sandbox.
 
 ## ✨ Highlights
 
-| Feature                  | What it gives you                                                                                                |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| **Agent sandbox**        | Agents with bypassed permissions reach the project tree, the internet and a rootless project Docker daemon only  |
-| **Tailnet-only access**  | One `sshd` port, published on the Tailscale address (`BIND_ADDR`) and loopback — never `0.0.0.0`                 |
-| **No private keys**      | Public keys only; manual git borrows the laptop's 1Password agent, agent git gets HTTPS and per-operation tokens |
-| **Multiple identities**  | One `identities.conf` routes git author, signing key and GitHub token by directory and GitHub owner              |
-| **Project Docker**       | `docker compose` against a rootless sibling daemon, with path identity and project ports kept off the Tailnet    |
-| **Persistent workspace** | herdr panes survive client exit; `/home/dev` is a host bind mount that survives every rebuild                    |
-| **One CLI, both sides**  | `./bin/devbox` for workstation and laptop, with a `doctor` acceptance test on each                               |
+| Feature                  | What it gives you                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| **Agent sandbox**        | Agents with bypassed permissions reach the project tree, the internet and LAN, and a rootless project Docker daemon only |
+| **Tailnet-only access**  | One `sshd` port, published on the Tailscale address (`BIND_ADDR`) and loopback — never `0.0.0.0`                         |
+| **No private keys**      | Public keys only; manual git borrows the laptop's 1Password agent, agent git gets HTTPS and per-operation tokens         |
+| **Multiple identities**  | One `identities.conf` routes git author, signing key and GitHub token by directory and GitHub owner                      |
+| **Project Docker**       | `docker compose` against a rootless sibling daemon, with path identity and project ports kept off the Tailnet            |
+| **Persistent workspace** | herdr panes survive client exit; `/home/dev` is a host bind mount that survives every rebuild                            |
+| **One CLI, both sides**  | `./bin/devbox` for workstation and laptop, with a `doctor` acceptance test on each                                       |
 
 > [!IMPORTANT]
 > The container **is** the sandbox: agents never reach the host filesystem, the host's root Docker daemon or a private
-> key — the box holds public keys only. It contains authority, not data: outbound network is unrestricted, so assume
-> anything inside can leave. See [Security model](docs/security.md).
+> key — the box holds public keys only. It contains authority, not data: outbound internet is unrestricted and the LAN
+> is reachable — only the host's own services and the Tailnet overlay are blocked — so assume anything inside can
+> leave. See [Security model](docs/security.md).
 
 ## 🚀 Quick start
 
-**Requires** a workstation running Ubuntu 26.04 LTS with Docker and Tailscale, the **Devbox Laptop key in 1Password**
-(only `~/.ssh/devbox.pub` on disk), the two **`~/.ssh/config` blocks**, a non-empty **`BIND_ADDR`** and **bash >= 4.2
-on the laptop** (`brew install bash`; macOS ships 3.2, which the generated `bin/devbox` refuses) — see
-[Installation](docs/installation.md). A laptop set up with [dotfiles](https://github.com/rozsival/dotfiles) has the
-key, the blocks and bash already.
+**Requires** a workstation running Ubuntu 26.04 LTS with Docker and Tailscale, two **1Password SSH keys** — the Devbox
+Laptop key and your default identity's key, with only `~/.ssh/devbox.pub` and `~/.ssh/id_<slug>.pub` on disk — the two
+**`~/.ssh/config` blocks**, a non-empty **`BIND_ADDR`** and **bash >= 4.2 on the laptop** (`brew install bash`; macOS
+ships 3.2, which the generated `bin/devbox` refuses) — see [Installation](docs/installation.md). A laptop set up with
+[dotfiles](https://github.com/rozsival/dotfiles) has the keys, the blocks and bash already.
 
 From the laptop:
 

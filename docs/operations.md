@@ -20,7 +20,14 @@ and after.
 
 A deploy that changes `cli/lib/docker_setup.sh` — the boundary ruleset, the daemon's unit, its user manager's drop-in —
 also needs `ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'`: until then the host keeps the old
-files. `doctor` flags a stale ruleset or drop-in; `sudo ./bin/devbox docker setup --check` reports every piece.
+files. `doctor` flags a stale ruleset, firewall unit or drop-in and sshd's effective `DenyUsers`;
+`sudo ./bin/devbox docker setup --check` reports every piece, the daemon unit included.
+
+> [!WARNING]
+> When the `user@1001.service` drop-in changed, or the running manager predates it, `docker setup` restarts `dev`'s user
+> manager — and with it the project daemon and every project container. Ubuntu's 5 s stop timeout for `user@` SIGKILLs
+> a container slower to stop; one without a restart policy stays down until its `docker compose up -d`. The devbox
+> itself runs on the host's root daemon and keeps going. Re-runs are no-ops once everything is current.
 
 Use `rebuild` over `up` for a cache-free image after a pinned version changes:
 
@@ -94,7 +101,8 @@ the container and rootless, and whether `host.docker.internal` resolves.
 
 ### `Too many authentication failures`
 
-The agent offered more than six keys. Add `IdentitiesOnly yes` + `IdentityFile ~/.ssh/devbox.pub` to the `Host` block.
+The agent offered more than six keys. Give the `Host` block `IdentitiesOnly yes` plus that host's one key:
+`IdentityFile ~/.ssh/devbox.pub` for `Host devbox`, `IdentityFile ~/.ssh/id_<slug>.pub` for `Host <workstation>`.
 
 ### herdr machine flaps between `connecting` and `offline`
 
@@ -104,7 +112,8 @@ prompts. Unlock and approve; if it persists, use the documented file-key excepti
 
 ### `up` fails with `BIND_ADDR is empty`
 
-Preflight working as intended. Run `./bin/devbox env` (Tailscale must be up first).
+Preflight working as intended — every compose command, `down` included, fails until it's set. Run `./bin/devbox env`
+(Tailscale must be up first); a box already published on `0.0.0.0` goes with `docker rm -f devbox`.
 
 ### `doctor` reports `published on 0.0.0.0`
 

@@ -21,13 +21,16 @@ Laptop prerequisite: bash >= 4.2 (`brew install bash`) - `bin/devbox` is bashly-
 start under macOS's /bin/bash 3.2, so `/usr/bin/env bash` must find the Homebrew one first on the PATH.
 The workstation's Ubuntu bash is fine.
 
-The key is a 1Password SSH item served by its agent; only the public half lands in `~/.ssh/devbox.pub`,
-which `IdentityFile` selects. It opens the devbox and nothing else - the workstation's sshd takes the default
-identity's `id_<slug>.pub`, because every `ssh -A devbox` leaves `devbox.pub` approved in 1Password for
-anything in the devbox to sign with. Steps: `docs/installation.md#1-create-the-laptop-key`:
+Two 1Password SSH items served by its agent: the devbox key, whose public half lands in `~/.ssh/devbox.pub`,
+and the default identity's key, `~/.ssh/id_<slug>.pub` - only the public halves on disk, which `IdentityFile`
+selects. `devbox.pub` opens the devbox and nothing else (never registered on GitHub) - the workstation's sshd
+takes the default identity's `id_<slug>.pub`, because every `ssh -A devbox` leaves `devbox.pub` approved in
+1Password for anything in the devbox to sign with. That narrows, not closes: approval is per application until
+1Password locks, so a key used through `ssh -A devbox` signs from the devbox too - `devbox-docker-firewall` is
+what keeps the devbox off the workstation's sshd. Steps: `docs/installation.md#1-create-the-laptop-key`:
 
 ```bash
-ssh-copy-id -i ~/.ssh/id_<slug>.pub -p 2222 <user>@<workstation>  # host sshd, needed by deploy - never devbox.pub
+ssh-copy-id -f -i ~/.ssh/id_<slug>.pub -p 2222 <user>@<workstation>  # host sshd, needed by deploy - never devbox.pub
 cat ~/.ssh/devbox.pub                                           # goes into .env in phase 3
 ```
 
@@ -56,9 +59,9 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox env'
 
 `env` creates `.env` from `.env.example` (never clobbers an existing), filling `BIND_ADDR` from
 `tailscale ip -4` plus `HOST_UID`/`HOST_GID` - the dedicated `dev` host user if it exists, else the invoking
-user. Tailscale must be up first: down means no address to write, and `up` refuses the empty value. Then
-edit `~/devbox/.env` on the workstation - at minimum, the phase-1 public key in
-`DEVBOX_EXTRA_AUTHORIZED_KEYS` (newline-separated).
+user. Tailscale must be up first: down means no address to write, and every compose command (`up`, `down`,
+`logs`, `shell`) refuses the empty value. Then edit `~/devbox/.env` on the workstation - at minimum, `devbox.pub`
+in `DEVBOX_EXTRA_AUTHORIZED_KEYS` (newline-separated).
 
 `.env` is gitignored **and** excluded from `devbox deploy`, so later deploys never touch it.
 
@@ -74,9 +77,16 @@ Needs `sudo`, idempotent; `--check` reports state, no changes made. Installs `ui
 creates unprivileged host user `dev:devbox`, daemon owner, and denies it in the host's sshd (its `~/.ssh` is
 the bind mount); moves `DEVBOX_DATA_DIR` to `/home/dev`, chowns
 the tree; installs the nftables table and `devbox-docker-firewall.service`, keeping project ports off the
-Tailnet and LAN, and the host's own sshd and every Tailnet peer out of the devbox's reach; enables a lingering rootless `dockerd` on
-`/run/devbox/docker.sock`, whose user manager reads its units and environment from root-owned
-`/etc/devbox-docker` rather than the bind mount.
+Tailnet and LAN, the host's own services (its sshd, anything on loopback) out of the devbox's reach, and the
+Tailnet overlay (`tailscale0`, Tailscale's address ranges) closed to it - peers' LAN and public addresses stay
+reachable like the rest of the network, and tailscaled's world-accessible LocalAPI socket can still relay to
+peers for a project container that bind-mounts it (accepted limits, `docs/security.md`); enables a lingering
+rootless `dockerd` on `/run/devbox/docker.sock`, whose user manager reads its units and environment from
+root-owned `/etc/devbox-docker` rather than the bind mount. That closes the files the devbox writes, not the
+manager itself: a project container that bind-mounts `/run/user/1001` can still drive it, bounded by the
+uid-1001 firewall rules (resolver stub only on the host, no Tailnet). A re-run restarts that manager - the
+project daemon and every project container with it - only when its drop-in changed or the running manager
+predates it.
 
 Two caveats (`docs/docker.md`):
 
@@ -174,8 +184,8 @@ idempotent; details: `docs/toolchain.md#-agent-skills-and-browser-automation`.
 | Symptom                                 | Cause and fix                                                                                                                                                                    |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `up` aborts on empty `BIND_ADDR`        | Preflight by design - Tailscale up, then `env`                                                                                                                                   |
-| `Too many authentication failures`      | Missing `IdentitiesOnly yes` in `Host devbox` block                                                                                                                              |
-| `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS` or on GitHub; restart                                                                                                                  |
+| `Too many authentication failures`      | `IdentitiesOnly yes` missing from the `Host` block, or more than its one key (`devbox.pub` / `id_<slug>.pub`)                                                                    |
+| `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS`; restart (never register `devbox.pub` on GitHub)                                                                                       |
 | herdr machine stuck `offline`           | `~/.ssh/config` no longer parses (`ssh -G devbox` names the line; herdr's system `ssh -o BatchMode=yes` logs only `connection was lost`), or 1Password locked / key not approved |
 | `Host key verification failed`          | Data dir was wiped; `ssh-keygen -R '[<workstation>]:2223'`                                                                                                                       |
 | `Permission denied` writing `/home/dev` | `${DEVBOX_DATA_DIR}` not owned by `HOST_UID:HOST_GID`                                                                                                                            |

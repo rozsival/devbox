@@ -20,8 +20,9 @@
 `#!/usr/bin/env bash` finds. The workstation's Ubuntu bash is new enough.
 
 > [!IMPORTANT]
-> Not optional: the **Devbox Laptop key in 1Password** (only `~/.ssh/devbox.pub` on disk), the two **`~/.ssh/config`
-> blocks** and a non-empty **`BIND_ADDR`**.
+> Not optional: two **1Password SSH keys** — the Devbox Laptop key and your default identity's key — with only
+> `~/.ssh/devbox.pub` and `~/.ssh/id_<slug>.pub` on disk, the two **`~/.ssh/config` blocks** and a non-empty
+> **`BIND_ADDR`**.
 
 Check the workstation in one call:
 
@@ -46,11 +47,13 @@ No private key sits on the laptop's disk — a 1Password SSH item served by the 
 It opens the devbox and nothing else. The workstation's own sshd takes a different key — your default identity's
 `id_<slug>.pub`, the GitHub key saved the same way ([Git Identities](git.md#-laptop-install)) — because 1Password
 approves a key per application, not per use: while an `ssh -A devbox` connection lasts, anything in the devbox can sign
-with the key that connection authenticated with.
+with the key that connection authenticated with. That narrows the exposure, it does not close it: an approval lasts
+until 1Password locks, so any key used through `ssh -A devbox` can sign from the devbox too. What keeps the devbox off
+the workstation's sshd is `devbox-docker-firewall` ([Docker](docker.md)); `devbox.pub` is never registered on GitHub.
 
 ```bash
 # workstation host (needed by ./bin/devbox deploy): never devbox.pub
-ssh-copy-id -i ~/.ssh/id_<slug>.pub -p 2222 <user>@<workstation>
+ssh-copy-id -f -i ~/.ssh/id_<slug>.pub -p 2222 <user>@<workstation>
 
 # devbox container: paste devbox.pub into DEVBOX_EXTRA_AUTHORIZED_KEYS in .env (step 3)
 cat ~/.ssh/devbox.pub
@@ -130,7 +133,7 @@ same on the workstation, so from then on `devbox <TAB>` works in any new shell o
 `DEVBOX_SSH_HOST`, the `~/.ssh/config` host `sync omp` and `sync identities` use for the container (default `devbox`).
 
 `env` creates `.env` from `.env.example`: `BIND_ADDR` from `tailscale ip -4`, `HOST_UID`/`HOST_GID` from `dev` (else
-current user). Edit `~/devbox/.env`, at minimum `DEVBOX_EXTRA_AUTHORIZED_KEYS` with step 1's key.
+current user). Edit `~/devbox/.env`, at minimum `DEVBOX_EXTRA_AUTHORIZED_KEYS` with `devbox.pub`.
 
 Provision the project Docker daemon once: needs `.env` present, moves `DEVBOX_DATA_DIR` to `/home/dev` under `dev`,
 refusing while the container runs (before the first `up`):
@@ -234,7 +237,7 @@ fixes. Details: [CLI Reference](cli.md#-devbox-doctor).
 
 | Variable                       | Default                | Purpose                                                         |
 | ------------------------------ | ---------------------- | --------------------------------------------------------------- |
-| `BIND_ADDR`                    | _(empty)_              | Publish address; empty = `up` refuses                           |
+| `BIND_ADDR`                    | _(empty)_              | Publish address; empty = every compose command refuses          |
 | `DEVBOX_SSH_PORT`              | `2223`                 | Host port (container always uses `2222`)                        |
 | `DEVBOX_DATA_DIR`              | `/home/dev`            | Host path; must equal container home (path identity)            |
 | `HOST_UID` / `HOST_GID`        | `1001`                 | Dedicated `dev` host user; owns the data dir and project daemon |
@@ -288,9 +291,11 @@ serving the `devbox` block only.
 
 ### `up` failed with an empty `BIND_ADDR`. Is that a bug?
 
-No — the preflight is working as intended, and a bare `docker compose` stops with `required variable BIND_ADDR is
-missing a value` for the same reason. Run `./bin/devbox env` (Tailscale up first), or set the address by hand. `0.0.0.0`
-as fallback would expose devbox publicly.
+No — the preflight is working as intended. Every compose command fails while `BIND_ADDR` is empty — `down`, `logs` and
+`shell` included, not only `up` — and a bare `docker compose` stops with `required variable BIND_ADDR is missing a
+value` for the same reason. Run `./bin/devbox env` (Tailscale up first), or set the address by hand. A box already
+published on `0.0.0.0` can't wait for that: `docker rm -f devbox` removes it without compose. `0.0.0.0` as fallback
+would expose devbox publicly.
 
 ### Does `devbox deploy` overwrite my host configuration?
 
