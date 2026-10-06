@@ -28,12 +28,14 @@ The compose mapping is the entire network boundary:
 
 ```yaml
 ports:
-  - '${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222'
+  - '${BIND_ADDR:?BIND_ADDR is empty - run ./bin/devbox env}:${DEVBOX_SSH_PORT}:2222'
   - '127.0.0.1:${DEVBOX_SSH_PORT}:2222'
 ```
 
 > [!IMPORTANT]
-> `BIND_ADDR` is **mandatory**. Left unset, `./bin/devbox up` refuses to start rather than fall back to `0.0.0.0`.
+> `BIND_ADDR` is **mandatory**. Empty, the first mapping would degrade to `:2223:2222` — `0.0.0.0`, every interface — so
+> compose itself refuses to start (`required variable BIND_ADDR is missing a value`), not just `./bin/devbox up`'s
+> preflight: a bare `docker compose up` skips the CLI.
 
 ### Why UFW cannot help
 

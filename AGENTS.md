@@ -79,7 +79,8 @@ the host's root Docker daemon.
 - `Dockerfile` - pinned toolchain; `NVM_DIR=/opt/nvm` and `COREPACK_HOME=/opt/corepack` exist because
   `/home/dev` is bind-mounted and would shadow a home-directory install; `herdr` must land in
   `/usr/local/bin` because non-interactive SSH sessions get the default PATH
-- `docker-compose.yml` - `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` is the entire network boundary; `user:`,
+- `docker-compose.yml` - `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` is the entire network boundary, written
+  `${BIND_ADDR:?...}` so compose itself refuses an empty address instead of publishing on `0.0.0.0`; `user:`,
   `cap_drop: [ALL]`, `no-new-privileges`, no root docker socket, no identity in `environment:` either - same
   reason as `.env.example`. `${DEVBOX_DOCKER_SOCKET_DIR:-/run/devbox}` mounts the *directory* because
   rootlesskit recreates the socket inode on every daemon restart, and `network_mode: bridge` keeps the

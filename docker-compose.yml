@@ -24,8 +24,11 @@ services:
       TZ: '${TZ}'
       DEVBOX_GITHUB_USER: '${DEVBOX_GITHUB_USER}'
       DEVBOX_EXTRA_AUTHORIZED_KEYS: '${DEVBOX_EXTRA_AUTHORIZED_KEYS}'
+    # `:?`, because an empty BIND_ADDR is not a smaller boundary but none: the
+    # mapping degrades to ':2223:2222', which publishes on 0.0.0.0. The CLI's
+    # preflight refuses that too, but a bare `docker compose up` skips the CLI.
     ports:
-      - '${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222'
+      - '${BIND_ADDR:?BIND_ADDR is empty - run ./bin/devbox env}:${DEVBOX_SSH_PORT}:2222'
       - '127.0.0.1:${DEVBOX_SSH_PORT}:2222'
     # docker0 is this container's own gateway (see network_mode below), so
     # `host-gateway` resolves to the address the project daemon publishes on.

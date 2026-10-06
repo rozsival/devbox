@@ -288,8 +288,9 @@ serving the `devbox` block only.
 
 ### `up` failed with an empty `BIND_ADDR`. Is that a bug?
 
-No — the preflight is working as intended. Run `./bin/devbox env` (Tailscale up first), or set the address by hand.
-`0.0.0.0` as fallback would expose devbox publicly.
+No — the preflight is working as intended, and a bare `docker compose` stops with `required variable BIND_ADDR is
+missing a value` for the same reason. Run `./bin/devbox env` (Tailscale up first), or set the address by hand. `0.0.0.0`
+as fallback would expose devbox publicly.
 
 ### Does `devbox deploy` overwrite my host configuration?
 
