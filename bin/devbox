@@ -1198,9 +1198,13 @@ step_firewall() {
 # not compared, and a negated rule would wave it through. The daemon's
 # containers reach the host one hop later, through slirp4netns - a `dev`
 # process in the host netns - so the output chain refuses new connections from
-# `dev` to any of the host's addresses. Loopback stays open: the daemon's DNS
-# goes through systemd-resolved's stub there, and no container can get to it,
-# because dockerd-rootless.sh turns off slirp4netns' host-loopback mapping.
+# `dev` to any of the host's addresses, loopback included. The one exception
+# is systemd-resolved's stub (127.0.0.53/54, port 53), which the daemon's own
+# DNS goes through. Loopback cannot stay open on the grounds that no container
+# reaches it (dockerd-rootless.sh turns off slirp4netns' host-loopback mapping):
+# any project container can bind-mount /run/user/<uid> and drive dev's systemd
+# user manager over its private bus, which then runs whatever it is told as
+# `dev` in the host netns - one loopback connection away from the host's sshd.
 #
 # Unlike the DNAT case in docs/networking.md these are ordinary host-namespace
 # sockets, so INPUT genuinely applies to them.
@@ -1234,9 +1238,10 @@ netfilter_ruleset() {
 # covers every port that daemon will ever publish, at any address.
 #
 # It also keeps the host's own services - its sshd above all - away from the
-# devbox: from its bridge only the daemon's sockets answer, and the daemon's
-# containers, which reach the host through slirp4netns as uid ${DEV_UID}, can
-# open nothing on the host's addresses but loopback.
+# devbox: from its bridge only the daemon's sockets answer, and uid ${DEV_UID} -
+# slirp4netns for the daemon's containers, and anything a container gets dev's
+# user manager to start - opens nothing on the host's addresses, loopback
+# included, but systemd-resolved's stub on port 53.
 #
 # And it keeps both off the Tailnet: no new connection from the devbox bridge or
 # from uid ${DEV_UID} through ${TAILNET_IFACE} or to a Tailscale address. Docker's
@@ -1270,8 +1275,8 @@ table inet devbox {
 
   chain output {
     type filter hook output priority filter - 10; policy accept;
-    meta skuid ${DEV_UID} ct state new fib daddr type local ip daddr != 127.0.0.0/8 drop
-    meta skuid ${DEV_UID} ct state new fib daddr type local ip6 daddr != ::1 drop
+    meta skuid ${DEV_UID} ct state new ip daddr { 127.0.0.53, 127.0.0.54 } meta l4proto { tcp, udp } th dport 53 accept
+    meta skuid ${DEV_UID} ct state new fib daddr type local drop
     meta skuid ${DEV_UID} ct state new oifname "${TAILNET_IFACE}" drop
     meta skuid ${DEV_UID} ct state new ip daddr ${TAILNET_IPV4} drop
     meta skuid ${DEV_UID} ct state new ip6 daddr ${TAILNET_IPV6} drop
@@ -1405,12 +1410,14 @@ step_socket_dir() {
 # configuration from ~/.config and ~/.local/share - the devbox bind mount. A
 # unit there outranks the root-owned one below, drop-ins and wants links from
 # there are merged in, and environment.d feeds every unit's environment: so
-# anything in the container could change the daemon's flags - turn
-# slirp4netns' host-loopback mapping back on, say, and reach the host's sshd
-# past step_netfilter - or have the host run a service of its own as dev at
-# the next boot. This drop-in moves both directories somewhere root-owned. A
-# running manager keeps the environment it started with, so it only takes
-# effect from the manager's next start.
+# anything in the container could rewrite the daemon's command line or have
+# the host run a service of its own as dev at every boot, without ever
+# touching the daemon's API. This drop-in moves both directories somewhere
+# root-owned. It closes the files, not the manager's bus: a project container
+# that bind-mounts /run/user/<uid> can still start units as dev, which is why
+# step_netfilter holds dev's uid, not just the daemon's sockets. A running
+# manager keeps the environment it started with, so it only takes effect from
+# the manager's next start.
 #
 # A function because `doctor host` compares the installed file against it.
 manager_dropin() {
