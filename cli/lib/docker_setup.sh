@@ -171,6 +171,9 @@ step_sshd() {
     log_success "${SSHD_DROPIN} current"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
     fail "${SSHD_DROPIN} missing or stale - a key written into /home/dev from the devbox could open a host login as ${DEV_USER}"
+    # Nothing was written, so sshd -T below would only add a misleading
+    # "lacks Include" failure on top of this one.
+    return 0
   else
     # Validated before anything is written as well as after: a configuration
     # sshd already rejects would otherwise be blamed on this file, and removed
