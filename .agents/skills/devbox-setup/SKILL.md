@@ -73,7 +73,7 @@ ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'
 Needs `sudo`, idempotent; `--check` reports state, no changes made. Installs `uidmap`, `slirp4netns`;
 creates unprivileged host user `dev:devbox`, daemon owner; moves `DEVBOX_DATA_DIR` to `/home/dev`, chowns
 the tree; installs the nftables table and `devbox-docker-firewall.service`, keeping project ports off the
-Tailnet and LAN and the host's own sshd out of the devbox's reach; enables a lingering rootless `dockerd` on
+Tailnet and LAN, and the host's own sshd and every Tailnet peer out of the devbox's reach; enables a lingering rootless `dockerd` on
 `/run/devbox/docker.sock`, whose user manager reads its units and environment from root-owned
 `/etc/devbox-docker` rather than the bind mount.
 

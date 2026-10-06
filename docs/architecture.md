@@ -30,17 +30,17 @@ flowchart LR
 
 ## 🧩 Components
 
-| Component                      | Where                                                 | Role                                                                                                                           |
-| ------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `devbox` container             | `docker-compose.yml`, `Dockerfile`                    | `ubuntu:26.04` plus the pinned toolchain; runs as `dev`, `cap_drop: [ALL]`, `no-new-privileges`                                |
-| `sshd`                         | `container/sshd_config`                               | Unprivileged, pubkey-only, container port `2222`, published as `${BIND_ADDR}:2223` and `127.0.0.1:2223`                        |
-| `/home/dev`                    | `${DEVBOX_DATA_DIR}` on the host, also `/home/dev`    | Bind mount: dotfiles, keys, `~/.config/devbox`, `~/projects`, project Docker data — survives rebuilds                          |
-| `/opt/devbox/{container,home}` | `./container`, `./home` mounted read-only             | Entrypoint, bootstrap and the templates bootstrap installs into `/home/dev`                                                    |
-| Project Docker daemon          | Host user `dev` (uid 1001), `/run/devbox/docker.sock` | Rootless `dockerd` from `sudo ./bin/devbox docker setup`; the socket _directory_ is bind-mounted in                            |
-| `devbox-docker-firewall`       | nftables table plus a systemd unit on the host        | Keeps published project ports off every interface but loopback and `docker0`, and the host's own services away from the devbox |
-| Identity registry              | `~/.config/devbox/identities.conf`                    | Who the box is, per account and directory tree; read only through `devbox-identities`                                          |
-| Agent launchers                | `~/.local/libexec/devbox-agent`                       | `omp`/`claude` symlinks that fence agent git to HTTPS, a bot author and per-operation tokens                                   |
-| `./bin/devbox`                 | `cli/` → generated `bin/devbox`                       | One CLI for workstation and laptop; see [CLI reference](cli.md)                                                                |
+| Component                      | Where                                                 | Role                                                                                                                                                       |
+| ------------------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `devbox` container             | `docker-compose.yml`, `Dockerfile`                    | `ubuntu:26.04` plus the pinned toolchain; runs as `dev`, `cap_drop: [ALL]`, `no-new-privileges`                                                            |
+| `sshd`                         | `container/sshd_config`                               | Unprivileged, pubkey-only, container port `2222`, published as `${BIND_ADDR}:2223` and `127.0.0.1:2223`                                                    |
+| `/home/dev`                    | `${DEVBOX_DATA_DIR}` on the host, also `/home/dev`    | Bind mount: dotfiles, keys, `~/.config/devbox`, `~/projects`, project Docker data — survives rebuilds                                                      |
+| `/opt/devbox/{container,home}` | `./container`, `./home` mounted read-only             | Entrypoint, bootstrap and the templates bootstrap installs into `/home/dev`                                                                                |
+| Project Docker daemon          | Host user `dev` (uid 1001), `/run/devbox/docker.sock` | Rootless `dockerd` from `sudo ./bin/devbox docker setup`; the socket _directory_ is bind-mounted in                                                        |
+| `devbox-docker-firewall`       | nftables table plus a systemd unit on the host        | Keeps published project ports off every interface but loopback and `docker0`, the host's own services away from the devbox, and the devbox off the Tailnet |
+| Identity registry              | `~/.config/devbox/identities.conf`                    | Who the box is, per account and directory tree; read only through `devbox-identities`                                                                      |
+| Agent launchers                | `~/.local/libexec/devbox-agent`                       | `omp`/`claude` symlinks that fence agent git to HTTPS, a bot author and per-operation tokens                                                               |
+| `./bin/devbox`                 | `cli/` → generated `bin/devbox`                       | One CLI for workstation and laptop; see [CLI reference](cli.md)                                                                                            |
 
 `network_mode: bridge` keeps the container on `docker0`, the one interface the project-port boundary admits, and which
 — unlike a compose-managed bridge — is not removed by `down`.

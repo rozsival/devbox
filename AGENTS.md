@@ -209,8 +209,10 @@ the host's root Docker daemon.
     `docker0` (`--ip` covers only the default bridge, so the unit also passes `--default-network-opt` and the
     table backs both up) and the host's own services out of the devbox's reach (from `docker0` only the daemon's
     sockets answer; its containers, leaving through slirp4netns as uid 1001 in the host netns, open nothing on
-    the host's addresses but loopback - `doctor host` fails until the loaded file matches the ruleset the
-    checkout writes), adds the one `ufw` rule that lets the devbox bridge reach the gateway, and runs a
+    the host's addresses but loopback) and both off the Tailnet (no new connection from `docker0` or uid 1001
+    through `tailscale0` or to `100.64.0.0/10`/`fd7a:115c:a1e0::/48`, evaluated after Docker's DNAT so a
+    root-daemon port on the host's Tailscale address still works) - `doctor host` fails until the loaded file
+    matches the ruleset the checkout writes, adds the one `ufw` rule that lets the devbox bridge reach the gateway, and runs a
     lingering rootless `dockerd` on `/run/devbox/docker.sock` from a root-owned unit in `/etc/systemd/user`,
     so nothing in the bind mount can rewrite the daemon's command line - plus a `user@1001.service` drop-in
     pointing dev's `XDG_CONFIG_HOME`/`XDG_DATA_HOME` at root-owned `/etc/devbox-docker`, since the user

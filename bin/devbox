@@ -935,6 +935,12 @@ readonly NFT_UNIT="/etc/systemd/system/${NFT_SERVICE}"
 # is the one host address the container can reach, and it exists whenever the
 # host docker daemon does. Resolved at run time because a host may set `bip`.
 readonly DEVBOX_BRIDGE='docker0'
+# Tailscale's interface and the ranges it hands out: the CGNAT block for IPv4
+# and its own ULA prefix for IPv6. Neither the devbox nor its project
+# containers need the Tailnet - only Tailnet peers need to reach the devbox.
+readonly TAILNET_IFACE='tailscale0'
+readonly TAILNET_IPV4='100.64.0.0/10'
+readonly TAILNET_IPV6='fd7a:115c:a1e0::/48'
 # 65536 ids is the useradd default and what the daemon maps container uids into.
 readonly SUBID_RANGE='165536-231071'
 
@@ -1144,6 +1150,17 @@ step_firewall() {
 # Unlike the DNAT case in docs/networking.md these are ordinary host-namespace
 # sockets, so INPUT genuinely applies to them.
 #
+# And it keeps both off the Tailnet. Peers reach the devbox (its sshd is
+# published on the Tailscale address), but nothing in it needs to reach a peer,
+# and a forwarded agent plus a peer's sshd is a way off this machine. So no new
+# connection leaves the bridge, or leaves as `dev`, through the Tailscale
+# interface or towards a Tailscale address; replies to inbound sessions are
+# established, so they pass. Both run after Docker's DNAT, so a root-daemon
+# port published on the host's Tailscale address - the local LLMs - is already
+# rewritten to its container and never matches. The address rules also cover
+# tailscaled being down: the address is then no longer local and a packet to
+# it would follow the default route out to the ISP.
+#
 # Its own `inet` table at a lower priority than ufw's chains, so the two never
 # touch each other's rules; ufw still needs its one allow rule, because a table
 # accepting a packet does not exempt it from later tables.
@@ -1166,6 +1183,11 @@ netfilter_ruleset() {
 # containers, which reach the host through slirp4netns as uid ${DEV_UID}, can
 # open nothing on the host's addresses but loopback.
 #
+# And it keeps both off the Tailnet: no new connection from the devbox bridge or
+# from uid ${DEV_UID} through ${TAILNET_IFACE} or to a Tailscale address. Docker's
+# DNAT runs first, so a root-daemon port published on the host's Tailscale
+# address still works - it has become a container address by then.
+#
 # The conntrack rule is load-bearing: with --detach-netns the daemon runs in the
 # *host* netns, so every reply to a pull, a DNS lookup or an outbound connection
 # also lands on a socket in this slice. Without it the daemon has no egress at
@@ -1184,10 +1206,20 @@ table inet devbox {
     socket cgroupv2 level 2 "user.slice/user-${DEV_UID}.slice" drop
   }
 
+  chain forward {
+    type filter hook forward priority filter - 10; policy accept;
+    iifname "${DEVBOX_BRIDGE}" ct state new oifname "${TAILNET_IFACE}" drop
+    iifname "${DEVBOX_BRIDGE}" ct state new ip daddr ${TAILNET_IPV4} drop
+    iifname "${DEVBOX_BRIDGE}" ct state new ip6 daddr ${TAILNET_IPV6} drop
+  }
+
   chain output {
     type filter hook output priority filter - 10; policy accept;
     meta skuid ${DEV_UID} ct state new fib daddr type local ip daddr != 127.0.0.0/8 drop
     meta skuid ${DEV_UID} ct state new fib daddr type local ip6 daddr != ::1 drop
+    meta skuid ${DEV_UID} ct state new oifname "${TAILNET_IFACE}" drop
+    meta skuid ${DEV_UID} ct state new ip daddr ${TAILNET_IPV4} drop
+    meta skuid ${DEV_UID} ct state new ip6 daddr ${TAILNET_IPV6} drop
   }
 }
 NFT_BODY

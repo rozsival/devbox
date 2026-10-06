@@ -136,7 +136,10 @@ new boundary to audit each time. SSH forwarding needs no configuration and inher
 ### Does the container get its own IP on the Tailnet?
 
 No — it sits on Docker's default bridge (`docker0`); the Tailnet terminates on the host, DNATing in. Outbound internet
-works normally.
+works normally; outbound to the Tailnet does not — `devbox-docker-firewall` drops every new connection from `docker0`
+through `tailscale0` or to a Tailscale address, so a peer can reach the devbox but the devbox can't reach a peer. A port
+the host's root daemon publishes on the host's own Tailscale address still works, rewritten to its container on the
+host ([Docker](docker.md#2-the-boundary)).
 
 ### Is IPv6 published?
 
@@ -147,3 +150,5 @@ No — only the IPv4 Tailscale address from `tailscale ip -4` and `127.0.0.1`.
 No — the rootless daemon publishes on the devbox bridge gateway, not `0.0.0.0`; `devbox-docker-firewall` blocks `INPUT`
 outside loopback and that bridge (see [Why UFW cannot help](#why-ufw-cannot-help)), overriding even a port spec's
 default. So `ports: ['5432:5432']` reaches only the devbox and host — see [Docker](docker.md).
+Nor can they reach a Tailnet peer: as uid 1001 in the host's namespace, their traffic meets the same table's output
+rules.

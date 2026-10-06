@@ -39,8 +39,8 @@ Four facts:
    publishes project ports on the devbox bridge gateway (`--ip` plus `--default-network-opt`, since `--ip`
    alone covers only the default bridge). `devbox-docker-firewall` - nftables matching the daemon's socket
    cgroup - holds the line regardless: even an explicit `0.0.0.0:` port never reaches the Tailnet or the
-   LAN, and neither the devbox nor its project containers reach the host's own services, sshd included
-   (`docs/docker.md`).
+   LAN, and neither the devbox nor its project containers reach the host's own services, sshd included, or
+   any other Tailnet machine - peers reach the devbox, never the reverse (`docs/docker.md`).
 
 ## The four ways in
 

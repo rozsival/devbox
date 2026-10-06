@@ -103,10 +103,20 @@ table inet devbox {
     socket cgroupv2 level 2 "user.slice/user-1001.slice" drop
   }
 
+  chain forward {
+    type filter hook forward priority filter - 10; policy accept;
+    iifname "docker0" ct state new oifname "tailscale0" drop
+    iifname "docker0" ct state new ip daddr 100.64.0.0/10 drop
+    iifname "docker0" ct state new ip6 daddr fd7a:115c:a1e0::/48 drop
+  }
+
   chain output {
     type filter hook output priority filter - 10; policy accept;
     meta skuid 1001 ct state new fib daddr type local ip daddr != 127.0.0.0/8 drop
     meta skuid 1001 ct state new fib daddr type local ip6 daddr != ::1 drop
+    meta skuid 1001 ct state new oifname "tailscale0" drop
+    meta skuid 1001 ct state new ip daddr 100.64.0.0/10 drop
+    meta skuid 1001 ct state new ip6 daddr fd7a:115c:a1e0::/48 drop
   }
 }
 ```
@@ -129,6 +139,15 @@ chain refusing new connections from uid 1001 to any of the host's addresses. Loo
 DNS goes through systemd-resolved's stub there, and no container reaches it: `dockerd-rootless.sh` turns off
 slirp4netns' host-loopback mapping. Ports the host's root daemon publishes are untouched, DNATed to their containers
 before this table sees the packet.
+
+And it keeps both off the Tailnet. Peers reach the devbox — its sshd is published on the Tailscale address — but nothing
+in it needs to reach a peer, and a forwarded agent plus a peer's sshd is a way off this machine. So no new connection
+leaves `docker0`, or leaves as uid 1001, through `tailscale0` or towards a Tailscale address (`100.64.0.0/10`,
+`fd7a:115c:a1e0::/48`); replies to your inbound sessions are established and pass. Docker's DNAT runs before both
+chains, so a root-daemon port published on the host's Tailscale address — a local LLM server, say — has already become
+a container address and never matches: that traffic stays on the host. The address rules also cover `tailscaled` being
+down, when the host's Tailscale address stops being local and a packet to it would follow the default route out to the
+ISP.
 
 It lives in its own `inet` table at lower priority than ufw's chains, so neither touches the other's rules; ufw still
 needs its allow rule, since a packet accepted in one table isn't exempt from later ones.
@@ -295,6 +314,18 @@ should come back empty:
 ```bash
 ssh devbox 'timeout 3 bash -c "</dev/tcp/host.docker.internal/2222" && echo reachable'
 ssh devbox 'docker run --rm alpine:3 nc -w 3 <workstation-lan-ip> 2222 </dev/null'
+```
+
+### Can the devbox reach other machines on my Tailnet?
+
+No — it is reachable _from_ the Tailnet, never the other way. `devbox-docker-firewall` drops every new connection from
+`docker0` or uid 1001 through `tailscale0` or to a Tailscale address. A service the host's root daemon publishes on the
+host's own Tailscale address still works, and never leaves the host: Docker rewrites it to the container first. Both
+checks should come back empty (a peer's Tailscale IP from `tailscale status`):
+
+```bash
+ssh devbox 'timeout 3 bash -c "</dev/tcp/<peer-tailscale-ip>/22" && echo reachable'
+ssh devbox 'docker run --rm alpine:3 ping -c1 -W2 <peer-tailscale-ip>'
 ```
 
 ### Why does `doctor` say `devbox-docker-firewall is inactive` after a reboot?
