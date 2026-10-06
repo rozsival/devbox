@@ -88,6 +88,16 @@ herdr's connection. GitHub `Host`/`Match` blocks come from `~/.config/devbox/ide
 `Host github.com` block naming the key most identities on it share, plus a `Match host github.com tagged <slug>` block
 per identity whose key differs — see [Git Identities](git.md#-laptop-install).
 
+`Host <workstation>` may name the default identity's `id_<slug>.pub` instead of `devbox.pub`, if that is the key
+authorized on the host; `devbox doctor laptop` accepts either. `Host devbox` must name `devbox.pub`.
+
+> [!NOTE]
+> On a laptop set up with [rozsival/dotfiles](https://github.com/rozsival/dotfiles), none of this is written by hand:
+> `~/.ssh/config` is a tracked file symlinked from that repo (`Host *`, the workstation, `devbox`), and `dot identities`
+> renders the GitHub blocks into `~/.ssh/config.d/identities`, together with `~/.gitconfig`, `allowed_signers` and the
+> `id_*`/`signing_*.pub` files. Change them there — the registry plus `dot identities`, or the dotfiles repo — never
+> in place.
+
 > [!IMPORTANT]
 > `IdentitiesOnly yes` is load-bearing: without it the agent offers every key, and the server rejects with
 > `Too many authentication failures` first.
@@ -201,6 +211,8 @@ native install owns `~/.local/bin/claude`, so the launchers cannot live there):
 ```bash
 export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"
 ```
+
+On a [dotfiles](https://github.com/rozsival/dotfiles) laptop, `~/.config/bash/env.sh` already puts the launchers first.
 
 It reports whether `omp` and `claude` resolve to their launchers, and prints the remaining manual steps per identity: a
 `GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env`, and — for any identity with an `app` directory set — its GitHub

@@ -1,7 +1,8 @@
 # Seeded once by container/bootstrap.sh (devbox) and `devbox agent install` (laptop)
 # when absent; OMP owns the file afterwards. An existing file is never touched -
 # both installers say so when it lacks the `bash:` block below, so you can copy
-# the block in by hand.
+# the block in by hand. dotfiles seeds its own preset first and carries a copy of
+# this block (`dot doctor` flags drift): change it here, then mirror it there.
 
 # `secrets.enabled` obfuscates any API key found in the environment - from
 # ~/.config/devbox/secrets.env or a project .env - before it can reach a provider.

@@ -23,15 +23,15 @@
 
 Everything lives on the `/home/dev` bind mount, so it survives container/image rebuilds, established once per host.
 
-| Secret                                           | Lives in                                                             | Established by                                                                                             |
-| ------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| SSH identity public keys (one pair per identity) | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `pubkey`/`signing_pubkey` in `~/.config/devbox/identities.conf` — no private key present |
-| `gh` tokens, one per identity                    | `~/.config/devbox/secrets.env`                                       | you, one fine-grained GitHub PAT per identity                                                              |
-| Model API keys for OMP                           | `~/.config/devbox/secrets.env`                                       | you, plain values                                                                                          |
-| Claude Code login                                | `~/.claude/.credentials.json`                                        | you, once, `/login` in a `claude` session ([below](#-claude-code-login))                                   |
-| GitHub App credentials (per identity, optional)  | the directory that identity's `app` field names                      | you, `app-id` + `app.pem` at mode 600 ([Git Identities](git.md#devbox-git-credential))                     |
-| Per-project secrets                              | `<project>/.env`                                                     | you, rendered on the laptop                                                                                |
-| GCP service-account key                          | `~/.config/gcloud/<gcp-project>-*.json`                              | you, one per project, mode 600                                                                             |
+| Secret                                           | Lives in                                                                       | Established by                                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| SSH identity public keys (one pair per identity) | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing)           | `bootstrap`, from `pubkey`/`signing_pubkey` in `~/.config/devbox/identities.conf` — no private key present |
+| `gh` tokens, one per identity                    | `~/.config/devbox/secrets.env`                                                 | you, one fine-grained GitHub PAT per identity                                                              |
+| Model API keys for OMP                           | `~/.config/devbox/secrets.env` (devbox only: nothing exports it on the laptop) | you, plain values                                                                                          |
+| Claude Code login                                | `~/.claude/.credentials.json`                                                  | you, once, `/login` in a `claude` session ([below](#-claude-code-login))                                   |
+| GitHub App credentials (per identity, optional)  | the directory that identity's `app` field names                                | you, `app-id` + `app.pem` at mode 600 ([Git Identities](git.md#devbox-git-credential))                     |
+| Per-project secrets                              | `<project>/.env`                                                               | you, rendered on the laptop                                                                                |
+| GCP service-account key                          | `~/.config/gcloud/<gcp-project>-*.json`                                        | you, one per project, mode 600                                                                             |
 
 ---
 
@@ -196,7 +196,11 @@ approval interactively. A `claude` that bypasses the launcher (absolute path) wo
 `git` itself in an agent session uses a different credential path from `gh` above: the agent launchers'
 `agent.gitconfig` and `devbox-git-credential`. See [Git Identities](git.md#-agent-sessions) for the mechanism; this page
 covers only where those secrets live — `~/.config/devbox/secrets.env` and each identity's `app` directory
-(`{app-id,app.pem}`) on the laptop too, read there by its copy of the helper (`./bin/devbox agent install`).
+(`{app-id,app.pem}`) on the laptop too, read there by its copy of the helper (`./bin/devbox agent install`). On the
+devbox, `~/.bashrc.d/devbox.sh` sources the file under `set -a` into every shell, which is how OMP sees model keys; the
+laptop installs no such rc line, so there `devbox-gh-token` and the credential helper read only the `GH_TOKEN_<SLUG>`
+lines, by name, and model keys in it are unused. Neither copy travels: `devbox sync` carries `identities.conf` and the
+OMP preset, not secrets.
 
 ---
 

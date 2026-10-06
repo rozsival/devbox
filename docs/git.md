@@ -365,14 +365,18 @@ bootstraps from:
 | `~/.config/devbox/secrets.env`            | Created from the example if absent and never overwritten either                                                                                                                                       |
 
 The installer reads or edits nothing of yours in either file. It does **not** touch `~/.ssh/config` or `~/.gitconfig` —
-both are hand-maintained here (below); `bootstrap` renders them on the devbox because nothing there is meant to be
-hand-edited.
+on the laptop they are yours (below); `bootstrap` renders them on the devbox because nothing there is meant to be
+hand-edited. Yours to write by hand, or to have rendered: a laptop set up with
+[rozsival/dotfiles](https://github.com/rozsival/dotfiles) gets both from `dot identities`, which calls the same
+`devbox-identities render …` functions shown below — there, edit `identities.conf` and re-run it rather than editing the
+output.
 
 ### The launchers on your `PATH`
 
 On the laptop the launchers need their own directory, first on your `PATH`, holding nothing but the two symlinks:
 `~/.local/bin` cannot carry them, because Claude's native install owns `~/.local/bin/claude` and re-points it on every
-update. Add, as the last line of `~/.zshrc`/`~/.bashrc` (after anything that prepends `~/.local/bin`):
+update. Add, as the last line of `~/.zshrc`/`~/.bashrc` (after anything that prepends `~/.local/bin`; dotfiles'
+`env.sh` already does this):
 
 ```bash
 export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"
@@ -394,8 +398,10 @@ Reference](cli.md#-devbox-doctor)).
 
 ### `~/.ssh/config`
 
-Not installed by this repo either — `devbox-identities render ssh-config` prints exactly what it should contain, to copy
-in by hand (`devbox doctor laptop` checks the result, not what produced it). One plain `Host <host>` block per forge,
+Not installed by this repo either — `devbox-identities render ssh-config` prints the forge part (the `Host`/`Match`
+blocks below plus a `Host *` with `ServerAliveInterval`), to copy in by hand or `Include`; the 1Password `IdentityAgent`
+and the workstation/`devbox` blocks ([Installation](installation.md#2-add-the-sshconfig-blocks)) are yours to add.
+`devbox doctor laptop` checks the result, not what produced it. One plain `Host <host>` block per forge,
 one `Match host <host> tagged <slug>` per identity whose key differs from the plain one, `IdentityAgent` on `Host *`
 pointing at 1Password:
 
@@ -441,8 +447,8 @@ includeIf "hasconfig:remote.*.url:https://github.com/your-org/**"   → org-work
 ```
 
 `devbox-identities org-urls work` prints the three patterns for an identity's `orgs`;
-`devbox-identities render org-gitconfig work` prints the file they point at — any file, e.g.
-`~/.config/work/org.gitconfig`:
+`devbox-identities render org-gitconfig work` prints the file they point at — any path; the devbox keeps them in
+`~/.config/devbox/git/`, dotfiles in `~/.config/git/identities/`, both named `org-<slug>.gitconfig`:
 
 ```
 [user]
@@ -467,8 +473,8 @@ Both machines hold the same `identities.conf`. `./bin/devbox sync identities [ss
 devbox (keeping one `identities.conf.bak` there), validates it locally with `devbox-identities check` first so a broken
 file never lands, then re-runs `container/bootstrap.sh` so `~/.ssh/config`, `~/.gitconfig`'s `user-*`/`org-*` includes,
 the agent gitconfigs and `allowed_signers` catch up — the same regeneration `./bin/devbox bootstrap` does on its own,
-and just as idempotent. The laptop's own `~/.ssh/config` and `~/.gitconfig` are yours to keep in sync by hand;
-`devbox doctor laptop` is what notices drift.
+and just as idempotent. The laptop's own `~/.ssh/config` and `~/.gitconfig` follow by hand, or by `dot identities` on a
+dotfiles laptop; `devbox doctor laptop` is what notices drift.
 
 ---
 

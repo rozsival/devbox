@@ -16,6 +16,12 @@ credential helper and `devbox-identities` are not generated and stay bash 3.2 co
 Blocks, rationale: `docs/installation.md` (key, ssh config), `docs/git.md` (identities, agent override, signing).
 Read the needed section, not retyped, so a changed default gets picked up, not reintroduced.
 
+A laptop set up with rozsival/dotfiles (`~/.ssh/config` a symlink into it, `~/.gitconfig` whose first line
+names `dot identities`) owns phases 1-3 differently: `id_*`/`signing_*.pub`, the GitHub ssh blocks,
+`~/.gitconfig` with its includes and `allowed_signers` are rendered by `dot identities` from `identities.conf` -
+fix the registry and re-run it, never edit the output; `Host *`/`<workstation>`/`devbox` are edited in the dotfiles
+repo's `home/.ssh/config`. Phases 4-5 apply unchanged.
+
 ## Phase 1 - keys: 1Password items, public halves on disk
 
 One 1Password SSH Key item per identity's authentication key and per identity's signing key, plus the
@@ -26,7 +32,7 @@ file names follow from them:
 | -------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `id_<slug>.pub`      | that identity's auth key    | `Host <host>` (plain) or `Match host <host> tagged <slug>` (its own key)                                           |
 | `signing_<slug>.pub` | that identity's signing key | `~/.gitconfig` `user.signingkey` (default) or `user-<slug>.gitconfig`/`org-<slug>.gitconfig`; GitHub _Signing_ key |
-| `devbox.pub`         | Devbox Laptop               | `Host <workstation>`, `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS`                                                |
+| `devbox.pub`         | Devbox Laptop               | `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS`; `Host <workstation>` (or the default's `id_<slug>.pub`)             |
 
 Auth/signing are separate files: GitHub registers each separately, per account - signing with auth key
 verifies locally, shows _Unverified_ on GitHub.
@@ -61,20 +67,22 @@ tag replaces it.
 ## Phase 3 - gitconfigs
 
 Commits sign through 1Password (`gpg.ssh.program = op-ssh-sign`), signing key named by file so laptop and
-devbox read it alike. Two kinds of block in `~/.gitconfig`, both hand-maintained, both checked by
-`devbox doctor laptop` against a fresh `devbox-identities render …`:
+devbox read it alike. Two kinds of block in `~/.gitconfig`, hand-maintained unless dotfiles renders them, both
+checked by `devbox doctor laptop` against a fresh `devbox-identities render …`:
 
 ```
 ~/.gitconfig                    user.signingkey = ~/.ssh/signing_personal.pub, gpg.format = ssh,
                                  commit.gpgsign = true, gpg.ssh.allowedSignersFile = ~/.ssh/allowed_signers,
-                                 includeIf gitdir:~/projects/work/ → ~/.config/work/user.gitconfig
+                                 includeIf gitdir:~/projects/work/ → <dir>/user-work.gitconfig
                                  includeIf hasconfig:remote.*.url:git@github.com:your-org/**       (+ 2 more URL forms)
-                                                                  → ~/.config/work/org.gitconfig
-~/.config/work/user.gitconfig   user.name/email for work (gitdir: - a tree fallback, no ssh tag)
-~/.config/work/org.gitconfig    user.name/email for work, core.sshCommand = ssh -P work (hasconfig: - the
+                                                                  → <dir>/org-work.gitconfig
+<dir>/user-work.gitconfig       user.name/email for work (gitdir: - a tree fallback, no ssh tag)
+<dir>/org-work.gitconfig        user.name/email for work, core.sshCommand = ssh -P work (hasconfig: - the
                                  org's repos, wherever cloned)
 ~/.ssh/allowed_signers          one line per identity: <email> <key type> <key>
 ```
+
+`<dir>` is any directory: the devbox uses `~/.config/devbox/git`, dotfiles `~/.config/git/identities`.
 
 `devbox-identities org-urls work` prints the three `hasconfig:` patterns for `work`'s `orgs`;
 `devbox-identities render user-gitconfig work` / `render org-gitconfig work` print the two files' content -
@@ -100,7 +108,7 @@ the `cp` command for it, because the example is valid and would otherwise become
 does it edit your shell rc: the launchers directory must come before `~/.local/bin` on the PATH - Claude's
 native install owns `~/.local/bin/claude` and re-points it on every update - so add the line it prints,
 `export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"`, after anything that prepends
-`~/.local/bin`, then open a new shell.
+`~/.local/bin`, then open a new shell. A dotfiles laptop already has it (`~/.config/bash/env.sh`).
 
 The agent gitconfigs are _rendered_ from the registry, not copied: `~/.config/devbox/git/agent.gitconfig`
 plus one `agent-<slug>.gitconfig` per identity claiming a `dir` (all of them - an inherited author is
@@ -125,7 +133,8 @@ checks.
 `devbox agent install` also seeds `~/.omp/agent/config.yml` when absent - `bash.patterns` denying the obvious
 reach past the scoped tokens (`gh auth token|login|…`, keychain reads, force push). An existing config is
 never edited; one without a `bash:` block is listed as a manual step (copy the block from
-`home/.omp/agent/config.yml`). It is a guardrail, not a boundary: on the laptop an agent runs as you and can
+`home/.omp/agent/config.yml`). On a dotfiles laptop its own seed lands first, carrying a copy of that block
+that `dot doctor` compares against this template. It is a guardrail, not a boundary: on the laptop an agent runs as you and can
 still reach your `gh` login or 1Password by other means - `docs/security.md`, accepted limit 7.
 
 A session's git config is the file `GIT_CONFIG_GLOBAL` names, so any `git config --global …` in its
@@ -144,8 +153,9 @@ authored wrongly need `git commit --amend --reset-author` (or `rebase -x`) plus 
   fine-grained, `contents: write` on repos agents push to without the App, plus `actions`/`checks` read,
   `issues`/`pull-requests` write if agents should post, `workflows` write only if agents should push
   `.github/workflows/` changes (otherwise GitHub rejects that push). Used by the credential helper for App-less repos,
-  by `gh` in agent sessions. Same file/variables as devbox; only PATs belong here - model keys come from
-  OMP's own config, Claude Code from its login.
+  by `gh` in agent sessions. Same file and variable names as the devbox, but nothing on the laptop exports
+  it (the devbox's `~/.bashrc.d/devbox.sh` does): only the `GH_TOKEN_<SLUG>` lines are read, by name. Model
+  keys come from OMP's own config, Claude Code from its login.
 - Per identity with an `app` field in `identities.conf`: `<app-dir>/app-id`, `<app-dir>/app.pem`
   (mode 600) - the credential helper mints a repo-scoped installation token (cached ≤30 min on tmpfs) for
   agent git on a repo the App is installed on, ahead of the PAT, and the `gh` shim uses the same token for

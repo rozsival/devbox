@@ -42,7 +42,8 @@ agents inside — the container is the agent sandbox.
 **Requires** a workstation running Ubuntu 26.04 LTS with Docker and Tailscale, the **Devbox Laptop key in 1Password**
 (only `~/.ssh/devbox.pub` on disk), the two **`~/.ssh/config` blocks**, a non-empty **`BIND_ADDR`** and **bash >= 4.2
 on the laptop** (`brew install bash`; macOS ships 3.2, which the generated `bin/devbox` refuses) — see
-[Installation](docs/installation.md).
+[Installation](docs/installation.md). A laptop set up with [dotfiles](https://github.com/rozsival/dotfiles) has the
+key, the blocks and bash already.
 
 From the laptop:
 
@@ -50,6 +51,7 @@ From the laptop:
 ./bin/devbox install                                                  # devbox + bash completion on this laptop's PATH
 ./bin/devbox deploy <workstation>                                     # sync the repo to ~/devbox (and `devbox` there too)
 ssh <workstation> 'cd ~/devbox && ./bin/devbox env'                   # .env from .env.example, BIND_ADDR from Tailscale
+ssh -t <workstation> 'nano ~/devbox/.env'                             # DEVBOX_EXTRA_AUTHORIZED_KEYS: ~/.ssh/devbox.pub
 ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'  # once: project Docker, asks for a password
 ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
 herdr machine add devbox --label "Devbox"                             # once the ~/.ssh/config blocks exist

@@ -35,7 +35,9 @@ the host's root Docker daemon.
    (the workstation has no Ruby, which is why the generated script is committed). Workstation and laptop share
    this one CLI, each command side-guarded by a bashly `filters:` entry; the laptop needs bash >= 4.2 (macOS
    `/bin/bash` is 3.2, so `brew install bash`). Bodies keep `log_info`/`log_success`/`log_warn`/`log_error`
-   from `cli/lib/log.sh`; `container/` scripts stay hand-written bash with `set -euo pipefail`
+   from `cli/lib/log.sh`; `container/` scripts stay hand-written bash with `set -euo pipefail`. Read a flag
+   whose name has an inner dash with a quoted key, `${args['--allow-unguarded']}`: shfmt reads an unquoted
+   subscript as arithmetic and rewrites it to `--allow - unguarded`, a key bashly never sets
 3. **Pinned versions only** - every external binary comes from an explicit `ARG <TOOL>_VERSION` and is
    checksum-verified where upstream publishes a checksum file. Never invent a hash
 4. **No root in the container** - no `privileged`, no `cap_add`, no `/var/run/docker.sock` mount. `sshd` runs

@@ -36,6 +36,7 @@ fmt: ## Format shell (shfmt), Markdown and YAML (prettier)
 lint: ## Lint shell (shellcheck) and parse the laptop-side scripts with /bin/bash
 	shellcheck $(SH_LINT)
 	for f in $(SH_BASH32); do /bin/bash -n "$$f"; done
+	@! grep -rnE 'args\[--[a-z0-9]+( - [a-z0-9]+)+' cli || { echo 'cli/: shfmt split these flag keys; quote them (AGENTS.md rule 2)' >&2; exit 1; }
 
 check: fmt-check lint build-check ## Everything CI would run; changes nothing
 

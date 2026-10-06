@@ -1,12 +1,14 @@
 # Identity registry: who this machine is, per directory tree.
 #
-# Installed as ~/.config/devbox/identities.conf by container/bootstrap.sh (devbox)
-# and `devbox agent install` (laptop), then never overwritten - it is yours to edit.
+# Copy to ~/.config/devbox/identities.conf yourself - neither container/bootstrap.sh
+# (devbox) nor `devbox agent install` (laptop) creates it, because this example is
+# valid and would silently become your git identity. Nothing ever overwrites it.
 # Both machines need it and both must hold the same file: the devbox derives
 # ~/.ssh/config, ~/.gitconfig, the agent gitconfigs, allowed_signers and the
 # per-account token routing from it, while the laptop's agent override and
-# `devbox doctor laptop` read it to check the same wiring. `devbox sync identities`
-# copies the laptop's copy over. Not a secret - no token and no private key
+# `devbox doctor laptop` read it to check the same wiring (and dotfiles'
+# `dot identities` renders the laptop's ssh and git config from it).
+# `devbox sync identities` copies the laptop's copy over. Not a secret - no token and no private key
 # belongs here; those live in secrets.env and in 1Password respectively.
 #
 # One `[slug]` block per identity, any number of them. The slug is lowercase

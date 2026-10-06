@@ -11,7 +11,9 @@ phases later is almost always an earlier phase left unverified.
 
 Command/config blocks live in `docs/installation.md` - read the section pointed to, not from memory, so a changed
 default gets picked up. Phases 1-2 are the laptop's share of a larger layout (GitHub keys, gitconfigs, the
-agent git override, tokens) owned by `devbox-laptop`; `./bin/devbox doctor laptop` checks it.
+agent git override, tokens) owned by `devbox-laptop`; `./bin/devbox doctor laptop` checks it. A laptop set up
+with rozsival/dotfiles has phases 1-2 done by its `workstation-setup` skill: verify with the phase checks; its
+`~/.ssh/config` is a symlink into the dotfiles repo (`home/.ssh/config`), so a change there is a commit there.
 
 ## Phase 1 - the laptop key (on the laptop)
 
@@ -35,7 +37,8 @@ unworkable: a dedicated passphrase-less file key (documented).
 
 Two `Host` entries, same machine, different ports: `2222` the workstation's sshd (needed by
 `devbox deploy`), `2223` the container's. Copy both blocks verbatim from
-`docs/installation.md#2-add-the-sshconfig-blocks`; the field people drop and debug for an hour is
+`docs/installation.md#2-add-the-sshconfig-blocks` (the workstation block may name the default identity's
+`id_<slug>.pub` instead, if that key is the one authorized there); the field people drop and debug for an hour is
 `IdentitiesOnly yes` - without it the agent offers every key it holds and the server rejects with
 `Too many authentication failures` before the right one.
 
@@ -55,21 +58,9 @@ user. Tailscale must be up first: down means no address to write, and `up` refus
 edit `~/devbox/.env` on the workstation - at minimum, the phase-1 public key in
 `DEVBOX_EXTRA_AUTHORIZED_KEYS` (newline-separated).
 
-Do phase 4 **before** the first `up`: it moves the data directory, refuses while the container's up.
-
-```bash
-ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
-```
-
-`doctor` is phase 3's acceptance test: compose; `BIND_ADDR` vs Tailscale; something on
-`BIND_ADDR:${DEVBOX_SSH_PORT}` and **nothing** on `0.0.0.0`; container health; PID 1 `dev`; project Docker
-daemon answering, rootless; `host.docker.internal` resolving; project-port boundary service active; toolchain
-probes - exits non-zero on any failure.
-
 `.env` is gitignored **and** excluded from `devbox deploy`, so later deploys never touch it.
 
-If the node's Tailscale address changes later, `doctor` reports `BIND_ADDR is X but Tailscale reports Y`;
-re-run `./bin/devbox env && ./bin/devbox up`.
+Next is phase 4, not `up`: project Docker moves the data directory and refuses while the container runs.
 
 ## Phase 4 - project Docker (on the workstation, once)
 
@@ -90,7 +81,19 @@ Two caveats (`docs/docker.md`):
 - **`DEVBOX_DATA_DIR` must end up as `/home/dev`.** The daemon resolves a project's bind mounts as host
   paths - both sides must agree, or every relative mount silently resolves to an empty directory.
 
-Check: the Docker probes in `./bin/devbox doctor`, then `ssh devbox 'docker run --rm hello-world'`.
+Then start the container:
+
+```bash
+ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
+```
+
+`doctor` is the acceptance test for phases 3 and 4: compose; `BIND_ADDR` vs Tailscale; something on
+`BIND_ADDR:${DEVBOX_SSH_PORT}` and **nothing** on `0.0.0.0`; container health; PID 1 `dev`; project Docker
+daemon answering, rootless; `host.docker.internal` resolving; project-port boundary service active; toolchain
+probes - exits non-zero on any failure. Then `ssh devbox 'docker run --rm hello-world'`.
+
+If the node's Tailscale address changes later, `doctor` reports `BIND_ADDR is X but Tailscale reports Y`;
+re-run `./bin/devbox env && ./bin/devbox up`.
 
 ## Phase 5 - attach herdr and finish the identity steps
 
