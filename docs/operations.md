@@ -18,9 +18,9 @@ Repeatable and non-destructive: `.env`, `${DEVBOX_DATA_DIR}`, identity public ke
 `bootstrap` re-runs as a no-op. Verify with `./bin/devbox keys` — public keys and host-key fingerprint must match before
 and after.
 
-A deploy that changes the boundary ruleset in `cli/lib/docker_setup.sh` also needs
-`ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'` — until then the host keeps the old table, and
-`doctor` says so.
+A deploy that changes `cli/lib/docker_setup.sh` — the boundary ruleset, the daemon's unit, its user manager's drop-in —
+also needs `ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'`: until then the host keeps the old
+files. `doctor` flags a stale ruleset or drop-in; `sudo ./bin/devbox docker setup --check` reports every piece.
 
 Use `rebuild` over `up` for a cache-free image after a pinned version changes:
 

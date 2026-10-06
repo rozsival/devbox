@@ -212,7 +212,11 @@ the host's root Docker daemon.
     the host's addresses but loopback - `doctor host` fails until the loaded file matches the ruleset the
     checkout writes), adds the one `ufw` rule that lets the devbox bridge reach the gateway, and runs a
     lingering rootless `dockerd` on `/run/devbox/docker.sock` from a root-owned unit in `/etc/systemd/user`,
-    so nothing in the bind mount can rewrite the daemon's command line
+    so nothing in the bind mount can rewrite the daemon's command line - plus a `user@1001.service` drop-in
+    pointing dev's `XDG_CONFIG_HOME`/`XDG_DATA_HOME` at root-owned `/etc/devbox-docker`, since the user
+    manager would otherwise read units, drop-ins, wants links and `environment.d` from the bind mount (the
+    unit therefore passes `--data-root` itself, and root makes the wants link `systemctl --user enable` no
+    longer can)
   - `devbox sync omp` - copies `~/.omp/agent/config.yml` into the devbox over `Host devbox`; only the preset,
     never the per-machine OMP state. Refuses (without `--allow-unguarded`) a file lacking a top-level `bash:`
     block, since the copy replaces the devbox's whole file and would drop its seeded guardrail. The flag is not

@@ -21,6 +21,18 @@ readonly SOCKET_DIR='/run/devbox'
 readonly SOCKET="${SOCKET_DIR}/docker.sock"
 readonly TMPFILES_CONF='/etc/tmpfiles.d/devbox-docker.conf'
 readonly UNIT='/etc/systemd/user/docker.service'
+# dev's systemd user manager reads units, drop-ins, wants links and
+# environment.d from XDG_CONFIG_HOME and XDG_DATA_HOME - by default ~/.config
+# and ~/.local/share, the devbox bind mount. step_daemon points both at these
+# root-owned directories instead (see manager_dropin).
+readonly MANAGER_DIR='/etc/devbox-docker'
+readonly MANAGER_CONFIG="${MANAGER_DIR}/config"
+readonly MANAGER_DATA="${MANAGER_DIR}/share"
+readonly MANAGER_DROPIN="/etc/systemd/system/user@${DEV_UID}.service.d/devbox-docker.conf"
+readonly WANTS_LINK="${MANAGER_CONFIG}/systemd/user/default.target.wants/docker.service"
+# Stated in the unit rather than derived from XDG_DATA_HOME, which no longer
+# points into /home/dev.
+readonly DATA_ROOT="${DEV_HOME}/.local/share/docker"
 readonly NFT_CONF='/etc/nftables.d/devbox-docker.nft'
 readonly NFT_SERVICE='devbox-docker-firewall.service'
 readonly NFT_UNIT="/etc/systemd/system/${NFT_SERVICE}"
@@ -396,6 +408,28 @@ step_socket_dir() {
 }
 
 # -- 6. The daemon itself -----------------------------------------------------
+# The daemon runs under dev's systemd user manager, and that manager takes its
+# configuration from ~/.config and ~/.local/share - the devbox bind mount. A
+# unit there outranks the root-owned one below, drop-ins and wants links from
+# there are merged in, and environment.d feeds every unit's environment: so
+# anything in the container could change the daemon's flags - turn
+# slirp4netns' host-loopback mapping back on, say, and reach the host's sshd
+# past step_netfilter - or have the host run a service of its own as dev at
+# the next boot. This drop-in moves both directories somewhere root-owned. A
+# running manager keeps the environment it started with, so it only takes
+# effect from the manager's next start.
+#
+# A function because `doctor host` compares the installed file against it.
+manager_dropin() {
+  cat <<DROPIN
+# Managed by ./bin/devbox docker setup - do not edit.
+# dev's systemd user manager reads its units, drop-ins and environment.d here,
+# not from /home/dev - the devbox bind mount.
+[Service]
+Environment=XDG_CONFIG_HOME=${MANAGER_CONFIG} XDG_DATA_HOME=${MANAGER_DATA}
+DROPIN
+}
+
 step_daemon() {
   if loginctl show-user "${DEV_USER}" -p Linger --value 2>/dev/null | grep -qx yes; then
     log_success "linger enabled for ${DEV_USER}"
@@ -417,8 +451,7 @@ step_daemon() {
   # Prerequisites only (newuidmap, subordinate ids, kernel support). The tool's
   # `install` path would write the unit into ~/.config/systemd/user - the
   # bind-mounted home, where anything in the container could rewrite the
-  # daemon's own command line - and enable it from there, leaving a wants-link
-  # that fights the root-owned unit below.
+  # daemon's own command line - and enable it from there.
   if [[ "${CHECK_ONLY}" != 'true' ]]; then
     as_dev dockerd-rootless-setuptool.sh check >/dev/null ||
       log_error 'dockerd-rootless-setuptool.sh check failed - see its output above'
@@ -441,7 +474,8 @@ step_daemon() {
     cat <<UNIT_BODY
 # Managed by ./bin/devbox docker setup - do not edit. Root-owned on purpose: this file
 # holds the daemon's command line, and /home/dev is writable from inside the
-# devbox container. Modelled on dockerd-rootless-setuptool.sh's own template.
+# devbox container. Modelled on dockerd-rootless-setuptool.sh's own template;
+# --data-root is explicit because XDG_DATA_HOME no longer points into /home/dev.
 [Unit]
 Description=Docker Application Container Engine (Rootless, devbox projects)
 Documentation=https://docs.docker.com/go/rootless/
@@ -450,7 +484,8 @@ Requires=dbus.socket
 [Service]
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/usr/bin/dockerd-rootless.sh --host unix://${SOCKET} --ip ${gateway} \\
-  --default-network-opt bridge=com.docker.network.bridge.host_binding_ipv4=${gateway}
+  --default-network-opt bridge=com.docker.network.bridge.host_binding_ipv4=${gateway} \\
+  --data-root ${DATA_ROOT}
 ExecReload=/bin/kill -s HUP \$MAINPID
 TimeoutSec=0
 RestartSec=2
@@ -480,14 +515,46 @@ UNIT_BODY
     install -d -m 755 "$(dirname "${UNIT}")"
     printf '%s\n' "${want_unit}" >"${UNIT}"
     chmod 644 "${UNIT}"
-    # A unit the setup tool enabled in an earlier layout would shadow this one.
-    rm -f "${DEV_HOME}/.config/systemd/user/docker.service" \
-      "${DEV_HOME}/.config/systemd/user/default.target.wants/docker.service"
     systemctl --user --machine="${DEV_USER}@.host" daemon-reload
     unit_changed='true'
   fi
 
+  # The manager's own configuration directories: root-owned, empty but for the
+  # wants link that starts the daemon at boot. Root makes that link - `systemctl
+  # --user enable` cannot, since the manager runs as dev - and it is written
+  # before the drop-in below, so a restarted manager finds the unit current.
+  if [[ -L "${WANTS_LINK}" && "$(readlink "${WANTS_LINK}")" == "${UNIT}" ]]; then
+    log_success "${WANTS_LINK} present"
+  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
+    fail "${WANTS_LINK} missing - the daemon would not start at boot"
+  else
+    log_info "Linking ${WANTS_LINK}..."
+    install -d -m 755 "${MANAGER_DIR}" "${MANAGER_CONFIG}" "${MANAGER_CONFIG}/systemd" \
+      "${MANAGER_CONFIG}/systemd/user" "$(dirname "${WANTS_LINK}")" "${MANAGER_DATA}"
+    ln -sfn "${UNIT}" "${WANTS_LINK}"
+  fi
+
+  local manager_changed='false'
+  if [[ "$(cat "${MANAGER_DROPIN}" 2>/dev/null)" == "$(manager_dropin)" ]]; then
+    log_success "${MANAGER_DROPIN} current"
+  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
+    fail "${MANAGER_DROPIN} missing or stale - dev's user manager reads its configuration from the bind mount"
+  else
+    log_info "Writing ${MANAGER_DROPIN}..."
+    install -d -m 755 "$(dirname "${MANAGER_DROPIN}")"
+    manager_dropin >"${MANAGER_DROPIN}"
+    chmod 644 "${MANAGER_DROPIN}"
+    systemctl daemon-reload
+    manager_changed='true'
+  fi
+
   if [[ "${CHECK_ONLY}" == 'true' ]]; then
+    if systemctl --user --machine="${DEV_USER}@.host" show-environment 2>/dev/null |
+      grep -qx "XDG_CONFIG_HOME=${MANAGER_CONFIG}"; then
+      log_success "dev's user manager reads ${MANAGER_DIR}"
+    else
+      fail "dev's user manager still reads its configuration from ${DEV_HOME} - it predates the drop-in"
+    fi
     if [[ -S "${SOCKET}" ]]; then
       log_success "${SOCKET} live"
     else
@@ -495,14 +562,26 @@ UNIT_BODY
     fi
     return 0
   fi
-  log_info 'Enabling and starting the daemon...'
-  systemctl --user --machine="${DEV_USER}@.host" enable --now docker
-  # `enable --now` leaves an already-running daemon alone, so a rewritten unit
-  # would keep serving the old socket path until the next reboot.
-  if [[ "${unit_changed}" == 'true' ]]; then
+  # Inert once the manager reads elsewhere - removed so nothing suggests
+  # otherwise: what the setup tool's own layout and this step's earlier
+  # `systemctl --user enable` left in the bind mount.
+  rm -f "${DEV_HOME}/.config/systemd/user/docker.service" \
+    "${DEV_HOME}/.config/systemd/user/default.target.wants/docker.service"
+  if [[ "${manager_changed}" == 'true' ]]; then
+    # Restarts the daemon, and every project container with it (those with a
+    # restart policy come back); PartOf= also reloads the step_netfilter table.
+    log_info "Restarting user@${DEV_UID}.service so dev's user manager reads ${MANAGER_DIR} - project containers restart with the daemon..."
+    systemctl restart "user@${DEV_UID}.service"
+  elif [[ "${unit_changed}" == 'true' ]]; then
+    # `start` leaves an already-running daemon alone, so a rewritten unit would
+    # keep serving the old command line until the next reboot.
     log_info 'Restarting the daemon to pick up the new unit...'
     systemctl --user --machine="${DEV_USER}@.host" restart docker
   fi
+  log_info 'Starting the daemon...'
+  systemctl --user --machine="${DEV_USER}@.host" start docker
+  systemctl --user --machine="${DEV_USER}@.host" show-environment | grep -qx "XDG_CONFIG_HOME=${MANAGER_CONFIG}" ||
+    log_error "dev's user manager does not read ${MANAGER_DIR} - check: systemctl cat user@${DEV_UID}.service"
   local waited=0
   until [[ -S "${SOCKET}" ]] || ((waited >= 100)); do
     sleep 0.2

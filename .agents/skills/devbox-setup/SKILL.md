@@ -74,7 +74,8 @@ Needs `sudo`, idempotent; `--check` reports state, no changes made. Installs `ui
 creates unprivileged host user `dev:devbox`, daemon owner; moves `DEVBOX_DATA_DIR` to `/home/dev`, chowns
 the tree; installs the nftables table and `devbox-docker-firewall.service`, keeping project ports off the
 Tailnet and LAN and the host's own sshd out of the devbox's reach; enables a lingering rootless `dockerd` on
-`/run/devbox/docker.sock`.
+`/run/devbox/docker.sock`, whose user manager reads its units and environment from root-owned
+`/etc/devbox-docker` rather than the bind mount.
 
 Two caveats (`docs/docker.md`):
 

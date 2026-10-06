@@ -97,7 +97,8 @@ These are known and deliberate, not gaps to be closed later:
    through that socket, including one bind-mounting a host path — but only as unprivileged `dev`: world-readable host
    files to read, only `dev`-owned files to write, never host root, the root daemon, or your home directory (`750`,
    untraversable by `dev`). The price of `docker compose up` inside the box — why the daemon gets its own dedicated
-   account.
+   account. The daemon's own configuration stays out of reach: dev's systemd user manager reads its units and
+   `environment.d` from root-owned `/etc/devbox-docker`, not from the bind mount.
 6. **A project port is one firewall rule away from the Tailnet.** Rootless Docker binds every published port on
    `0.0.0.0`, with no way to change that — `devbox-docker-firewall`, an nftables table dropping input to that daemon's
    sockets outside loopback and the devbox bridge, confines them, and keeps the host's own services away from the

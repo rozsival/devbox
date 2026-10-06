@@ -63,10 +63,12 @@ container's hardening untouched: nothing in `docker-compose.yml` was relaxed.
 | `/etc/tmpfiles.d/devbox-docker.conf`                                      | `/run/devbox` must exist _before_ the daemon starts: rootlesskit copy-ups `/run`, symlinking only what's already there; tmpfiles recreates it on boot                                                                                                                                                 |
 | `loginctl enable-linger dev`                                              | A never-logged-in account gets no systemd user manager, so the daemon couldn't boot or survive                                                                                                                                                                                                        |
 | Unit in `/etc/systemd/user`, owned by root                                | `dockerd-rootless-setuptool.sh install` would put it in `~/.config/systemd/user` on the bind mount, letting the container rewrite the daemon's command line; the script runs only for its prerequisite `check`, owning the unit itself                                                                |
+| `user@1001.service` drop-in → `/etc/devbox-docker`                        | dev's user manager reads units, drop-ins, wants links and `environment.d` from `XDG_CONFIG_HOME`/`XDG_DATA_HOME` — by default the bind mount. Pointed at root-owned directories (the wants link starting the daemon included), the container can't change the daemon's flags or add a host service    |
 | `/etc/nftables.d/devbox-docker.nft` plus `devbox-docker-firewall.service` | The publish boundary and the one around the host's own services, the non-obvious piece ([below](#-where-a-published-port-is-bound))                                                                                                                                                                   |
 
-`./bin/devbox doctor` checks `host.docker.internal` resolves and the boundary service is active with the ruleset this
-checkout writes — a project port silently exposed on every interface gets reported, not discovered.
+`./bin/devbox doctor` checks `host.docker.internal` resolves, the boundary service is active with the ruleset this
+checkout writes, and the daemon's user manager reads the root-owned directories — a project port silently exposed on
+every interface, or a daemon configuration the container can edit, gets reported, not discovered.
 
 ## 🧱 Where a published port is bound
 
@@ -312,6 +314,13 @@ isn't.
 
 The daemon is down or unprovisioned. On the host: `sudo ./bin/devbox docker setup --check`, then
 `systemctl --user --machine=dev@.host status docker` for its log.
+
+### Where does the project daemon's `daemon.json` go?
+
+`/etc/devbox-docker/config/docker/daemon.json`, written as root, then
+`sudo systemctl --user --machine=dev@.host restart docker`. `~/.config/docker/daemon.json` is ignored on purpose:
+anything in the devbox can write the bind mount, and a daemon configuration it controls could turn off the boundaries
+this page describes. Same for units and `environment.d`: dev's user manager reads them from `/etc/devbox-docker`.
 
 ### What if a service is running but nothing in the devbox can reach its port?
 

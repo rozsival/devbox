@@ -247,6 +247,28 @@ doctor_host() {
     log_success 'project port boundary active and current (devbox-docker-firewall)'
   fi
 
+  # The daemon's own configuration has to stay out of the container's reach:
+  # dev's user manager reads its units and environment.d from the root-owned
+  # directories the drop-in names, never from the bind mount. The file is
+  # world-readable, the manager's live environment is not, so its start time
+  # stands in - a manager started before the drop-in was written still reads
+  # /home/dev.
+  local manager_pid manager_age dropin_age
+  manager_pid="$(systemctl show "user@${DEV_UID}.service" -p MainPID --value 2>/dev/null || true)"
+  if [[ "$(cat "${MANAGER_DROPIN}" 2>/dev/null)" != "$(manager_dropin)" ]]; then
+    fail "${MANAGER_DROPIN} is missing or stale - the project daemon's user manager reads its configuration from the bind mount:"' sudo ./bin/devbox docker setup'
+  elif [[ -z "${manager_pid}" || "${manager_pid}" == 0 ]]; then
+    fail "user@${DEV_UID}.service is not running, so neither is the project daemon:"' sudo ./bin/devbox docker setup'
+  else
+    manager_age="$(ps -o etimes= -p "${manager_pid}" | tr -d ' ')"
+    dropin_age=$(($(date +%s) - $(stat -c %Y "${MANAGER_DROPIN}")))
+    if ((manager_age > dropin_age)); then
+      fail "user@${DEV_UID}.service predates ${MANAGER_DROPIN}, so it still reads ${DEV_HOME}:"' sudo ./bin/devbox docker setup'
+    else
+      log_success "project daemon's user manager reads root-owned ${MANAGER_DIR}, not the bind mount"
+    fi
+  fi
+
   log_info 'devbox command'
   devbox_command_checks
 
