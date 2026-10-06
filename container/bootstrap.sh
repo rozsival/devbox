@@ -146,7 +146,7 @@ if ${identities_ok}; then
   # authentication and signing keys separately and each account uses a different
   # key for each; signing with the auth key verifies locally and shows
   # Unverified on GitHub. Agent git never uses the forwarded agent: it goes over
-  # HTTPS with per-operation tokens (§12).
+  # HTTPS with per-operation tokens (§13).
   mkdir -p "${SSH_DIR}"
   chmod 700 "${SSH_DIR}"
   for slug in ${slugs}; do
@@ -291,13 +291,13 @@ if ${identities_ok}; then
 
   # -- 8. allowed_signers -----------------------------------------------------
   # So `git log --show-signature` verifies your own commits locally; agent
-  # commits are unsigned by design (§12).
+  # commits are unsigned by design (§13).
   di_render_allowed_signers >"${SSH_DIR}/allowed_signers"
   chmod 644 "${SSH_DIR}/allowed_signers"
 
   # -- 9. GitHub App credentials ----------------------------------------------
   # Secrets: bootstrap creates each `app` directory and never fetches the
-  # contents. The credential helper (§12) mints a repository-scoped installation
+  # contents. The credential helper (§13) mints a repository-scoped installation
   # token from them for every git operation on a repository the App is installed
   # on, and falls back to that identity's PAT everywhere else.
   for slug in ${slugs}; do

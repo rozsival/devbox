@@ -486,7 +486,9 @@ doctor_laptop() {
       key_probe="$(ssh -v -o BatchMode=yes -o ConnectTimeout=10 -o ControlPath=none -o IdentityAgent=none \
         -o IdentitiesOnly=yes -i "${SSH_DIR}/devbox.pub" "${workstation_host}" true 2>&1 || true)"
       if [[ ${key_probe} == *"Server accepts key: ${SSH_DIR}/devbox.pub"* ]]; then
-        fail "${workstation_host} accepts devbox.pub - take it out of that account's ~/.ssh/authorized_keys: 1Password approves it for every ssh -A devbox, so anything in the devbox could log in to the host with it"
+        # Ordered: devbox.pub may be the only key that account takes today, and
+        # removing it first would lock the laptop out of the workstation.
+        fail "${workstation_host} accepts devbox.pub - 1Password approves it for every ssh -A devbox, so anything in the devbox could log in to the host with it. First authorize ~/.ssh/id_${default_slug:-<default>}.pub on ${workstation_host} and point Host ${workstation_host} in ~/.ssh/config at it, until 'ssh ${workstation_host} true' passes; only then take devbox.pub out of that account's ~/.ssh/authorized_keys"
       elif [[ ${key_probe} == *"Offering public key: ${SSH_DIR}/devbox.pub"* ]]; then
         log_success "${workstation_host} refuses devbox.pub"
       else
