@@ -16,7 +16,7 @@
 > blast radius. See [Security Model](security.md).
 
 | Layer                  | Holds                                    | Scope of a leak                                    |
-|------------------------|------------------------------------------|----------------------------------------------------|
+| ---------------------- | ---------------------------------------- | -------------------------------------------------- |
 | Identity (public keys) | `~/.ssh/id_<slug>.pub`, one per identity | none alone — selects the forwarded key GitHub sees |
 | Box-wide tools         | `~/.config/devbox/secrets.env`           | the tools' credentials                             |
 | Per project            | that project's `.env`                    | one project                                        |
@@ -24,7 +24,7 @@
 Everything lives on the `/home/dev` bind mount, so it survives container/image rebuilds, established once per host.
 
 | Secret                                           | Lives in                                                             | Established by                                                                                             |
-|--------------------------------------------------|----------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
+| ------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | SSH identity public keys (one pair per identity) | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `pubkey`/`signing_pubkey` in `~/.config/devbox/identities.conf` — no private key present |
 | `gh` tokens, one per identity                    | `~/.config/devbox/secrets.env`                                       | you, one fine-grained GitHub PAT per identity                                                              |
 | Model API keys for OMP                           | `~/.config/devbox/secrets.env`                                       | you, plain values                                                                                          |
@@ -39,12 +39,12 @@ Everything lives on the `/home/dev` bind mount, so it survives container/image r
 
 `bootstrap` prints exactly what's left; nothing below is automated, since it all needs a browser or a secret.
 
-| # | Step                         | Details                                                                                                                                                                                                                                  |
-|---|------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1 | Set identity public keys     | Set each identity's `pubkey` (authentication) and `signing_pubkey` (signing) in `~/.config/devbox/identities.conf` to the laptop's public keys, already on GitHub — the devbox registers nothing. See [Git Identities](git.md#-signing). |
-| 2 | Fill `secrets.env`           | Fill `~/.config/devbox/secrets.env` with a `GH_TOKEN_<SLUG>` per identity, and model API keys — fine-grained, scoped as below (see [`gh`](#gh)). `gh` picks tokens up immediately; reconnect so model keys reach open shells.            |
-| 3 | Place GitHub App credentials | If configured, place any identity's GitHub App credentials in the directory its `app` field names (`app-id`, `app.pem` at mode 600) — see [Agent git credentials](#-agent-git-credentials).                                              |
-| 4 | Log Claude Code in           | Once: `claude` in a pane, then `/login` — see [Claude Code login](#-claude-code-login).                                                                                                                                                  |
+| #   | Step                         | Details                                                                                                                                                                                                                                  |
+| --- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Set identity public keys     | Set each identity's `pubkey` (authentication) and `signing_pubkey` (signing) in `~/.config/devbox/identities.conf` to the laptop's public keys, already on GitHub — the devbox registers nothing. See [Git Identities](git.md#-signing). |
+| 2   | Fill `secrets.env`           | Fill `~/.config/devbox/secrets.env` with a `GH_TOKEN_<SLUG>` per identity, and model API keys — fine-grained, scoped as below (see [`gh`](#gh)). `gh` picks tokens up immediately; reconnect so model keys reach open shells.            |
+| 3   | Place GitHub App credentials | If configured, place any identity's GitHub App credentials in the directory its `app` field names (`app-id`, `app.pem` at mode 600) — see [Agent git credentials](#-agent-git-credentials).                                              |
+| 4   | Log Claude Code in           | Once: `claude` in a pane, then `/login` — see [Claude Code login](#-claude-code-login).                                                                                                                                                  |
 
 ---
 
@@ -76,7 +76,7 @@ shell never sources it; your `gh` keeps its OAuth login. Fill it with every iden
 a git identity, one mental model for both. With the example registry from `identities.conf.example`:
 
 | Working directory    | Variable            | Identity           |
-|----------------------|---------------------|--------------------|
+| -------------------- | ------------------- | ------------------ |
 | everywhere else      | `GH_TOKEN_PERSONAL` | personal (default) |
 | `~/projects/work/**` | `GH_TOKEN_WORK`     | work               |
 
@@ -86,7 +86,7 @@ Every identity gets its own `GH_TOKEN_<SLUG>` — `<SLUG>` is its slug upper-cas
 Minimum useful permissions:
 
 | Permission             | Level     | When                                                                                                                                    |
-|------------------------|-----------|-----------------------------------------------------------------------------------------------------------------------------------------|
+| ---------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `contents`             | **write** | repos agents push to without the GitHub App installed — agent git falls back to this PAT (see [Git Identities](git.md#-agent-sessions)) |
 | `actions` / `checks`   | **read**  | always (the minimum useful set)                                                                                                         |
 | issues / pull-requests | **write** | only if agents should post                                                                                                              |
@@ -115,7 +115,7 @@ invocation makes the account follow the tree.
 Resolution order inside `devbox-gh-token`, first hit wins:
 
 | Order | Source                                                                                                     |
-|-------|------------------------------------------------------------------------------------------------------------|
+| ----- | ---------------------------------------------------------------------------------------------------------- |
 | 1     | an explicit `GH_TOKEN` in the environment — a deliberate one-off, and what a pre-split `secrets.env` holds |
 | 2     | the identity's variable in the environment, from a shell that sourced `secrets.env`                        |
 | 3     | the same variable read **directly out of `secrets.env`**                                                   |
@@ -244,7 +244,7 @@ project — in a box built for unattended agents, the largest, least contained c
 ADC resolves in three steps, first hit wins:
 
 | Order | Source                                                  | Note                                          |
-|-------|---------------------------------------------------------|-----------------------------------------------|
+| ----- | ------------------------------------------------------- | --------------------------------------------- |
 | 1     | `GOOGLE_APPLICATION_CREDENTIALS`                        | path to a JSON key or external-account config |
 | 2     | `~/.config/gcloud/application_default_credentials.json` | the well-known user file                      |
 | 3     | the GCE/GKE/Cloud Run metadata server                   | absent in this container                      |

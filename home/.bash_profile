@@ -12,6 +12,7 @@
 # So: run ~/.profile as the distro intends, then let devbox.sh's own function
 # reassert the order it wants.
 if [ -f "$HOME/.profile" ]; then
+  # shellcheck source=/dev/null # the distro's file, not repo content
   . "$HOME/.profile"
 fi
 

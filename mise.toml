@@ -1,0 +1,6 @@
+# Repo tooling that is not a system package: `make` runs prettier through `mise exec`, which installs anything
+# missing; run `mise trust` once. shfmt, shellcheck and bashly come from Homebrew (docs/development.md).
+
+[tools]
+node = "24"
+"npm:prettier" = "3.9.9"

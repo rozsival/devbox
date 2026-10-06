@@ -40,7 +40,7 @@ sudo ./bin/devbox docker setup      # then, as your own user:
 ## 🚫 Why not the two obvious options
 
 | Option                              | What it actually grants                                                       |
-|-------------------------------------|-------------------------------------------------------------------------------|
+| ----------------------------------- | ----------------------------------------------------------------------------- |
 | Mount `/var/run/docker.sock`        | Host root. The API can start a container that bind-mounts `/` and adds caps   |
 | Nested daemon in the devbox         | Needs setuid `newuidmap`, which `cap_drop: ALL` + `no-new-privileges` prevent |
 | Privileged sidecar `dind`           | Same as the first row, one indirection later                                  |
@@ -54,7 +54,7 @@ container's hardening untouched: nothing in `docker-compose.yml` was relaxed.
 ## 🧰 What the prep script does
 
 | Piece                                                                     | What it does and why                                                                                                                                                                                                                      |
-|---------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `uidmap`, `slirp4netns`                                                   | `newuidmap` maps subordinate ids; without it, one uid only, so privilege-dropping images (postgres, redis, node) can't start                                                                                                              |
 | Host user `dev:devbox`, uid 1001                                          | The daemon's authority ceiling: a dedicated account keeps your home, SSH keys and sudo out of reach                                                                                                                                       |
 | `DEVBOX_DATA_DIR` → `/home/dev`                                           | Path identity ([below](#-path-identity)); refuses mid-run, since it's just a `mv` plus `chown` — nothing recreated or lost                                                                                                                |
@@ -142,9 +142,8 @@ because the bind mount sits at `/home/dev` on the host too, hence `DEVBOX_DATA_D
 > path.
 
 Ownership follows suit: the rootless daemon maps container `root` to uid 1001 (`dev` inside the container), so files a
-container writes into a bind mount are yours. A container dropping to its own unprivileged user (postgres runs as uid
-
-999) writes files owned by a subordinate id, unreadable by `dev` — normal rootless behaviour.
+container writes into a bind mount are yours. A container dropping to its own unprivileged user (postgres runs as
+uid 999) writes files owned by a subordinate id, unreadable by `dev` — normal rootless behaviour.
 
 > [!TIP]
 > Keep database data directories in **named volumes**, inside the daemon's own storage, avoiding this.
@@ -153,11 +152,11 @@ container writes into a bind mount are yours. A container dropping to its own un
 
 Three ways, in order of preference:
 
-| # | Route                                           | How                                                                                                                                                                                                                                                                                                                       |
-|---|-------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1 | From another container in the same stack        | Unchanged: compose networks and service DNS work as on a laptop; `postgres:5432` resolves                                                                                                                                                                                                                                 |
-| 2 | Via `host.docker.internal`, from a devbox shell | Every port published _on the gateway_ (a `ports:` entry with no explicit host address) is reachable there: the name resolves to the devbox bridge gateway, the boundary table's one admitted interface. An entry naming `127.0.0.1` isn't — see [A compose file that binds 127.0.0.1](#-a-compose-file-that-binds-127001) |
-| 3 | Via `localhost`, from a devbox shell            | Run `devbox-ports`, forwarding `127.0.0.1:<port>` to `host.docker.internal:<port>` for every gateway-published port, one `socat` per port. A loopback-bound publish is skipped with a warning naming the container, since a forward there relays to nothing                                                               |
+| #   | Route                                           | How                                                                                                                                                                                                                                                                                                                       |
+| --- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | From another container in the same stack        | Unchanged: compose networks and service DNS work as on a laptop; `postgres:5432` resolves                                                                                                                                                                                                                                 |
+| 2   | Via `host.docker.internal`, from a devbox shell | Every port published _on the gateway_ (a `ports:` entry with no explicit host address) is reachable there: the name resolves to the devbox bridge gateway, the boundary table's one admitted interface. An entry naming `127.0.0.1` isn't — see [A compose file that binds 127.0.0.1](#-a-compose-file-that-binds-127001) |
+| 3   | Via `localhost`, from a devbox shell            | Run `devbox-ports`, forwarding `127.0.0.1:<port>` to `host.docker.internal:<port>` for every gateway-published port, one `socat` per port. A loopback-bound publish is skipped with a warning naming the container, since a forward there relays to nothing                                                               |
 
 ```bash
 docker compose up -d
@@ -226,7 +225,7 @@ file.
 ## 📌 Versions
 
 | Piece          | Pin                                   | Where                        |
-|----------------|---------------------------------------|------------------------------|
+| -------------- | ------------------------------------- | ---------------------------- |
 | Docker CLI     | `DOCKER_CLI_VERSION` (static tarball) | `Dockerfile`                 |
 | Compose plugin | `DOCKER_COMPOSE_VERSION` (+ checksum) | `Dockerfile`                 |
 | Buildx plugin  | `DOCKER_BUILDX_VERSION` (+ checksum)  | `Dockerfile`                 |

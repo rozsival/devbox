@@ -164,7 +164,7 @@ idempotent; details: `docs/toolchain.md#-agent-skills-and-browser-automation`.
 ## When setup does not work
 
 | Symptom                                 | Cause and fix                                                                                                                                                                    |
-|-----------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `up` aborts on empty `BIND_ADDR`        | Preflight by design - Tailscale up, then `env`                                                                                                                                   |
 | `Too many authentication failures`      | Missing `IdentitiesOnly yes` in `Host devbox` block                                                                                                                              |
 | `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS` or on GitHub; restart                                                                                                                  |

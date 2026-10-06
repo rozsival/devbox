@@ -10,7 +10,7 @@
 ## 🧱 Boundaries
 
 | Boundary                   | Enforced by                                                                                                                                            |
-|----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | No host filesystem access  | Only `${DEVBOX_DATA_DIR}` mounted, at `/home/dev` (see accepted limit 5)                                                                               |
 | No host root Docker daemon | `/var/run/docker.sock` not mounted; reachable daemon is rootless                                                                                       |
 | No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true`                                                                           |
@@ -39,7 +39,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox logs | grep "Server listening"'  
 Authority is enumerated, not ambient: each credential is scoped, separately revocable, separately attributable.
 
 | Purpose                                          | Credential                                                               | Reach                                                      |
-|--------------------------------------------------|--------------------------------------------------------------------------|------------------------------------------------------------|
+| ------------------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
 | Agent git (clone, pull, push, commit)            | per-repository GitHub App installation token, else a fine-grained PAT    | App: one repo, 1h. PAT: its named repos, `contents: write` |
 | Manual git, incl. signing (you)                  | the laptop's 1Password agent, forwarded per connection (`ssh -A devbox`) | same as your laptop; the container stores no private key   |
 | Agent `gh` on one repository (PRs, issues, runs) | that repository's GitHub App installation token, else the PAT below      | App: one repo, 1h (cached ≤30 min on tmpfs)                |
@@ -124,7 +124,7 @@ reading them stays allowed; `env -i` prompts instead, since this repo's own smok
 ## 🚫 Deliberate boundaries
 
 | Boundary                          | Rationale                                                                                                                                                                                                                                                                                                                   |
-|-----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **No host _root_ Docker socket**  | Mounting `/var/run/docker.sock` would hand the sandbox host root, voiding the container's point. Projects needing containers get a sibling rootless daemon owned by a dedicated unprivileged host user, reached through `DOCKER_HOST` — see [Docker](docker.md) for why nesting one needs the container's `CAP_SETUID` back |
 | **No root process at runtime**    | See [No root process at runtime](#-no-root-process-at-runtime)                                                                                                                                                                                                                                                              |
 | **No 1Password in the container** | A live `op` session is readable by any agent in that shell, turning a one-project leak into every vault the account can read — while project secrets sit in a plaintext `.env` regardless, since the app must read them. Secrets render on the laptop, then copy in                                                         |

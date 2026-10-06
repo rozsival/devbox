@@ -23,7 +23,7 @@ agents inside — the container is the agent sandbox.
 ## ✨ Highlights
 
 | Feature                  | What it gives you                                                                                                |
-|--------------------------|------------------------------------------------------------------------------------------------------------------|
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | **Agent sandbox**        | Agents with bypassed permissions reach the project tree, the internet and a rootless project Docker daemon only  |
 | **Tailnet-only access**  | One `sshd` port, published on the Tailscale address (`BIND_ADDR`) and loopback — never `0.0.0.0`                 |
 | **No private keys**      | Public keys only; manual git borrows the laptop's 1Password agent, agent git gets HTTPS and per-operation tokens |
@@ -74,7 +74,7 @@ Docker, operations, security, CLI and development — lives in **[docs/](docs/RE
 ## 👤 Ownership
 
 | Item       | Details                                                                   |
-|------------|---------------------------------------------------------------------------|
+| ---------- | ------------------------------------------------------------------------- |
 | Maintainer | [@rozsival](https://github.com/rozsival) (see [`CODEOWNERS`](CODEOWNERS)) |
 | Issues     | [GitHub Issues](https://github.com/rozsival/devbox/issues)                |
 | License    | [MIT](LICENSE)                                                            |

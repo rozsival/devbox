@@ -1,12 +1,13 @@
 # bashly (https://bashly.dev) builds bin/devbox from cli/. Edit cli/, then run
-# `bashly generate` from the repo root and commit both: the workstation has no
+# `make build` (bashly generate) and commit both: the workstation has no
 # Ruby, so the generated script is what it runs.
 source_dir: cli
 commands_dir: commands
 target_dir: bin
 strict: true
 env: production
-formatter: internal
+# Same shfmt style as every other shell file (Makefile SHFMT), applied by bashly itself.
+formatter: shfmt -i 2
 enable_header_comment: always
 enable_bash_version_bouncer: always
 enable_view_markers: never

@@ -16,7 +16,7 @@ Any number of identities, chosen by directory. Each is a `[slug]` block in `~/.c
 any of them; you and an agent session use them differently.
 
 | Who                                         | Default identity (everywhere)                                                                                           | A second identity (`~/projects/work/**`, org `your-org`)                                                                  |
-|---------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | **You** (manual, `ssh -A devbox` or laptop) | SSH `git@github.com:`, forwarded `id_personal.pub` (the host's plain key), author `Your Name <you@example.com>`, signed | SSH `git@github.com:`, forwarded `id_work.pub` (`ssh -P work` tags it), author `Your Name <you@work.example.com>`, signed |
 | **Agent session** (`omp`/`claude` launcher) | HTTPS, token from `devbox-git-credential`, author `your-agent <your-agent@users.noreply.github.com>`, unsigned          | HTTPS, same helper, author `your-app[bot] <00000000+your-app[bot]@users.noreply.github.com>`, unsigned                    |
 
@@ -55,7 +55,7 @@ bootstrap so everything derived from it catches up (see [Laptop install](#-lapto
 One `[slug]` block per identity, `slug` lowercase `[a-z][a-z0-9_]*`:
 
 | Field                       | Meaning                                                                                                                                                                                                                                                                                                                                                                                              | Default                                                |
-|-----------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------|
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | `dir`                       | Directory prefix that selects this identity. Must be absolute or start `~/`, and contain no whitespace — it also becomes a `gitdir:` pattern and a config key, and a relative path resolves differently for git than for the token resolver, so `check` rejects both. Omit on exactly one block — that one is the default, catching every tree no other `dir` matches. Longest matching prefix wins. | none on the default block                              |
 | `name`, `email`             | Your git identity in that tree. Required.                                                                                                                                                                                                                                                                                                                                                            | —                                                      |
 | `pubkey`                    | The laptop's _public_ authentication key, one line, as in `~/.ssh/id_<slug>.pub`. Devbox only: it holds no private key. Empty disables SSH-as-you for that tree.                                                                                                                                                                                                                                     | empty                                                  |
@@ -68,7 +68,7 @@ One `[slug]` block per identity, `slug` lowercase `[a-z][a-z0-9_]*`:
 Everything else is derived from the slug alone:
 
 | Derived from the slug | Where                                                                                                               |
-|-----------------------|---------------------------------------------------------------------------------------------------------------------|
+| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Key files             | `~/.ssh/id_<slug>.pub` / `~/.ssh/signing_<slug>.pub` (see the key files below)                                      |
 | ssh tag               | `<slug>`, when its key differs from its host's plain one (`devbox-identities get <slug> tag`, [Cloning](#-cloning)) |
 | GitHub token          | `GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env` (see [Secrets](secrets.md#gh))                                  |
@@ -98,7 +98,7 @@ a bad edit costs configuration, never SSH access.
 `devbox-identities` inspects the resolved registry and prints exactly what `bootstrap` installs:
 
 | Command                                           | Purpose                                                                                  |
-|---------------------------------------------------|------------------------------------------------------------------------------------------|
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `devbox-identities list`                          | Inspect the resolved registry                                                            |
 | `devbox-identities for <dir>`                     | Inspect the resolved registry — who owns a directory                                     |
 | `devbox-identities get <slug> <field>`            | Inspect the resolved registry — one field                                                |
@@ -190,7 +190,7 @@ real binary. Both launchers (`omp-launcher`, `claude-launcher` in `~/.local/libe
 drift apart:
 
 | Export                | Value                                  | What it does                            |
-|-----------------------|----------------------------------------|-----------------------------------------|
+| --------------------- | -------------------------------------- | --------------------------------------- |
 | `GIT_CONFIG_GLOBAL`   | `~/.config/devbox/git/agent.gitconfig` | replaces `~/.gitconfig`, not merged     |
 | `GIT_SSH_COMMAND`     | `…/devbox-git-no-ssh`                  | refuses every SSH remote, exit 255      |
 | `GIT_TERMINAL_PROMPT` | `0`                                    | missing credential errors, never hangs  |
@@ -289,7 +289,7 @@ with two Apps on the same host stay apart:
 `store` and `erase` are accepted and ignored. Two subcommands inspect it:
 
 | Command                                          | Prints                                                                                                                                                                                                       |
-|--------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `devbox-git-credential explain owner/repo [dir]` | Which path a request would take — `app:<slug>:<installation-id>` or `pat:<slug>` — without minting anything                                                                                                  |
 | `devbox-git-credential token owner/repo [dir]`   | Just the App token, or nothing when no App covers the repository: the `gh` shim's way to act as the same bot in an agent session ([Secrets](secrets.md#agent-sessions-the-app-for-one-repositorys-commands)) |
 
@@ -355,7 +355,7 @@ bootstraps from:
 ### What the installer writes
 
 | Destination                               | Installed                                                                                                                                                                                             |
-|-------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `~/.local/libexec/devbox-agent`           | `agent-launch`, `omp-launcher`, `claude-launcher`, the `gh` shim, `devbox-git-credential`, `devbox-git-no-ssh`                                                                                        |
 | `~/.local/bin`                            | `devbox-gh-token`                                                                                                                                                                                     |
 | `~/.local/libexec`                        | `devbox-identities`                                                                                                                                                                                   |
@@ -475,7 +475,7 @@ and just as idempotent. The laptop's own `~/.ssh/config` and `~/.gitconfig` are 
 ## 🧪 Verify
 
 | Check                                                            | Command                                                                            | Expected                                                |
-|------------------------------------------------------------------|------------------------------------------------------------------------------------|---------------------------------------------------------|
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | Which credential path a repo would take, without minting a token | `devbox-git-credential explain <owner>/<repo>`                                     | `app:<slug>:<installation-id>` or `pat:<slug>`          |
 | Who owns a directory                                             | `devbox-identities for ~/projects/work/<repo>`                                     | —                                                       |
 | Every resolved field for an identity                             | `devbox-identities show work`                                                      | —                                                       |

@@ -12,7 +12,7 @@
 ## 🗺️ Routes
 
 | Route                | From        | Use it for                                         |
-|----------------------|-------------|----------------------------------------------------|
+| -------------------- | ----------- | -------------------------------------------------- |
 | `herdr`              | Laptop      | Normal work: survives client exit, network loss    |
 | `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git` |
 | Moshi                | Phone       | Watching, steering an agent away from the desk     |

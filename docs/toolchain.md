@@ -12,7 +12,7 @@
 ## 📌 Pinned versions
 
 | Tool             | Version   | Installed as                                       |
-|------------------|-----------|----------------------------------------------------|
+| ---------------- | --------- | -------------------------------------------------- |
 | `herdr`          | `0.9.3`   | `/usr/local/bin/herdr`                             |
 | `node`           | `24.21.0` | nvm in `/opt/nvm`, symlinked into `/usr/local/bin` |
 | `pnpm`           | `12.9.1`  | `npm install -g`, symlinked into `/usr/local/bin`  |
@@ -41,7 +41,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 ## 📍 Why tools live where they do
 
 | Location                            | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-|-------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/usr/local/bin`                    | Default _non-interactive_ SSH `PATH`; `herdr` needs it since non-interactive SSH uses only a pre-existing compatible binary and never installs — true of saved-machine background connections.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `/opt/nvm` + `/opt/corepack`        | Not `~/.nvm`: `/home/dev`'s bind mount would shadow anything the image installs there. `node`, `npm`, `npx`, `corepack`, `pnpm` symlink into `/usr/local/bin` to resolve without a login shell.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `~/.local/bin`                      | OMP, Claude Code (`~/.local/bin/claude`, a symlink into `~/.local/share/claude/versions`) and `moshi-hook`, installed by `bootstrap` rather than baked in, so `omp update`, Claude's auto-update and `moshi-hook update` work without a rebuild. Also `devbox-gh-token`, the per-directory GitHub token resolver ([Secrets](secrets.md#gh)).                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -77,7 +77,7 @@ which is why the launcher survives an update. See [Git Identities](git.md#update
 (`~/.config/devbox/secrets.env` or a project `.env`) before it reaches a provider, and a `bash.patterns` guardrail:
 
 | Action   | Commands                                                                                                                                                                                                                                                                                                         |
-|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `deny`   | Reaching past the agent's scoped tokens: `gh auth token\|login\|…`, an absolute-path `gh`, `env -u`, unsetting or reassigning `GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND`, `GH_CONFIG_DIR`, `GIT_TERMINAL_PROMPT`, keychain reads, `gh secret`/`variable`/`repo delete`. History rewrites: `--no-verify`, force push. |
 | `prompt` | `env -i` (this repo's smoke tests use it), `op`, `gcloud`, `terraform apply`                                                                                                                                                                                                                                     |
 
@@ -135,7 +135,7 @@ daemon `bootstrap` installs into `~/.local/bin` and the entrypoint starts. `boot
 (`moshi-hook install --target omp,claude`).
 
 | Piece                       | Where it lives                             | What breaks without it                |
-|-----------------------------|--------------------------------------------|---------------------------------------|
+| --------------------------- | ------------------------------------------ | ------------------------------------- |
 | `moshi-hook` binary         | `~/.local/bin` (bind mount, self-updating) | Everything below                      |
 | OMP extension               | `~/.omp/agent/extensions/moshi-hooks.ts`   | No OMP lifecycle events emitted       |
 | Claude Code hooks           | `hooks` in `~/.claude/settings.json`       | No Claude lifecycle events emitted    |
@@ -189,7 +189,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'
 reads:
 
 | Skill           | Source                      | What it is for                                       |
-|-----------------|-----------------------------|------------------------------------------------------|
+| --------------- | --------------------------- | ---------------------------------------------------- |
 | `agent-browser` | `vercel-labs/agent-browser` | Browser automation: navigate, fill, screenshot, test |
 | `skill-creator` | `anthropics/skills`         | Authoring, editing and evaluating skills             |
 | `find-skills`   | `vercel-labs/skills`        | Discovering and installing more skills mid-task      |
@@ -258,7 +258,7 @@ Add `ARG <TOOL>_VERSION=<version>` next to the others in the `Dockerfile`.
 ### 3. Add a doctor probe
 
 Add a probe to `doctor`'s list in `cli/lib/doctor_host.sh` if the version matters, then run
-`bashly generate && shfmt -i 2 -w bin/devbox` and commit `cli/` with the regenerated `bin/devbox`.
+`make build` and commit `cli/` with the regenerated `bin/devbox`.
 
 ### 4. Deploy and rebuild
 

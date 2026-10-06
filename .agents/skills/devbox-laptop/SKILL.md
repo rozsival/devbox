@@ -23,7 +23,7 @@ fixed `devbox` key, each exported as one `.pub` file in `~/.ssh`. `identities.co
 file names follow from them:
 
 | file                 | 1Password item              | used by                                                                                                            |
-|----------------------|-----------------------------|--------------------------------------------------------------------------------------------------------------------|
+| -------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `id_<slug>.pub`      | that identity's auth key    | `Host <host>` (plain) or `Match host <host> tagged <slug>` (its own key)                                           |
 | `signing_<slug>.pub` | that identity's signing key | `~/.gitconfig` `user.signingkey` (default) or `user-<slug>.gitconfig`/`org-<slug>.gitconfig`; GitHub _Signing_ key |
 | `devbox.pub`         | Devbox Laptop               | `Host <workstation>`, `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS`                                                |
@@ -159,7 +159,7 @@ repo.
 ## When `devbox doctor laptop` warns
 
 | Warning                                                                       | Meaning and fix                                                                                                                        |
-|-------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `private key(s) on disk`                                                      | Import to 1Password if missing, delete file (phase 1)                                                                                  |
 | `<name>.pub … is not held by the 1Password agent`                             | Wrong export, or item disabled; re-export via `ssh-add -L`                                                                             |
 | `1Password SSH agent not reachable`                                           | Agent off (1Password → Developer → SSH agent) or locked                                                                                |
@@ -198,7 +198,7 @@ herdr's saved-machine connections are background ssh over that agent - a machine
 ## Where the details live
 
 | Topic                                          | File                   |
-|------------------------------------------------|------------------------|
+| ---------------------------------------------- | ---------------------- |
 | Key item, ssh config, herdr, 1Password         | `docs/installation.md` |
 | Both git modes, launcher, helper, signing      | `docs/git.md`          |
 | Tokens, App credentials, `secrets.env`         | `docs/secrets.md`      |

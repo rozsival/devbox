@@ -12,7 +12,7 @@
 ## 📍 At a glance
 
 | Audience           | Use this                                                                                           |
-|--------------------|----------------------------------------------------------------------------------------------------|
+| ------------------ | -------------------------------------------------------------------------------------------------- |
 | CLI users          | `./bin/devbox` from the repo root, or `devbox` anywhere after [`devbox install`](#-devbox-install) |
 | CLI maintainers    | Edit authored sources in `cli/` (see [Maintainer workflow](#-maintainer-workflow))                 |
 | Generated artifact | `bin/devbox` is generated, committed build output, not the source of truth                         |
@@ -46,7 +46,7 @@ wrong side exits with a one-line message naming the right one. Log prefixes `[IN
 the same on both.
 
 | Group       | Commands                                                                                                           | Side guard                                        |
-|-------------|--------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
+| ----------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
 | Workstation | `env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`, `logs`, `hook`, `keys`, `docker setup` | Linux host that runs the container, not inside it |
 | Laptop      | `deploy`, `sync omp`, `sync identities`, `agent install`                                                           | macOS only                                        |
 | Both        | `install`, `doctor`, `completions`                                                                                 | Either side                                       |
@@ -78,7 +78,7 @@ env` and `.env.example`.
 compose up` that changes nothing leaves the container running, so a no-op `up` never asks.
 
 | Command                  | What it does                                                                                                                                                         |
-|--------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `env`                    | Create `.env` from `.env.example` and sync `BIND_ADDR`, `HOST_UID` and `HOST_GID` — see [`devbox env`](#devbox-env)                                                  |
 | `up [--force\|-f]`       | Preflight, then build and start the container — see [`devbox up`](#devbox-up)                                                                                        |
 | `down [--force\|-f]`     | Stop and remove the container: `docker compose down`. Bind mount and `.env` untouched                                                                                |
@@ -149,7 +149,7 @@ env`).
 What it provisions:
 
 | Step           | What it does                                                                                                                                                                   |
-|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Packages       | Installs `uidmap` and `slirp4netns`                                                                                                                                            |
 | Host user      | Creates `dev:devbox` host user (uid 1001): no password, no keys, no sudo                                                                                                       |
 | Data directory | Moves `DEVBOX_DATA_DIR` to `/home/dev`, chowning it so host and container bind-mount paths match                                                                               |
@@ -169,7 +169,7 @@ Run these on the macOS laptop, from the repo checkout. `deploy`, `sync omp` and 
 `ssh`; a missing `rsync` fails up front with a `brew install rsync` remedy.
 
 | Command                               | What it does                                                                                                               |
-|---------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `deploy [HOST] [--up] [--force\|-f]`  | Sync this repo to the workstation, optionally bringing the container up — see [`devbox deploy`](#devbox-deploy)            |
 | `sync omp [HOST] [--allow-unguarded]` | Copy the laptop's OMP preset into the devbox — see [`devbox sync omp`](#devbox-sync-omp)                                   |
 | `sync identities [HOST]`              | Copy the laptop's identity registry into the devbox and apply it — see [`devbox sync identities`](#devbox-sync-identities) |
@@ -277,7 +277,7 @@ Idempotent: installs the same agent git override the devbox bootstraps. All of i
 of yours is touched.
 
 | Installed                                                                                                                                                             | Where                                                                                                                                                        |
-|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `agent-launch` (the shared launcher body), `omp-launcher`, `claude-launcher`, `gh` shim, credential helper (`devbox-git-credential`), SSH fence (`devbox-git-no-ssh`) | `~/.local/libexec/devbox-agent`                                                                                                                              |
 | `devbox-gh-token`                                                                                                                                                     | `~/.local/bin`                                                                                                                                               |
 | `omp` and `claude` symlinks to their launchers                                                                                                                        | `~/.local/libexec/devbox-agent/launchers` (the pre-Claude `~/.local/bin/omp` symlink is removed once `omp` resolves through that directory, kept until then) |
@@ -313,7 +313,7 @@ file rather than replace someone else's command. A symlink onto another checkout
 It finishes with the same checks `doctor` runs on both sides, exiting non-zero if one fails:
 
 | Check           | Fix it reports                                                                                                                                                                              |
-|-----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Symlink         | `bin/devbox install`                                                                                                                                                                        |
 | Completion file | Missing, or not what this `bin/devbox` writes: `bin/devbox install`                                                                                                                         |
 | PATH            | A fresh login shell (`$SHELL -lic`, clean environment) must resolve `devbox` to the symlink: the `PATH` line to add, or what shadows it                                                     |
@@ -339,7 +339,7 @@ container has no docker and no keys). Naming a side the machine is not is refuse
 ### What `doctor host` checks
 
 | #   | Check                                                                                                                                                                                                                                                                                                                                                                                                                      |
-|-----|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | `docker` and `docker compose` v2 present                                                                                                                                                                                                                                                                                                                                                                                   |
 | 2   | `BIND_ADDR` non-empty and equal to `tailscale ip -4`                                                                                                                                                                                                                                                                                                                                                                       |
 | 3   | Something listening on `BIND_ADDR:${DEVBOX_SSH_PORT}`, and **nothing** on `0.0.0.0`                                                                                                                                                                                                                                                                                                                                        |
@@ -362,7 +362,7 @@ The laptop-side counterpart of `doctor host`. It starts with `~/.config/devbox/i
 ones that do not depend on it (private keys, launcher symlinks) still run. The checks:
 
 | Area               | What it checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-|--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Keys               | No private key on disk, every identity's `.pub` files (plus `devbox.pub`) held by the 1Password agent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `~/.ssh/config`    | Per forge host, the plain connection selecting the host's default key and each identity's tagged connection (`ssh -P <slug>`) selecting its own, with no leftover SSH-alias `Host` block                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | git                | The base `user.name`/`user.email`/`user.signingkey` matching the default identity (what every repo no include claims commits as), every identity's gitconfig signing through `op-ssh-sign` with its own `signing_*.pub` key and an `allowed_signers` file covering all of them; each `gitdir:` include setting its identity's name, email and signing key; each `orgs` pattern probed as a `hasconfig:` remote from `/` — email, signing key and `core.sshCommand` matching what `org-<slug>.gitconfig` should set, and no `gitdir:` include left rewriting URLs; no clone still pointed at a stale SSH-alias remote (`devbox-identities alias-remotes`)                                             |
@@ -401,7 +401,7 @@ Usage: devbox-identities list|dir-slugs|default|get|show|for|check|file|org-urls
 ```
 
 | Subcommand                      | What it does                                                                                                                     |
-|---------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `list`                          | Slugs, in config order                                                                                                           |
 | `dir-slugs`                     | Slugs claiming a tree, shortest dir first                                                                                        |
 | `default`                       | The slug with no `dir` (the default identity)                                                                                    |
@@ -441,7 +441,7 @@ devbox-identities check || echo 'fix identities.conf before bootstrapping'
 ### Edit the right files
 
 | Path                  | Responsibility                                                                                                                                        |
-|-----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `bashly-settings.yml` | bashly settings: source `cli/`, target `bin/`, strict mode, bash-version bouncer                                                                      |
 | `cli/bashly.yml`      | Every command: group, help, filters (host/laptop), args, flags, env vars, dependencies                                                                |
 | `cli/initialize.sh`   | Runs before any command: `REPO_ROOT`, `.env` paths, the laptop's install layout                                                                       |
@@ -455,11 +455,11 @@ To change a command, edit `cli/bashly.yml` (interface), `cli/commands/` (body) o
 following from the repo root and **commit both** `cli/` and `bin/devbox`:
 
 ```bash
-bashly generate && shfmt -i 2 -w bin/devbox
+make build
 ```
 
-- The `shfmt` pass is part of generating, not a hand edit: the committed script is in its format, and bashly's raw
-  output differs from it by some 1,500 lines of indentation, burying the real change.
+- bashly formats the script with `shfmt -i 2` itself (`formatter` in `bashly-settings.yml`), so it matches every other
+  shell file; `make check` fails when `bin/devbox` differs from a fresh build.
 - The generated script is committed because the workstation has no Ruby; only a contributor who regenerates needs bashly
   (`brew install bashly` or `gem install bashly`).
 - The side guard is a bashly `filters:` entry on each command (`filter_host` / `filter_laptop` in `cli/lib/machine.sh`),

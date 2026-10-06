@@ -39,7 +39,7 @@ A bind mount (not a named volume) lets `tar` back it up and the host user (same 
 everything, including the client's `known_hosts` entry.
 
 | Event                            | Filesystem | Running panes |
-|----------------------------------|------------|---------------|
+| -------------------------------- | ---------- | ------------- |
 | herdr client killed / lid closed | kept       | **kept**      |
 | `docker compose restart`         | kept       | lost          |
 | `./bin/devbox down` + `up`       | kept       | lost          |

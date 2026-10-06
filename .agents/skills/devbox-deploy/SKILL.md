@@ -35,7 +35,7 @@ local Docker daemon, and `deploy`/`sync`/`agent install` only on the laptop. Fro
 ## Which apply step does the change need
 
 | Changed                                | Apply with                       | Why                               |
-|----------------------------------------|----------------------------------|-----------------------------------|
+| -------------------------------------- | -------------------------------- | --------------------------------- |
 | `docker-compose.yml`, `.env`           | `up`                             | Config hash change recreates      |
 | `Dockerfile`, apt list, install block  | `up`                             | Rebuilds changed layers           |
 | A pinned `ARG <TOOL>_VERSION`          | `up`, or `rebuild` for no cache  | `ARG` invalidates that layer      |

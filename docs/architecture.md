@@ -31,7 +31,7 @@ flowchart LR
 ## 🧩 Components
 
 | Component                      | Where                                                 | Role                                                                                                    |
-|--------------------------------|-------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
+| ------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `devbox` container             | `docker-compose.yml`, `Dockerfile`                    | `ubuntu:26.04` plus the pinned toolchain; runs as `dev`, `cap_drop: [ALL]`, `no-new-privileges`         |
 | `sshd`                         | `container/sshd_config`                               | Unprivileged, pubkey-only, container port `2222`, published as `${BIND_ADDR}:2223` and `127.0.0.1:2223` |
 | `/home/dev`                    | `${DEVBOX_DATA_DIR}` on the host, also `/home/dev`    | Bind mount: dotfiles, keys, `~/.config/devbox`, `~/projects`, project Docker data — survives rebuilds   |
@@ -50,22 +50,22 @@ flowchart LR
 `container/entrypoint.sh` runs as `dev`, never root, under tini (`init: true`). The order is load-bearing — directories
 before keys, keys before `sshd`, or the box starts unreachable:
 
-| # | Step                | What it does                                                                                               |
-|---|---------------------|------------------------------------------------------------------------------------------------------------|
-| 1 | Home skeleton       | Prepares the bind-mounted home tree root; `StrictModes` rejects a group- or world-writable home            |
-| 2 | `sshd` host key     | Kept on the bind mount, so a rebuild or restore keeps the laptop's `known_hosts` valid                     |
-| 3 | `authorized_keys`   | Rebuilt every start from `https://github.com/<DEVBOX_GITHUB_USER>.keys` and `DEVBOX_EXTRA_AUTHORIZED_KEYS` |
-| 4 | Bootstrap           | `container/bootstrap.sh`, idempotent; a failure logs and continues rather than cost SSH access             |
-| 5 | Project-port mirror | `devbox-ports`; forwards live in this container's netns and are lost on every recreate                     |
-| 6 | `moshi-hook` daemon | Backgrounded, not supervised: there is no systemd, so it becomes a child of `sshd`, reaped by tini         |
-| 7 | `sshd`              | `exec /usr/sbin/sshd -D -e` with `container/sshd_config`                                                   |
+| #   | Step                | What it does                                                                                               |
+| --- | ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 1   | Home skeleton       | Prepares the bind-mounted home tree root; `StrictModes` rejects a group- or world-writable home            |
+| 2   | `sshd` host key     | Kept on the bind mount, so a rebuild or restore keeps the laptop's `known_hosts` valid                     |
+| 3   | `authorized_keys`   | Rebuilt every start from `https://github.com/<DEVBOX_GITHUB_USER>.keys` and `DEVBOX_EXTRA_AUTHORIZED_KEYS` |
+| 4   | Bootstrap           | `container/bootstrap.sh`, idempotent; a failure logs and continues rather than cost SSH access             |
+| 5   | Project-port mirror | `devbox-ports`; forwards live in this container's netns and are lost on every recreate                     |
+| 6   | `moshi-hook` daemon | Backgrounded, not supervised: there is no systemd, so it becomes a child of `sshd`, reaped by tini         |
+| 7   | `sshd`              | `exec /usr/sbin/sshd -D -e` with `container/sshd_config`                                                   |
 
 Steps 5 and 6 are best-effort: neither an unreachable project daemon nor a missing hook daemon may cost SSH access.
 
 ## 🚪 Ways in
 
 | Route                | Run from    | Use it for                                                   |
-|----------------------|-------------|--------------------------------------------------------------|
+| -------------------- | ----------- | ------------------------------------------------------------ |
 | `herdr`              | Laptop      | Normal work; panes survive client exit and network loss      |
 | `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git`           |
 | Moshi                | Phone       | Watching and steering an agent away from the desk            |
@@ -76,11 +76,12 @@ All four land as `dev` in `/home/dev`. Details: [Connecting](connecting.md).
 ## 📁 Repository layout
 
 | Path                                          | Contents                                                                                                    |
-|-----------------------------------------------|-------------------------------------------------------------------------------------------------------------|
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `.env.example`                                | The only per-host configuration (`.env` is gitignored, never deployed)                                      |
 | `Dockerfile`                                  | Pinned toolchain; ends as `USER dev`                                                                        |
 | `docker-compose.yml`                          | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` is the whole network boundary                                        |
 | `bashly-settings.yml`                         | Bashly settings: builds `bin/devbox` from `cli/`                                                            |
+| `Makefile`, `mise.toml`                       | Repo tasks (`make build`, `fmt`, `lint`, `check`) and the pinned prettier they run                          |
 | `cli/`                                        | The CLI source: `bashly.yml` (commands), `commands/` (bodies), `lib/` (shared functions)                    |
 | `bin/devbox`                                  | The CLI, generated by bashly and committed — never hand-edited ([CLI reference](cli.md))                    |
 | `container/`                                  | `entrypoint.sh` (PID 1), `bootstrap.sh` (user setup), `skills.sh` (optional), `sshd_config`, `devbox-ports` |

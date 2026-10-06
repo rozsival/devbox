@@ -11,7 +11,7 @@ quick start live in the [root README](../README.md).
 ## 🗂️ Document index
 
 | Document                        | Read when you want to…                                      | Key topics                                                                         |
-|---------------------------------|-------------------------------------------------------------|------------------------------------------------------------------------------------|
+| ------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | [Architecture](architecture.md) | Understand what runs where and why                          | System map, container startup, ways in, repository layout                          |
 | [Installation](installation.md) | Set up the laptop and the workstation for the first time    | Laptop key, `~/.ssh/config`, deploy, `.env` reference, laptop agent install        |
 | [Connecting](connecting.md)     | Get a shell in the devbox                                   | herdr panes, `ssh devbox`, Moshi, `devbox shell`, cloning, dev servers             |
@@ -49,11 +49,11 @@ quick start live in the [root README](../README.md).
 
 ## ✍️ Documentation conventions
 
-| Rule            | Detail                                                                                                                                                                                                             |
-|-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Location        | All user and maintainer docs live in `docs/`, one domain per file, kebab-case names                                                                                                                                |
-| Page shape      | `# Title` → summary quote → **Related** line → sections → `## ❓ FAQ` (when useful)                                                                                                                                |
-| Source of truth | Config and scripts (`.env.example`, `docker-compose.yml`, `Dockerfile`, `container/*`, `cli/`) win; docs explain them                                                                                              |
-| Agent context   | `AGENTS.md`, `CLAUDE.md` and `.agents/skills/*/SKILL.md` stay where their tools look; skills mirror these docs                                                                                                     |
-| Formatting      | Prettier via `npx prettier@3 --print-width 120 --single-quote --trailing-comma none --write README.md 'docs/*.md' '.agents/skills/*/SKILL.md'` (not `AGENTS.md`); GitHub-flavored Markdown with alerts and Mermaid |
-| Versions        | Pinned versions live in the `Dockerfile` (`ARG <TOOL>_VERSION`) and `container/skills.sh`; docs name them, the code wins                                                                                           |
+| Rule            | Detail                                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Location        | All user and maintainer docs live in `docs/`, one domain per file, kebab-case names                                                                                            |
+| Page shape      | `# Title` → summary quote → **Related** line → sections → `## ❓ FAQ` (when useful)                                                                                            |
+| Source of truth | Config and scripts (`.env.example`, `docker-compose.yml`, `Dockerfile`, `container/*`, `cli/`) win; docs explain them                                                          |
+| Agent context   | `AGENTS.md`, `CLAUDE.md` and `.agents/skills/*/SKILL.md` stay where their tools look; skills mirror these docs                                                                 |
+| Formatting      | `make fmt`: Prettier (`.prettierrc.yml`: 120 columns, single quotes) for Markdown and YAML, not `AGENTS.md`; shfmt for shell; GitHub-flavored Markdown with alerts and Mermaid |
+| Versions        | Pinned versions live in the `Dockerfile` (`ARG <TOOL>_VERSION`) and `container/skills.sh`; docs name them, the code wins                                                       |

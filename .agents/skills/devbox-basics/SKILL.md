@@ -44,7 +44,7 @@ Four facts:
 ## The four ways in
 
 | Route                | Run from    | Use it for                                                |
-|----------------------|-------------|-----------------------------------------------------------|
+| -------------------- | ----------- | --------------------------------------------------------- |
 | `herdr`              | Laptop      | Normal work; panes survive client exit, network loss      |
 | `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git`        |
 | Moshi                | Phone       | Watching, steering an agent away from the desk            |
@@ -115,7 +115,7 @@ network is unrestricted; assume anything inside can leave.
 Answer from these files, not memory - each ends with an FAQ of real failures.
 
 | Question                                             | File                   |
-|------------------------------------------------------|------------------------|
+| ---------------------------------------------------- | ---------------------- |
 | Doc index, reading paths, doc conventions            | `docs/README.md`       |
 | System map, components, startup order, repo layout   | `docs/architecture.md` |
 | First deploy, `.env`, laptop key, SSH cfg            | `docs/installation.md` |

@@ -471,6 +471,7 @@ if [[ ! -f "${omp_config_dir}/config.yml" ]]; then
   log_info 'Seeding ~/.omp/agent/config.yml...'
   install -m 644 "${TEMPLATE_DIR}/.omp/agent/config.yml" "${omp_config_dir}/config.yml"
 elif ! grep -qE '^bash:' "${omp_config_dir}/config.yml"; then
+  # shellcheck disable=SC2088 # a literal ~ in the message, not a path
   register_action "~/.omp/agent/config.yml has no bash: block - copy the guardrail patterns from home/.omp/agent/config.yml into it (on the laptop too, if 'devbox sync omp' brought it here)"
 fi
 

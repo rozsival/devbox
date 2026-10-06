@@ -12,7 +12,7 @@
 ## 🔐 Security model
 
 | Layer     | Behavior                                                                                    |
-|-----------|---------------------------------------------------------------------------------------------|
+| --------- | ------------------------------------------------------------------------------------------- |
 | Docker    | Publishes `2223` on `127.0.0.1` and `BIND_ADDR` (the node's Tailscale IP) — never `0.0.0.0` |
 | Tailscale | The only route to `BIND_ADDR`                                                               |
 | Result    | Reachable from the Tailnet, invisible from the public internet                              |
@@ -53,7 +53,7 @@ netfilter table, not the publish address, is the boundary. See [Docker](docker.m
 ## 🌐 Port reference
 
 | Port                    | Owner                  | Reachable from                                                                   |
-|-------------------------|------------------------|----------------------------------------------------------------------------------|
+| ----------------------- | ---------------------- | -------------------------------------------------------------------------------- |
 | `2222` (workstation)    | Workstation's sshd     | The host, on `0.0.0.0` — the only host service reachable from project containers |
 | `2223` (published)      | Devbox container sshd  | `BIND_ADDR` (Tailnet) and `127.0.0.1`, DNATed to container `:2222`               |
 | `2222` (in container)   | Devbox container sshd  | Always the in-container listener, behind the `2223` mapping                      |
@@ -101,7 +101,7 @@ ssh -N -L 5432:host.docker.internal:5432 devbox &        # directly, without the
 ## 🛠️ Where network behavior is defined
 
 | File                      | Responsibility                                                                               |
-|---------------------------|----------------------------------------------------------------------------------------------|
+| ------------------------- | -------------------------------------------------------------------------------------------- |
 | `docker-compose.yml`      | The address-scoped `ports` mapping — the entire network boundary                             |
 | `.env.example`            | `BIND_ADDR` (mandatory, filled by `./bin/devbox env`) and `DEVBOX_SSH_PORT` (`2223`)         |
 | `container/sshd_config`   | In-container sshd on `2222`; `AllowTcpForwarding`, `PermitTunnel` and `AllowAgentForwarding` |

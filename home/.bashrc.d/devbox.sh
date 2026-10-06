@@ -57,6 +57,7 @@ export DOCKER_HOST=unix:///run/devbox/docker.sock
 
 # Interactive-only: prompt, aliases, and the ~100ms nvm shell function.
 if [[ $- == *i* ]]; then
+  # shellcheck source=/dev/null # installed by nvm, not repo content
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
   eval "$(starship init bash)"
   alias lg='lazygit'
@@ -73,6 +74,7 @@ fi
 # - projects use different GCP projects, so the ADC path is per-project too.
 if [ -r "$HOME/.config/devbox/secrets.env" ]; then
   set -a
+  # shellcheck source=/dev/null # a runtime credential file, not repo content
   . "$HOME/.config/devbox/secrets.env"
   set +a
 fi

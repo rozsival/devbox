@@ -146,6 +146,7 @@ di_get() {
     ;;
   orgs)
     # Space- or comma-separated as written, one per line here.
+    # shellcheck disable=SC2020 # two separators, each mapped to a newline
     di_raw "${slug}" orgs | tr ', ' '\n\n' | sed '/^$/d'
     return 0
     ;;

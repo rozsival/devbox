@@ -10,23 +10,27 @@
 
 ## 🧰 Toolchain
 
-| Tool         | Version / config                        | Role                                                                   |
-|--------------|-----------------------------------------|------------------------------------------------------------------------|
-| Bashly       | `bashly-settings.yml`, `cli/bashly.yml` | Generates `bin/devbox` from `cli/`; only needed by whoever regenerates |
-| shfmt        | `shfmt -i 2`                            | The format the committed `bin/devbox` is kept in                       |
-| bash         | >= 4.2 (`brew install bash` on macOS)   | Runs `bin/devbox` on both machines; macOS `/bin/bash` 3.2 is refused   |
-| Prettier     | `printWidth: 120`, run through `npx`    | Markdown formatting                                                    |
-| Docker       | Compose v2 on the workstation           | Builds and runs the container                                          |
-| EditorConfig | `.editorconfig`                         | LF, 2-space indent, final newline, 120-column lines                    |
+| Tool         | Version / config                         | Role                                                                   |
+| ------------ | ---------------------------------------- | ---------------------------------------------------------------------- |
+| Bashly       | `bashly-settings.yml`, `cli/bashly.yml`  | Generates `bin/devbox` from `cli/`; only needed by whoever regenerates |
+| shfmt        | `shfmt -i 2`                             | Formats every shell file; bashly runs it on `bin/devbox` (`formatter`) |
+| ShellCheck   | `.shellcheckrc`                          | Lints the shell files and the assembled `bin/devbox`                   |
+| bash         | >= 4.2 (`brew install bash` on macOS)    | Runs `bin/devbox` on both machines; macOS `/bin/bash` 3.2 is refused   |
+| Prettier     | `.prettierrc.yml`, pinned in `mise.toml` | Markdown and YAML formatting (`AGENTS.md` excluded)                    |
+| Make         | `Makefile`                               | `build`, `fmt`, `lint`, `check`; `make` alone lists them               |
+| Docker       | Compose v2 on the workstation            | Builds and runs the container                                          |
+| EditorConfig | `.editorconfig`                          | LF, 2-space indent, final newline, 120-column lines                    |
 
 ```bash
-bashly generate && shfmt -i 2 -w bin/devbox   # regenerate the CLI after editing cli/
-npx prettier@3 --print-width 120 --single-quote --trailing-comma none \
-  --write README.md 'docs/*.md' '.agents/skills/*/SKILL.md'   # format the docs and skills
+make build   # regenerate bin/devbox after editing cli/
+make fmt     # shfmt the shell files, prettier the Markdown and YAML
+make check   # format check, shellcheck, bash 3.2 parse of the laptop scripts, bin/devbox matches cli/
 ```
 
-There is no CI and no test suite: a change is proven on the workstation with `./bin/devbox doctor` and on the laptop
-with `./bin/devbox doctor laptop`.
+`make` runs on the laptop: shfmt, shellcheck and bashly from Homebrew, prettier through `mise exec`, which installs the
+pinned version on first use (run `mise trust` once in the repo). The workstation and the container have none of them.
+There is no CI and no test suite: `make check` proves the source, and a change is proven on the workstation with
+`./bin/devbox doctor` and on the laptop with `./bin/devbox doctor laptop`.
 
 ## 📝 Rules
 
@@ -61,7 +65,7 @@ There are no releases: `./bin/devbox deploy` rsyncs the working tree to `~/devbo
 ## 🤖 Agent assets
 
 | Asset                           | Purpose                                                                                       |
-|---------------------------------|-----------------------------------------------------------------------------------------------|
+| ------------------------------- | --------------------------------------------------------------------------------------------- |
 | `AGENTS.md`                     | Project context and rules for AI assistants                                                   |
 | `CLAUDE.md`                     | The single line `@AGENTS.md`: Claude Code before v2.1.277 does not read `AGENTS.md`           |
 | `.agents/skills/devbox-basics/` | What the devbox is and how it is isolated: architecture, boundaries, entry routes             |
@@ -83,10 +87,11 @@ There are no releases: `./bin/devbox deploy` rsyncs the working tree to `~/devbo
 The workstation has no Ruby, so it cannot run bashly; the committed script means neither machine needs Ruby or bashly
 to run the CLI. Only a contributor who regenerates needs bashly (`brew install bashly` or `gem install bashly`).
 
-### Why run `shfmt` after `bashly generate`?
+### Why does bashly format `bin/devbox` with `shfmt`?
 
-The committed script is in shfmt's format, and bashly's raw output differs from it by some 1,500 lines of indentation,
-burying the real change in the diff.
+`formatter: shfmt -i 2` in `bashly-settings.yml` keeps the generated script in the same format as every other shell
+file. bashly's internal formatter differs from it by some 1,500 lines of indentation, which would bury the real change
+in the diff.
 
 ### Where should a new document go?
 

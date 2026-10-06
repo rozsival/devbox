@@ -92,7 +92,7 @@ doctor_host() {
   # reach for SSH keys.
   local agent launcher_state
   for agent in omp claude; do
-    # shellcheck disable=SC2016 # the script body must expand inside the container
+    # shellcheck disable=SC2016,SC2018 # the body expands in the container; tr keeps the ASCII state word
     launcher_state="$(compose exec -T -e AGENT="${agent}" "${SERVICE}" bash -lc '
       agent_dir="$HOME/.local/libexec/devbox-agent"
       [[ -L "${agent_dir}/${AGENT}" ]] || { echo notalink; exit 0; }
@@ -187,7 +187,7 @@ doctor_host() {
   # Unpaired is a warning, not a failure: the box works, the phone just gets
   # nothing. A stopped daemon is a failure - something killed it.
   local hook_state
-  # shellcheck disable=SC2016 # the script body must expand inside the container
+  # shellcheck disable=SC2016,SC2018 # the body expands in the container; tr keeps the ASCII state word
   hook_state="$(compose exec -T "${SERVICE}" bash -lc '
     command -v moshi-hook >/dev/null 2>&1 || { echo absent; exit 0; }
     pgrep -f "(^|/)(moshi|moshi-hook) serve( |$)" >/dev/null 2>&1 || { echo stopped; exit 0; }

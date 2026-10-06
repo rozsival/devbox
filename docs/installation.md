@@ -11,7 +11,7 @@
 ## 🧰 Prerequisites
 
 | Where       | Requirement                                                                  |
-|-------------|------------------------------------------------------------------------------|
+| ----------- | ---------------------------------------------------------------------------- |
 | Workstation | Ubuntu 26.04, Docker with compose v2, Tailscale up, `rsync`, a known UID/GID |
 | Laptop      | `rsync`, an SSH client, and a [herdr](https://herdr.dev) client              |
 |             | bash ≥ 4.2 (`brew install bash`) — macOS's 3.2 can't run `./bin/devbox`      |
@@ -178,7 +178,7 @@ Agents run on the laptop too — OMP and Claude Code, same launchers, same mecha
 ```
 
 | Part       | What the laptop gets                                                                                                                                                                                                                                                              |
-|------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Keys**   | One `id_<slug>.pub`/`signing_<slug>.pub` pair per identity in `~/.config/devbox/identities.conf`, plus `devbox`: 1Password SSH items, public halves only in `~/.ssh`, selected per `Host` by `IdentityFile <name>.pub` + `IdentitiesOnly`.                                        |
 | **Git**    | Your own commits sign through `op-ssh-sign`; agents run through the `omp`/`claude` launchers and get HTTPS remotes, per-operation tokens, a bot author and no signing, on the same clones. On the laptop the launchers need one `PATH` line, which `devbox agent install` prints. |
 | **Tokens** | One `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env` (mode 600) and each identity's GitHub App credentials in its own `app` directory, read only by agent sessions.                                                                                               |
@@ -215,7 +215,7 @@ skill and [Git Identities](git.md#-laptop-install) walk the fixes. Details: [CLI
 ## 🧾 `.env` reference
 
 | Variable                       | Default                | Purpose                                                         |
-|--------------------------------|------------------------|-----------------------------------------------------------------|
+| ------------------------------ | ---------------------- | --------------------------------------------------------------- |
 | `BIND_ADDR`                    | _(empty)_              | Publish address; empty = `up` refuses                           |
 | `DEVBOX_SSH_PORT`              | `2223`                 | Host port (container always uses `2222`)                        |
 | `DEVBOX_DATA_DIR`              | `/home/dev`            | Host path; must equal container home (path identity)            |
