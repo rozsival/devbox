@@ -237,12 +237,14 @@ doctor_host() {
   # told otherwise, so this table - not the daemon - is what keeps those ports
   # off the Tailnet and the LAN, and the host's own sshd out of the devbox's
   # reach. `is-active` needs no privileges; reading the table itself would, so
-  # the file the unit loads stands in for it: a ruleset this checkout changed
-  # stays inert until `docker setup` runs again.
-  if ! systemctl is-active --quiet devbox-docker-firewall.service; then
+  # the files the unit is made of stand in for it: a ruleset or unit this
+  # checkout changed stays inert until `docker setup` runs again.
+  if ! systemctl is-active --quiet "${NFT_SERVICE}"; then
     fail 'devbox-docker-firewall is inactive - project ports would reach the Tailnet and the LAN:'' sudo ./bin/devbox docker setup'
   elif [[ "$(cat "${NFT_CONF}" 2>/dev/null)" != "$(netfilter_ruleset)" ]]; then
     fail "${NFT_CONF} is not the ruleset this checkout writes - the host still runs an older boundary:"' sudo ./bin/devbox docker setup'
+  elif [[ "$(cat "${NFT_UNIT}" 2>/dev/null)" != "$(netfilter_unit)" ]]; then
+    fail "${NFT_UNIT} is not the unit this checkout writes - the boundary may load out of order at boot:"' sudo ./bin/devbox docker setup'
   else
     log_success 'project port boundary active and current (devbox-docker-firewall)'
   fi
