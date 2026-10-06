@@ -416,6 +416,7 @@ step_netfilter() {
 Description=Netfilter boundary for devbox project docker ports
 Documentation=file://${NFT_CONF}
 After=ufw.service nftables.service user@${DEV_UID}.service
+Before=docker.service
 Wants=user@${DEV_UID}.service
 PartOf=user@${DEV_UID}.service
 
@@ -423,7 +424,6 @@ PartOf=user@${DEV_UID}.service
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/sbin/nft -f ${NFT_CONF}
-ExecStop=/usr/sbin/nft delete table inet devbox
 
 [Install]
 WantedBy=multi-user.target user@${DEV_UID}.service
@@ -437,6 +437,19 @@ UNIT_BODY
   # every project port on the Tailnet until someone ran doctor. So: pulled in by
   # and ordered after user@<uid>.service, whose slice is the one matched, and
   # PartOf it, so a restarted user manager (new slice, new id) reloads the table.
+  #
+  # Before the host's docker.service, which starts the devbox container: at boot
+  # the root daemon was restoring it while this table was still loading, so for
+  # those milliseconds the devbox could reach the host's sshd and the Tailnet.
+  # It costs the root daemon the user manager's start - it reports ready in
+  # ~0.1 s, before its own units run.
+  #
+  # No ExecStop: stopping the unit leaves the table in place, and `nft -f` swaps
+  # it atomically (its first lines delete the old table in the same
+  # transaction). An ExecStop that deleted it would open a gap on every restart -
+  # including the one PartOf= triggers whenever docker setup restarts the user
+  # manager - with the devbox running. Removing the boundary for good is
+  # `systemctl disable --now` plus `nft delete table inet devbox`.
   #
   # The unit runs `nft -f` once, so a rewritten ruleset is inert until the
   # service is restarted: both files have to be part of the condition, or an

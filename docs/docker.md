@@ -159,6 +159,12 @@ needs its allow rule, since a packet accepted in one table isn't exempt from lat
 > lingering user manager that owns the slice — rather than merely after ufw, which at boot lost the race and left the
 > boundary down.
 
+It is also ordered **before** the host's `docker.service`, which starts the devbox container: at boot the root daemon
+used to restore the devbox while the table was still loading. That costs the root daemon about 0.1 s — the user manager
+reports ready before its own units run. And the unit has no `ExecStop`: stopping it leaves the table loaded, and a
+restart's `nft -f` replaces it atomically. Deleting it on stop opened a gap on every restart — including the one
+`PartOf=` triggers when `docker setup` restarts the user manager — while the devbox was running.
+
 The devbox deliberately sits on the _default_ bridge (`network_mode: bridge`): `docker0` exists whenever the host
 daemon does, while a compose-managed bridge is removed by `./bin/devbox down` and recreated with a new address — both
 the publish address and the boundary table's interface are keyed to it.

@@ -214,7 +214,8 @@ the host's root Docker daemon.
     (`DenyUsers dev` in `/etc/ssh/sshd_config.d/devbox-docker.conf`, `sshd -t` before the reload, `sshd -T`
     to confirm it applies: its `~/.ssh` is the bind mount), moves `DEVBOX_DATA_DIR` to
     `/home/dev` (path identity), writes `/etc/tmpfiles.d/devbox-docker.conf`, installs the nftables table plus
-    `devbox-docker-firewall.service` that keeps published project ports off every interface but loopback and
+    `devbox-docker-firewall.service` (ordered before the host's `docker.service`, which starts the devbox, and
+    with no `ExecStop` - a restart's `nft -f` swaps the table atomically) that keeps published project ports off every interface but loopback and
     `docker0` (`--ip` covers only the default bridge, so the unit also passes `--default-network-opt` and the
     table backs both up) and the host's own services out of the devbox's reach (from `docker0` only the daemon's
     sockets answer; its containers, leaving through slirp4netns as uid 1001 in the host netns, open nothing on
