@@ -235,10 +235,13 @@ doctor_host() {
 
   # The rootless daemon publishes every project port on 0.0.0.0 and cannot be
   # told otherwise, so this table - not the daemon - is what keeps those ports
-  # off the Tailnet and the LAN, and the host's own sshd out of the devbox's
-  # reach. `is-active` needs no privileges; reading the table itself would, so
-  # the files the unit is made of stand in for it: a ruleset or unit this
-  # checkout changed stays inert until `docker setup` runs again.
+  # off the Tailnet and the LAN, and the host's own services out of reach of
+  # the devbox and of dev's uid and subordinate uids (host-network project
+  # containers included). `is-active` needs no privileges; reading the table
+  # itself would, so the files the unit is made of stand in for it - the
+  # ruleset rendered from the world-readable /etc/subuid, exactly as setup
+  # renders it: a ruleset or unit this checkout changed stays inert until
+  # `docker setup` runs again.
   if ! systemctl is-active --quiet "${NFT_SERVICE}"; then
     fail 'devbox-docker-firewall is inactive - project ports would reach the Tailnet and the LAN:'' sudo ./bin/devbox docker setup'
   elif [[ "$(cat "${NFT_CONF}" 2>/dev/null)" != "$(netfilter_ruleset)" ]]; then

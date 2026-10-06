@@ -77,14 +77,18 @@ Needs `sudo`, idempotent; `--check` reports state, no changes made. Installs `ui
 creates unprivileged host user `dev:devbox`, daemon owner, and denies it in the host's sshd (its `~/.ssh` is
 the bind mount); moves `DEVBOX_DATA_DIR` to `/home/dev`, chowns
 the tree; installs the nftables table and `devbox-docker-firewall.service`, keeping project ports off the
-Tailnet and LAN, the host's own services (its sshd, anything on loopback) out of the devbox's reach, and the
-Tailnet overlay (`tailscale0`, Tailscale's address ranges) closed to it - peers' LAN and public addresses stay
+Tailnet and LAN, the host's own services (its sshd, anything on loopback) out of reach of the devbox, its
+project containers (a `--network host` one shares the host's network namespace, and the rules match dev's
+uid plus every subordinate uid in its `/etc/subuid` ranges, so it is covered too) and anything else running
+as those uids, and the Tailnet overlay (`tailscale0`, Tailscale's address ranges) closed to them - peers' LAN
+and public addresses stay
 reachable like the rest of the network, and tailscaled's world-accessible LocalAPI socket can still relay to
 peers for a project container that bind-mounts it (accepted limits, `docs/security.md`); enables a lingering
 rootless `dockerd` on `/run/devbox/docker.sock`, whose user manager reads its units and environment from
 root-owned `/etc/devbox-docker` rather than the bind mount. That closes the files the devbox writes, not the
 manager itself: a project container that bind-mounts `/run/user/1001` can still drive it, bounded by the
-uid-1001 firewall rules (resolver stub only on the host, no Tailnet). A re-run restarts that manager - the
+firewall rules on dev's uid and its subordinate uids (resolver stub only on the host, no Tailnet). A re-run
+restarts that manager - the
 project daemon and every project container with it - only when its drop-in changed or the running manager
 predates it.
 

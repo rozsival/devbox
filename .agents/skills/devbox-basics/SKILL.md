@@ -40,8 +40,9 @@ Four facts:
    publishes project ports on the devbox bridge gateway (`--ip` plus `--default-network-opt`, since `--ip`
    alone covers only the default bridge). `devbox-docker-firewall` - nftables matching the daemon's socket
    cgroup - holds the line regardless: even an explicit `0.0.0.0:` port never reaches the Tailnet or the
-   LAN, and neither the devbox nor its project containers reach the host's own services (sshd included;
-   uid 1001 gets no host address, loopback included, but systemd-resolved's DNS stub) or a Tailnet peer
+   LAN, and neither the devbox nor its project containers - `--network host` ones included - reach the
+   host's own services (sshd included; dev's uid and its `/etc/subuid` ranges get no host address, loopback
+   included, but systemd-resolved's DNS stub) or a Tailnet peer
    over the overlay (`tailscale0`, Tailscale's ranges). Accepted limits (`docs/security.md`): peers stay
    reachable at LAN or public addresses; a project container can relay to them through `tailscaled`'s
    world-accessible LocalAPI socket, or drive dev's user manager through `/run/user/1001`. A Tailscale exit

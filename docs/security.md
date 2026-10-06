@@ -9,15 +9,15 @@
 
 ## 🧱 Boundaries
 
-| Boundary                   | Enforced by                                                                                                                                                                       |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No host filesystem access  | Only `${DEVBOX_DATA_DIR}` mounted, at `/home/dev` (see accepted limit 5)                                                                                                          |
-| No host root Docker daemon | `/var/run/docker.sock` not mounted; reachable daemon is rootless                                                                                                                  |
-| No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true`                                                                                                      |
-| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` — Tailnet address only                                                                                                                     |
-| No host services           | `devbox-docker-firewall`: the devbox bridge reaches only the project daemon's ports; uid 1001 — the daemon, its containers — no host address, loopback included, but the DNS stub |
-| No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`                                                                                                              |
-| No private keys at rest    | Devbox holds no SSH private key; `AllowAgentForwarding yes` only lets `ssh -A devbox` borrow the laptop's forwarded 1Password agent for one connection                            |
+| Boundary                   | Enforced by                                                                                                                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No host filesystem access  | Only `${DEVBOX_DATA_DIR}` mounted, at `/home/dev` (see accepted limit 5)                                                                                                                                                                    |
+| No host root Docker daemon | `/var/run/docker.sock` not mounted; reachable daemon is rootless                                                                                                                                                                            |
+| No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true`                                                                                                                                                                |
+| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` — Tailnet address only                                                                                                                                                                               |
+| No host services           | `devbox-docker-firewall`: the devbox bridge reaches only the project daemon's ports; dev's uid and its subordinate uids — the daemon, its containers, `--network host` ones included — no host address, loopback included, but the DNS stub |
+| No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`                                                                                                                                                                        |
+| No private keys at rest    | Devbox holds no SSH private key; `AllowAgentForwarding yes` only lets `ssh -A devbox` borrow the laptop's forwarded 1Password agent for one connection                                                                                      |
 
 ## 👤 No root process at runtime
 
@@ -108,9 +108,10 @@ These are known and deliberate, not gaps to be closed later:
    closes the path the devbox writes directly — files in the bind mount. It doesn't close the manager: a project
    container can bind-mount `/run/user/1001` (its bus, `systemd/private`, `systemd/user.control`,
    `systemd/transient`) and change the daemon's environment or start units as `dev` in the host's network namespace.
-   What bounds such code is the boundary's uid-1001 rules: no host address — loopback included — but systemd-resolved's
-   stub, no Tailnet overlay, and its listening sockets answer only on loopback and `docker0`. Not applied: running
-   the daemon from a root-owned system unit with no user manager.
+   What bounds such code is the boundary's rules for dev's uid and its subordinate uids: no host address — loopback
+   included — but systemd-resolved's stub, no Tailnet overlay, and its listening sockets answer only on loopback and
+   `docker0`. The same rules cover a `--network host` project container, which shares the host's network namespace.
+   Not applied: running the daemon from a root-owned system unit with no user manager.
 6. **A project port is one firewall rule away from the Tailnet.** Rootless Docker binds every published port on
    `0.0.0.0`, with no way to change that — `devbox-docker-firewall`, an nftables table dropping input to that daemon's
    sockets outside loopback and the devbox bridge, confines them, and keeps the host's own services and the Tailnet

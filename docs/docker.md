@@ -85,9 +85,9 @@ or a daemon configuration the bind mount controls, gets reported, not discovered
 The drop-in closes the path the devbox writes directly: files in the bind mount. It doesn't close dev's user manager
 itself. A project container can bind-mount `/run/user/1001` — the manager's bus, `systemd/private`,
 `systemd/user.control`, `systemd/transient` — and through it change the daemon's environment or start units as `dev` in
-the host's network namespace. What bounds such code is the boundary table's uid-1001 rules
-([below](#2-the-boundary)): no host service but systemd-resolved's stub, no Tailnet, and its listening sockets answer
-only on loopback and `docker0`. Running the daemon from a root-owned system unit with no user manager would close it;
+the host's network namespace. What bounds such code is the boundary table's output rules for dev's uid and its
+subordinate uids ([below](#2-the-boundary)): no host service but systemd-resolved's stub, no Tailnet, and its listening
+sockets answer only on loopback and `docker0`. Running the daemon from a root-owned system unit with no user manager would close it;
 that isn't applied ([accepted limit 5](security.md#-accepted-limits)).
 
 ## 🧱 Where a published port is bound
@@ -132,11 +132,11 @@ table inet devbox {
 
   chain output {
     type filter hook output priority filter - 10; policy accept;
-    meta skuid 1001 ct state new ip daddr { 127.0.0.53, 127.0.0.54 } meta l4proto { tcp, udp } th dport 53 accept
-    meta skuid 1001 ct state new fib daddr type local drop
-    meta skuid 1001 ct state new oifname "tailscale0" drop
-    meta skuid 1001 ct state new ip daddr 100.64.0.0/10 drop
-    meta skuid 1001 ct state new ip6 daddr fd7a:115c:a1e0::/48 drop
+    meta skuid { 1001, 165536-231071 } ct state new ip daddr { 127.0.0.53, 127.0.0.54 } meta l4proto { tcp, udp } th dport 53 accept
+    meta skuid { 1001, 165536-231071 } ct state new fib daddr type local drop
+    meta skuid { 1001, 165536-231071 } ct state new oifname "tailscale0" drop
+    meta skuid { 1001, 165536-231071 } ct state new ip daddr 100.64.0.0/10 drop
+    meta skuid { 1001, 165536-231071 } ct state new ip6 daddr fd7a:115c:a1e0::/48 drop
   }
 }
 ```
@@ -155,17 +155,22 @@ The same table is the boundary around the host's own services. ufw's rule admits
 gateway and the workstation's sshd listens on all addresses, so from `docker0` only the daemon's sockets are accepted
 and the rest is dropped: the devbox reaches project ports and nothing else on the host. Its project containers would
 get there one hop later — they leave through slirp4netns, a `dev` process in the host namespace — hence the output
-chain refusing new connections from uid 1001 to any of the host's addresses, loopback included. The one exception is
-systemd-resolved's stub (`127.0.0.53`/`127.0.0.54`, port 53), where the daemon's DNS goes. `dockerd-rootless.sh` turns
-off slirp4netns' host-loopback mapping, so a container alone wouldn't reach loopback anyway; the rule is for code
-running as `dev` in the host namespace, which a container can start through dev's user manager
-([above](#the-user-manager-is-not-fenced-off)), and which would otherwise reach the host's sshd and every
-loopback-only service. Ports the host's root daemon publishes are untouched, DNATed to their containers before this
-table sees the packet.
+chain refusing new connections from dev's uid and its subordinate uids to any of the host's addresses, loopback
+included. The one exception is systemd-resolved's stub (`127.0.0.53`/`127.0.0.54`, port 53), where the daemon's DNS
+goes.
+
+The `meta skuid` set is rendered when the table is written: dev's uid plus every range `/etc/subuid` gives `dev`
+(`165536-231071` by default), as listed above. The ranges are what make it a boundary. A project container started with
+`--network host` shares the host's network namespace, and its processes run on the host as dev's subordinate uids —
+container root as `dev` itself, container uid N ≥ 1 as host uid 165536 + N − 1 — so `docker run --network host -u 1000`
+would otherwise reach the host's sshd, every loopback-only service and the Tailnet. Such a container meets these rules
+like any other `dev` process: no host service but the resolver stub, no Tailnet. So does code running as `dev` in the
+host namespace, which a container can start through dev's user manager ([above](#the-user-manager-is-not-fenced-off)).
+Ports the host's root daemon publishes are untouched, DNATed to their containers before this table sees the packet.
 
 And it keeps both off the Tailnet overlay. Peers reach the devbox — its sshd is published on the Tailscale address — but
 nothing in it needs to reach a peer, and a forwarded agent plus a peer's sshd is a way off this machine. So no new
-connection leaves `docker0`, or leaves as uid 1001, through `tailscale0` or towards a Tailscale address
+connection leaves `docker0`, or leaves as dev's uid or a subordinate uid, through `tailscale0` or towards a Tailscale address
 (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`); replies to your inbound sessions are established and pass. Docker's DNAT runs
 before both chains, so a root-daemon port published on the host's Tailscale address — a local LLM server, say — has
 already become a container address and never matches: that traffic stays on the host. The address rules also cover
@@ -349,19 +354,21 @@ stale, or the address drifted.
 ### Can the devbox reach the workstation's own services?
 
 No — only the project daemon's published ports. `devbox-docker-firewall` drops everything else `docker0` sends the
-host, the workstation's sshd included, and stops project containers — or anything running as `dev` on the host — getting
-there through slirp4netns or loopback: uid 1001 reaches no host address but systemd-resolved's DNS stub. Both checks
-should come back empty:
+host, the workstation's sshd included, and stops project containers — `--network host` ones too — or anything running
+as `dev` on the host getting there through slirp4netns or loopback: dev's uid and its subordinate uids reach no host
+address but systemd-resolved's DNS stub. All three checks should come back empty:
 
 ```bash
 ssh devbox 'timeout 3 bash -c "</dev/tcp/host.docker.internal/2222" && echo reachable'
 ssh devbox 'docker run --rm alpine:3 nc -w 3 <workstation-lan-ip> 2222 </dev/null'
+ssh devbox 'docker run --rm --network host -u 1000 alpine:3 nc -w 3 127.0.0.1 2222 </dev/null'
 ```
 
 ### Can the devbox reach other machines on my Tailnet?
 
 Not directly over the overlay — it is reachable _from_ the Tailnet, and `devbox-docker-firewall` drops every new
-connection from `docker0` or uid 1001 through `tailscale0` or to a Tailscale address. A service the host's root daemon
+connection from `docker0`, or from dev's uid or its subordinate uids, through `tailscale0` or to a Tailscale address. A
+service the host's root daemon
 publishes on the host's own Tailscale address still works, and never leaves the host: Docker rewrites it to the
 container first. Both checks should come back empty (a peer's Tailscale IP from `tailscale status`):
 

@@ -226,16 +226,19 @@ the host's root Docker daemon.
     with no `ExecStop` - a restart's `nft -f` swaps the table atomically) that keeps published project ports
     off every interface but loopback and `docker0` (`--ip` covers only the default bridge, so the unit also
     passes `--default-network-opt` and the table backs both up) and the host's own services out of the devbox's
-    reach (from `docker0` only the daemon's sockets answer; uid 1001's host processes - the daemon,
-    rootlesskit, slirp4netns and anything dev's user manager starts - open nothing on the host but
-    systemd-resolved's stub, `127.0.0.53`/`127.0.0.54` port 53, loopback included, because a project container
-    can drive that user manager, below) and both off the Tailnet (no new connection from `docker0` or uid 1001
-    through `tailscale0` or to `100.64.0.0/10`/`fd7a:115c:a1e0::/48`, evaluated after Docker's DNAT so a
-    root-daemon port on the host's Tailscale address still works). That covers direct connections to the
-    overlay only: tailscaled's LocalAPI socket is world-accessible and dials peers for any local caller, so a
-    project container that bind-mounts `/run/tailscale` relays through it, and peers stay reachable at their LAN
-    or public addresses (accepted limits, `docs/security.md`). `doctor host` fails until the loaded file matches
-    the ruleset the checkout writes and the installed unit matches the one `netfilter_unit` writes. Setup also
+    reach (from `docker0` only the daemon's sockets answer; host processes running as dev's uid or one of its
+    `/etc/subuid` subordinate uids - the daemon, rootlesskit, slirp4netns, anything dev's user manager starts and
+    every `--network host` project container, which shares the host's network namespace and runs a non-root
+    user as a subordinate uid - open nothing on the host but systemd-resolved's stub, `127.0.0.53`/`127.0.0.54`
+    port 53, loopback included, because a project container can drive that user manager, below; the set is
+    rendered from `/etc/subuid` at run time, `{ 1001, 165536-231071 }` by default) and both off the Tailnet (no
+    new connection from `docker0` or those uids through `tailscale0` or to `100.64.0.0/10`/`fd7a:115c:a1e0::/48`,
+    evaluated after Docker's DNAT so a root-daemon port on the host's Tailscale address still works). That covers
+    direct connections to the overlay only: tailscaled's LocalAPI socket is world-accessible and dials peers for
+    any local caller, so a project container that bind-mounts `/run/tailscale` relays through it, and peers stay
+    reachable at their LAN or public addresses (accepted limits, `docs/security.md`). `doctor host` fails until
+    the loaded file matches the ruleset the checkout writes and the installed unit matches the one
+    `netfilter_unit` writes. Setup also
     adds the one `ufw` rule that lets the devbox bridge reach the gateway, and runs a lingering rootless
     `dockerd` on `/run/devbox/docker.sock` from a root-owned unit in `/etc/systemd/user`, so nothing in the bind
     mount can rewrite the daemon's command line - plus a `user@1001.service` drop-in pointing dev's
@@ -249,9 +252,9 @@ the host's root Docker daemon.
     stays down until `docker compose up -d`) - re-runs are no-ops once current, and `doctor host` compares the
     manager's `ExecMainStartTimestamp` with the drop-in's mtime. The relocation closes only the path the devbox
     writes directly: through `/run/user/1001` (the bus, `systemd/private`) a project container can still change
-    the daemon's environment or start units as dev in the host network namespace - the uid-1001 rules above are
-    what bound such code. Old unit files in the bind mount are removed as dev, never by a root `rm` through
-    planted symlinks, and every docker CLI call as dev runs with `DOCKER_CONFIG` outside `/home/dev`, so the
+    the daemon's environment or start units as dev in the host network namespace - the rules above on dev's uid
+    and its subordinate uids are what bound such code. Old unit files in the bind mount are removed as dev, never
+    by a root `rm` through planted symlinks, and every docker CLI call as dev runs with `DOCKER_CONFIG` outside `/home/dev`, so the
     bind mount's `config.json` and `cli-plugins` are never read or run on the host. `doctor host` checks sshd's
     effective config unprivileged (`sshd -T` against a throwaway ed25519 host key, as `user=dev`), after first
     flagging a stale or missing drop-in file

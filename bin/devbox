@@ -1214,14 +1214,19 @@ step_firewall() {
 # a level-2 match on a socket whose cgroup sits higher (PID 1's own) is skipped,
 # not compared, and a negated rule would wave it through. The daemon's
 # containers reach the host one hop later, through slirp4netns - a `dev`
-# process in the host netns - so the output chain refuses new connections from
-# `dev` to any of the host's addresses, loopback included. The one exception
-# is systemd-resolved's stub (127.0.0.53/54, port 53), which the daemon's own
-# DNS goes through. Loopback cannot stay open on the grounds that no container
-# reaches it (dockerd-rootless.sh turns off slirp4netns' host-loopback mapping):
-# any project container can bind-mount /run/user/<uid> and drive dev's systemd
-# user manager over its private bus, which then runs whatever it is told as
-# `dev` in the host netns - one loopback connection away from the host's sshd.
+# process in the host netns - and a project container started with
+# `--network host` is in the host netns itself, running as dev (its root) or as
+# one of dev's subordinate uids (any other user). So the output chain refuses
+# new connections from dev's uid and every subordinate uid it owns to any of
+# the host's addresses, loopback included. The one exception is
+# systemd-resolved's stub (127.0.0.53/54, port 53), which the daemon's own DNS
+# goes through. Loopback cannot stay open on the grounds that no container
+# reaches it (dockerd-rootless.sh turns off slirp4netns' host-loopback
+# mapping): besides host networking, any project container can bind-mount
+# /run/user/<uid> and drive dev's systemd user manager over its private bus,
+# which then runs whatever it is told as dev - or, through rootlesskit, as a
+# subordinate uid - in the host netns, one loopback connection away from the
+# host's sshd.
 #
 # Unlike the DNAT case in docs/networking.md these are ordinary host-namespace
 # sockets, so INPUT genuinely applies to them.
@@ -1229,13 +1234,14 @@ step_firewall() {
 # And it keeps both off the Tailnet. Peers reach the devbox (its sshd is
 # published on the Tailscale address), but nothing in it needs to reach a peer,
 # and a forwarded agent plus a peer's sshd is a way off this machine. So no new
-# connection leaves the bridge, or leaves as `dev`, through the Tailscale
-# interface or towards a Tailscale address; replies to inbound sessions are
-# established, so they pass. Both run after Docker's DNAT, so a root-daemon
-# port published on the host's Tailscale address - the local LLMs - is already
-# rewritten to its container and never matches. The address rules also cover
-# tailscaled being down: the address is then no longer local and a packet to
-# it would follow the default route out to the ISP.
+# connection leaves the bridge, or leaves as dev or one of its subordinate
+# uids, through the Tailscale interface or towards a Tailscale address; replies
+# to inbound sessions are established, so they pass. Both run after Docker's
+# DNAT, so a root-daemon port published on the host's Tailscale address - the
+# local LLMs - is already rewritten to its container and never matches. The
+# address rules also cover tailscaled being down: the address is then no
+# longer local and a packet to it would follow the default route out to the
+# ISP.
 #
 # Its own `inet` table at a lower priority than ufw's chains, so the two never
 # touch each other's rules; ufw still needs its one allow rule, because a table
@@ -1243,8 +1249,11 @@ step_firewall() {
 #
 # A function rather than inline, because `doctor host` compares the file the
 # unit loads against it: a ruleset changed here is inert until `docker setup`
-# runs again.
+# runs again. /etc/subuid is world-readable, so doctor renders the same set
+# without privileges.
 netfilter_ruleset() {
+  local ids
+  ids="$(dev_ids)"
   cat <<NFT_BODY
 #!/usr/sbin/nft -f
 # Managed by ./bin/devbox docker setup - do not edit.
@@ -1255,13 +1264,14 @@ netfilter_ruleset() {
 # covers every port that daemon will ever publish, at any address.
 #
 # It also keeps the host's own services - its sshd above all - away from the
-# devbox: from its bridge only the daemon's sockets answer, and uid ${DEV_UID} -
-# slirp4netns for the daemon's containers, and anything a container gets dev's
+# devbox: from its bridge only the daemon's sockets answer, and uid ${DEV_UID}
+# with its subordinate uids - slirp4netns for the daemon's containers, a
+# project container on the host network, and anything a container gets dev's
 # user manager to start - opens nothing on the host's addresses, loopback
 # included, but systemd-resolved's stub on port 53.
 #
 # And it keeps both off the Tailnet: no new connection from the devbox bridge or
-# from uid ${DEV_UID} through ${TAILNET_IFACE} or to a Tailscale address. Docker's
+# from those uids through ${TAILNET_IFACE} or to a Tailscale address. Docker's
 # DNAT runs first, so a root-daemon port published on the host's Tailscale
 # address still works - it has become a container address by then.
 #
@@ -1292,14 +1302,35 @@ table inet devbox {
 
   chain output {
     type filter hook output priority filter - 10; policy accept;
-    meta skuid ${DEV_UID} ct state new ip daddr { 127.0.0.53, 127.0.0.54 } meta l4proto { tcp, udp } th dport 53 accept
-    meta skuid ${DEV_UID} ct state new fib daddr type local drop
-    meta skuid ${DEV_UID} ct state new oifname "${TAILNET_IFACE}" drop
-    meta skuid ${DEV_UID} ct state new ip daddr ${TAILNET_IPV4} drop
-    meta skuid ${DEV_UID} ct state new ip6 daddr ${TAILNET_IPV6} drop
+    meta skuid ${ids} ct state new ip daddr { 127.0.0.53, 127.0.0.54 } meta l4proto { tcp, udp } th dport 53 accept
+    meta skuid ${ids} ct state new fib daddr type local drop
+    meta skuid ${ids} ct state new oifname "${TAILNET_IFACE}" drop
+    meta skuid ${ids} ct state new ip daddr ${TAILNET_IPV4} drop
+    meta skuid ${ids} ct state new ip6 daddr ${TAILNET_IPV6} drop
   }
 }
 NFT_BODY
+}
+
+# dev's uid plus every subordinate range /etc/subuid gives it, as an nft
+# anonymous set: a container user other than root runs as one of those uids,
+# and with --network host or through rootlesskit it does so in the host netns.
+# Entries match by name or uid, in file order; `start:count` becomes
+# `start-end`, a single id stays a single element.
+dev_ids() {
+  local ids="${DEV_UID}" owner start count
+  if [[ -r /etc/subuid ]]; then
+    while IFS=: read -r owner start count || [[ -n "${owner}" ]]; do
+      [[ "${owner}" == "${DEV_USER}" || "${owner}" == "${DEV_UID}" ]] || continue
+      [[ "${start}" =~ ^[0-9]+$ && "${count}" =~ ^[0-9]+$ ]] || continue
+      if ((count == 1)); then
+        ids+=", ${start}"
+      elif ((count > 1)); then
+        ids+=", ${start}-$((start + count - 1))"
+      fi
+    done </etc/subuid
+  fi
+  printf '{ %s }' "${ids}"
 }
 
 # nft resolves the `socket cgroupv2` path to a cgroup *id* when the table
@@ -1435,7 +1466,7 @@ step_socket_dir() {
 # touching the daemon's API. This drop-in moves both directories somewhere
 # root-owned. It closes the files, not the manager's bus: a project container
 # that bind-mounts /run/user/<uid> can still start units as dev, which is why
-# step_netfilter holds dev's uid, not just the daemon's sockets. A running
+# step_netfilter holds dev's uids, not just the daemon's sockets. A running
 # manager keeps the environment it started with, so it only takes effect from
 # the manager's next start.
 #
@@ -1895,10 +1926,13 @@ doctor_host() {
 
   # The rootless daemon publishes every project port on 0.0.0.0 and cannot be
   # told otherwise, so this table - not the daemon - is what keeps those ports
-  # off the Tailnet and the LAN, and the host's own sshd out of the devbox's
-  # reach. `is-active` needs no privileges; reading the table itself would, so
-  # the files the unit is made of stand in for it: a ruleset or unit this
-  # checkout changed stays inert until `docker setup` runs again.
+  # off the Tailnet and the LAN, and the host's own services out of reach of
+  # the devbox and of dev's uid and subordinate uids (host-network project
+  # containers included). `is-active` needs no privileges; reading the table
+  # itself would, so the files the unit is made of stand in for it - the
+  # ruleset rendered from the world-readable /etc/subuid, exactly as setup
+  # renders it: a ruleset or unit this checkout changed stays inert until
+  # `docker setup` runs again.
   if ! systemctl is-active --quiet "${NFT_SERVICE}"; then
     fail 'devbox-docker-firewall is inactive - project ports would reach the Tailnet and the LAN:'' sudo ./bin/devbox docker setup'
   elif [[ "$(cat "${NFT_CONF}" 2>/dev/null)" != "$(netfilter_ruleset)" ]]; then

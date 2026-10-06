@@ -156,12 +156,13 @@ No — only the IPv4 Tailscale address from `tailscale ip -4` and `127.0.0.1`.
 No — the rootless daemon publishes on the devbox bridge gateway, not `0.0.0.0`; `devbox-docker-firewall` blocks `INPUT`
 outside loopback and that bridge (see [Why UFW cannot help](#why-ufw-cannot-help)), overriding even a port spec's
 default. So `ports: ['5432:5432']` reaches only the devbox and host — see [Docker](docker.md).
-Nor can they reach a Tailnet peer over the overlay: as uid 1001 in the host's namespace, their traffic meets the same
-table's output rules.
+Nor can they reach a Tailnet peer over the overlay: running as dev's uid or one of its subordinate uids in the host's
+namespace — a `--network host` container included — their traffic meets the same table's output rules.
 
 ### Why did the devbox lose internet when I enabled an exit node?
 
 With a Tailscale exit node set on the workstation, its outbound traffic leaves through `tailscale0`, and
-`devbox-docker-firewall` drops every new connection from `docker0` or uid 1001 on that interface — the devbox and the
+`devbox-docker-firewall` drops every new connection from `docker0`, or from dev's uid or its subordinate uids, on that
+interface — the devbox and the
 project daemon (image pulls included) lose the internet. Clear the exit node on the workstation
 (`tailscale set --exit-node=`); the boundary has no exception for it.
