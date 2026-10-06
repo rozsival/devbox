@@ -36,8 +36,8 @@ ports:
 > `BIND_ADDR` is **mandatory**. Empty, the first mapping would degrade to `:2223:2222` — `0.0.0.0`, every interface — so
 > compose itself refuses it (`required variable BIND_ADDR is missing a value`), not just `./bin/devbox up`'s preflight:
 > a bare `docker compose up` skips the CLI. Every command that loads the compose project interpolates the file, so while
-> it's empty `up`, `down`, `logs` and `ps` fail; exec-based ones — `shell`, `bootstrap`, `hook`, `sessions` — still
-> work, so the recovery shell stays available. `./bin/devbox env` fills it; `docker rm -f devbox` stops a box already
+> it's empty `up`, `down`, `logs` and `ps` fail; exec-based ones — `shell`, `bootstrap`, `hook` — still work, so the
+> recovery shell stays available. `./bin/devbox env` fills it; `docker rm -f devbox` stops a box already
 > published on `0.0.0.0`.
 
 ### Why UFW cannot help

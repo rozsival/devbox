@@ -113,8 +113,8 @@ prompts. Unlock and approve; if it persists, use the documented file-key excepti
 ### `up` fails with `BIND_ADDR is empty`
 
 Preflight working as intended — every command that loads the compose project (`up`, `down`, `logs`, `ps`) fails until
-it's set; the exec-based ones (`shell`, `bootstrap`, `hook`, `sessions`) still work, so the recovery shell stays
-available. Run `./bin/devbox env` (Tailscale must be up first); a box already published on `0.0.0.0` goes with
+it's set; the exec-based ones (`shell`, `bootstrap`, `hook`) still work, so the recovery shell stays available. Run
+`./bin/devbox env` (Tailscale must be up first); a box already published on `0.0.0.0` goes with
 `docker rm -f devbox`.
 
 ### `doctor` reports `published on 0.0.0.0`

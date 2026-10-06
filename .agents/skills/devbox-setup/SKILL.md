@@ -65,8 +65,8 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox env'
 `env` creates `.env` from `.env.example` (never clobbers an existing), filling `BIND_ADDR` from
 `tailscale ip -4` plus `HOST_UID`/`HOST_GID` - the dedicated `dev` host user if it exists, else the invoking
 user. Tailscale must be up first: down means no address to write, and every command that loads the compose
-project (`up`, `down`, `logs`, `ps`) refuses the empty value - exec-based ones (`shell`, `bootstrap`, `hook`,
-`sessions`) still work, so the recovery shell stays available. Then edit `~/devbox/.env` on the workstation -
+project (`up`, `down`, `logs`, `ps`) refuses the empty value - exec-based ones (`shell`, `bootstrap`,
+`hook`) still work, so the recovery shell stays available. Then edit `~/devbox/.env` on the workstation -
 at minimum, `devbox.pub`
 in `DEVBOX_EXTRA_AUTHORIZED_KEYS` (newline-separated).
 

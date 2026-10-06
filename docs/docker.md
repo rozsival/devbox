@@ -143,9 +143,9 @@ table inet devbox {
 ```
 
 The conntrack rule isn't decoration. `dockerd-rootless.sh` passes `--detach-netns`: the daemon runs in the _host_
-namespace and only its containers get the detached one, so image-pull and DNS replies also arrive on a socket in that
-slice. Without `ct state established` the daemon would have no outbound connectivity. An inbound connection is
-`ct state new`, so it still meets the drop.
+namespace and its containers get the detached one — all but `--network host` ones, which share the host's (below) —
+so image-pull and DNS replies also arrive on a socket in that slice. Without `ct state established` the daemon would
+have no outbound connectivity. An inbound connection is `ct state new`, so it still meets the drop.
 
 Matching is by the **listening socket's cgroup**, covering every port that daemon will ever publish, at any address,
 without knowing port numbers: loopback and the devbox bridge are accepted, everywhere else dropped — so

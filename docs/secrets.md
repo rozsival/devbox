@@ -131,8 +131,9 @@ Resolution order inside `devbox-gh-token`, first hit wins:
 | 3     | the same variable read **directly out of `secrets.env`**                                                                                            |
 
 Step 3 is why `gh` needs no reconnect after adding a token, and why the resolver's error is honest: the file is the only
-place it looks. A `secrets.env` that references an unset variable or has a syntax error does not silence it: the file is
-read with `nounset` off, and a read that fails anyway falls through to the same "not set" diagnostics.
+place it looks. A `secrets.env` that references an unset variable does not silence it: the file is read with `nounset`
+off. A read that fails anyway — a shell syntax error such as an unterminated `X=(`, which bash 3.2's `bash -n` misses —
+reports that syntax error rather than an unset variable.
 
 `devbox-gh-token --identity <slug>` returns that identity's token whatever the working directory and ignoring an
 inherited `GH_TOKEN` — for a caller that already knows whose token it needs, like the per-identity checks of `bootstrap`

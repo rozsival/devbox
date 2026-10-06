@@ -300,8 +300,8 @@ serving the `devbox` block only.
 
 No — the preflight is working as intended. Every command that loads the compose project fails while `BIND_ADDR` is
 empty — `up`, `down`, `logs` and `ps` — and a bare `docker compose` stops with `required variable BIND_ADDR is missing a
-value` for the same reason. The exec-based ones (`shell`, `bootstrap`, `hook`, `sessions`) still work, so the recovery
-shell stays available. Run `./bin/devbox env` (Tailscale up first), or set the address by hand. A box already
+value` for the same reason. The exec-based ones (`shell`, `bootstrap`, `hook`) still work, so the recovery shell stays
+available. Run `./bin/devbox env` (Tailscale up first), or set the address by hand. A box already
 published on `0.0.0.0` can't wait for that: `docker rm -f devbox` removes it without compose. `0.0.0.0` as fallback
 would expose devbox publicly.
 
