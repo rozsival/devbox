@@ -201,7 +201,10 @@ the host's root Docker daemon.
     `/home/dev` (path identity), writes `/etc/tmpfiles.d/devbox-docker.conf`, installs the nftables table plus
     `devbox-docker-firewall.service` that keeps published project ports off every interface but loopback and
     `docker0` (`--ip` covers only the default bridge, so the unit also passes `--default-network-opt` and the
-    table backs both up), adds the one `ufw` rule that lets the devbox bridge reach the gateway, and runs a
+    table backs both up) and the host's own services out of the devbox's reach (from `docker0` only the daemon's
+    sockets answer; its containers, leaving through slirp4netns as uid 1001 in the host netns, open nothing on
+    the host's addresses but loopback - `doctor host` fails until the loaded file matches the ruleset the
+    checkout writes), adds the one `ufw` rule that lets the devbox bridge reach the gateway, and runs a
     lingering rootless `dockerd` on `/run/devbox/docker.sock` from a root-owned unit in `/etc/systemd/user`,
     so nothing in the bind mount can rewrite the daemon's command line
   - `devbox sync omp` - copies `~/.omp/agent/config.yml` into the devbox over `Host devbox`; only the preset,
@@ -227,8 +230,11 @@ the host's root Docker daemon.
     App credentials)
   - `devbox doctor laptop` - read-only counterpart of `devbox doctor host`: no private key on disk, one
     `id_<slug>.pub`/`signing_<slug>.pub` pair per identity (plus `devbox.pub`) held by the 1Password agent,
-    each forge host's plain key and one `.pub` per identity's ssh tag selecting through it, `~/.gitconfig`'s
-    org includes probed with a `hasconfig:` remote per pattern (email, signing key, `core.sshCommand`), no
+    each forge host's plain key and one `.pub` per identity's ssh tag selecting through it, `Host <workstation>`
+    on the default identity's `id_<slug>.pub` and the workstation refusing `devbox.pub` (every `ssh -A devbox`
+    leaves that key approved for anything in the devbox; asked with `ssh -v` and no agent, so the server answers
+    before any signature and 1Password never prompts), `~/.gitconfig`'s org includes probed with a `hasconfig:`
+    remote per pattern (email, signing key, `core.sshCommand`), no
     clone left on a stale SSH-alias remote, the registry itself (`devbox-identities check`), every gitconfig
     signing via `op-ssh-sign` with the right `signing_*.pub` (the base `[user]` name/email being the default
     identity's), the agent override installed - the static files

@@ -46,6 +46,7 @@ local Docker daemon, and `deploy`/`sync`/`agent install` only on the laptop. Fro
 | `~/.omp/agent/config.yml` (laptop)     | `./bin/devbox sync omp`          | Personal state, not repo content  |
 | `~/.config/devbox/identities.conf`     | `./bin/devbox sync identities`   | Hand-held state, not repo content |
 | A new host needing project Docker      | `sudo ./bin/devbox docker setup` | Host provisioning, needs sudo     |
+| The firewall ruleset in `cli/lib/`     | `sudo ./bin/devbox docker setup` | `doctor` flags the stale file     |
 
 `up` = `docker compose build` then `docker compose up -d` behind a preflight (`BIND_ADDR` non-empty,
 `${DEVBOX_DATA_DIR}` present and owned by `HOST_UID:HOST_GID`); missing project Docker socket only warns -
@@ -115,7 +116,8 @@ to `tailscale ip -4`, port listening on `BIND_ADDR`, **nothing** on `0.0.0.0`, c
 as `dev`, twelve toolchain probes, real exit codes, the agent git override intact (`omp` and `claude` each
 resolving through a symlink to their launcher, not a file an update replaced), `moshi-hook` running (unpaired warns,
 stopped fails - `./bin/devbox hook` restarts it), project Docker daemon reachable and rootless, `host.docker.internal`
-resolving to publish address, and `devbox-docker-firewall` active.
+resolving to publish address, and `devbox-docker-firewall` active with the ruleset this checkout writes (stale
+after a deploy that changed it, until `sudo ./bin/devbox docker setup`).
 
 If `doctor` reports `BIND_ADDR is X but Tailscale reports Y`, the node's address changed:
 `./bin/devbox env && ./bin/devbox up`.

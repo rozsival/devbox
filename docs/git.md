@@ -175,9 +175,10 @@ Without `-A`, a manual `git push` or signed commit fails on purpose — no key t
 `Host devbox` block keeps it off — only an explicit `ssh -A devbox` does.
 
 > [!WARNING]
-> **Accepted limit.** For that connection's lifetime, anything inside it can reach the agent socket with a raw `ssh`
-> call. Git in an agent session can't (fenced to HTTPS), but a manual shell inside `ssh -A devbox` isn't. 1Password's
-> per-use approval is the backstop: nothing signs without it. See [Security Model](security.md#-accepted-limits).
+> **Accepted limit.** For that connection's lifetime the forwarded socket is open to every process in the devbox, not
+> just the shell you forwarded it into. Git in an agent session can't use it (fenced to HTTPS); a raw `ssh` from
+> anything else can. 1Password approves per key and per application, not per use, so a key your terminal app is
+> already approved for signs without a prompt. See [Security Model](security.md#-accepted-limits).
 
 ---
 
@@ -309,7 +310,7 @@ nothing in the registry names gets no credential at all.
 
 `GIT_SSH_COMMAND` points at `devbox-git-no-ssh`, printing a one-line explanation and exiting 255 (ssh's own "could not
 connect") for _any_ uncovered remote. Set in the environment, not `core.sshCommand`, so a repository-local override
-can't reach past it — keeping an agent off your SSH keys and any forwarded agent, whatever the remote says.
+can't reach past it — keeping an agent's git off your SSH keys and any forwarded agent, whatever the remote says.
 
 ---
 
@@ -333,8 +334,8 @@ account; signing with it verifies locally but shows _Unverified_. `signing_pubke
 is the public key GitHub lists under _SSH signing keys_ — `git config user.signingkey` prints it on the laptop.
 
 `ssh-keygen -Y sign` takes a _public_ key file and signs through `SSH_AUTH_SOCK` — no private key on disk needed.
-1Password prompts for approval, per signature. Without a forwarded agent (`ssh devbox`, a herdr pane,
-`./bin/devbox shell`), a manual commit fails to sign — by design.
+1Password asks the first time your terminal app uses the key, then remembers until it locks (its default). Without a
+forwarded agent (`ssh devbox`, a herdr pane, `./bin/devbox shell`), a manual commit fails to sign — by design.
 
 ```bash
 git log --show-signature -1                                          # Good "git" signature with ED25519 key
@@ -566,15 +567,16 @@ force-push, after checking nobody else has pulled the branch.
 
 ### Why are agent commits unsigned?
 
-No private key or forwarded agent to sign with in an agent session — `GIT_SSH_COMMAND` fences off SSH, with no HTTPS
-equivalent of `ssh-keygen -Y sign`. `agent.gitconfig` sets `commit.gpgsign = false` rather than fail. Provenance: author
-identity, and for App-backed pushes, only the App's token could have pushed it — not a signature.
+No private key to sign with in an agent session, and its git never touches a forwarded agent — `GIT_SSH_COMMAND` fences
+off SSH, with no HTTPS equivalent of `ssh-keygen -Y sign`. `agent.gitconfig` sets `commit.gpgsign = false` rather than
+fail. Provenance: author identity, and for App-backed pushes, only the App's token could have pushed it — not a
+signature.
 
 ### Why does the devbox generate no keys?
 
-A private key there is ambient push authority for every agent, present or not. Public keys, plus a forwarded agent
-prompting per use, keep that authority with you. `bootstrap` deletes any earlier devbox-generated private key, printing
-its fingerprint for revoking on GitHub. See [Security Model](security.md).
+A private key there is ambient push authority for every agent, present or not. Public keys, plus an agent forwarded
+only for one `ssh -A` connection, keep that authority with you. `bootstrap` deletes any earlier devbox-generated
+private key, printing its fingerprint for revoking on GitHub. See [Security Model](security.md).
 
 ### Why does a push say `Permission denied (publickey)`?
 
@@ -638,5 +640,6 @@ orgs works the same way as two Apps, at the cost of both identities sharing one 
 
 ### What happens if I run an agent session by hand inside `ssh -A devbox`?
 
-Its git is still fenced to HTTPS — same as anywhere else. The shell around it isn't: anything run there can reach the
-forwarded agent socket with a raw `ssh` call. See [Security Model](security.md#-accepted-limits).
+Its git is still fenced to HTTPS — same as anywhere else. Nothing else is: while that connection lasts, any process in
+the devbox, that session's shell commands included, can reach the forwarded agent socket with a raw `ssh` call. See
+[Security Model](security.md#-accepted-limits).

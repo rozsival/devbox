@@ -168,7 +168,9 @@ step_data_dir() {
 # Packets from the devbox container to a host address are delivered locally, so
 # unlike a *published* port they do traverse INPUT and UFW's default deny stops
 # them (docs/networking.md explains the published-port asymmetry). The rule is
-# scoped to the bridge the devbox is on and the address the daemon publishes on.
+# scoped to the bridge the devbox is on and the address the daemon publishes on,
+# but not to a port - those are the projects' - so it admits every listener on
+# that address; step_netfilter narrows it to the daemon's own sockets.
 #
 # Prints the bridge's CIDR so callers can reuse it; fails loudly, because every
 # later step depends on this address.
@@ -222,16 +224,30 @@ step_firewall() {
 # work from the devbox and from the host and nowhere else, whatever a project's
 # compose file asks for.
 #
+# The same table is the boundary around the host's own services. step_firewall
+# lets the bridge reach every port on the gateway and the host's sshd listens on
+# all addresses, so from the bridge only the daemon's sockets are accepted and
+# the rest is dropped - accept-then-drop rather than a single `!=` match, since
+# a level-2 match on a socket whose cgroup sits higher (PID 1's own) is skipped,
+# not compared, and a negated rule would wave it through. The daemon's
+# containers reach the host one hop later, through slirp4netns - a `dev`
+# process in the host netns - so the output chain refuses new connections from
+# `dev` to any of the host's addresses. Loopback stays open: the daemon's DNS
+# goes through systemd-resolved's stub there, and no container can get to it,
+# because dockerd-rootless.sh turns off slirp4netns' host-loopback mapping.
+#
 # Unlike the DNAT case in docs/networking.md these are ordinary host-namespace
 # sockets, so INPUT genuinely applies to them.
 #
 # Its own `inet` table at a lower priority than ufw's chains, so the two never
 # touch each other's rules; ufw still needs its one allow rule, because a table
 # accepting a packet does not exempt it from later tables.
-step_netfilter() {
-  local want
-  want="$(
-    cat <<NFT_BODY
+#
+# A function rather than inline, because `doctor host` compares the file the
+# unit loads against it: a ruleset changed here is inert until `docker setup`
+# runs again.
+netfilter_ruleset() {
+  cat <<NFT_BODY
 #!/usr/sbin/nft -f
 # Managed by ./bin/devbox docker setup - do not edit.
 #
@@ -239,6 +255,11 @@ step_netfilter() {
 # override that, so this table is what actually keeps project ports off the
 # Tailnet and the LAN. Matching is by the listening socket's cgroup, which
 # covers every port that daemon will ever publish, at any address.
+#
+# It also keeps the host's own services - its sshd above all - away from the
+# devbox: from its bridge only the daemon's sockets answer, and the daemon's
+# containers, which reach the host through slirp4netns as uid ${DEV_UID}, can
+# open nothing on the host's addresses but loopback.
 #
 # The conntrack rule is load-bearing: with --detach-netns the daemon runs in the
 # *host* netns, so every reply to a pull, a DNS lookup or an outbound connection
@@ -252,12 +273,24 @@ table inet devbox {
   chain input {
     type filter hook input priority filter - 10; policy accept;
     ct state established,related accept
-    iifname { "lo", "${DEVBOX_BRIDGE}" } accept
+    iifname "lo" accept
+    iifname "${DEVBOX_BRIDGE}" socket cgroupv2 level 2 "user.slice/user-${DEV_UID}.slice" accept
+    iifname "${DEVBOX_BRIDGE}" drop
     socket cgroupv2 level 2 "user.slice/user-${DEV_UID}.slice" drop
+  }
+
+  chain output {
+    type filter hook output priority filter - 10; policy accept;
+    meta skuid ${DEV_UID} ct state new fib daddr type local ip daddr != 127.0.0.0/8 drop
+    meta skuid ${DEV_UID} ct state new fib daddr type local ip6 daddr != ::1 drop
   }
 }
 NFT_BODY
-  )"
+}
+
+step_netfilter() {
+  local want
+  want="$(netfilter_ruleset)"
 
   if ! command -v nft >/dev/null 2>&1; then
     fail 'nft is not installed - project ports would be published on every interface'

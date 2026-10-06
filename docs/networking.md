@@ -44,20 +44,22 @@ mandatory.
 
 Conversely, for project containers: traffic _from_ the container _to_ a host address is delivered locally, traversing
 `INPUT`, which UFW's default deny would drop — why `sudo ./bin/devbox docker setup` adds one rule,
-`allow in on docker0 to <gateway>` (no source clause: arriving there means a bridge container). The only host service
-reachable from the container is the workstation's sshd, on `0.0.0.0`.
+`allow in on docker0 to <gateway>` (no source clause: arriving there means a bridge container). It admits every port on
+that address, so the boundary table narrows it: from `docker0` only the project daemon's sockets answer, and the
+workstation's own services — its sshd on `0.0.0.0` included — stay out of the devbox's reach, as they do for the
+daemon's containers.
 
 Project ports mirror this: the rootless daemon's listeners _are_ plain host-namespace sockets, so `INPUT` applies — a
 netfilter table, not the publish address, is the boundary. See [Docker](docker.md).
 
 ## 🌐 Port reference
 
-| Port                    | Owner                  | Reachable from                                                                   |
-| ----------------------- | ---------------------- | -------------------------------------------------------------------------------- |
-| `2222` (workstation)    | Workstation's sshd     | The host, on `0.0.0.0` — the only host service reachable from project containers |
-| `2223` (published)      | Devbox container sshd  | `BIND_ADDR` (Tailnet) and `127.0.0.1`, DNATed to container `:2222`               |
-| `2222` (in container)   | Devbox container sshd  | Always the in-container listener, behind the `2223` mapping                      |
-| Project ports (default) | Rootless Docker daemon | `docker0` (the bridge gateway) — `host.docker.internal:<port>` from the devbox   |
+| Port                    | Owner                  | Reachable from                                                                    |
+| ----------------------- | ---------------------- | --------------------------------------------------------------------------------- |
+| `2222` (workstation)    | Workstation's sshd     | Whatever the host's ufw allows, on `0.0.0.0` — never the devbox or its containers |
+| `2223` (published)      | Devbox container sshd  | `BIND_ADDR` (Tailnet) and `127.0.0.1`, DNATed to container `:2222`                |
+| `2222` (in container)   | Devbox container sshd  | Always the in-container listener, behind the `2223` mapping                       |
+| Project ports (default) | Rootless Docker daemon | `docker0` (the bridge gateway) — `host.docker.internal:<port>` from the devbox    |
 
 Nothing else is published from the devbox container. IPv6 is not published: only the IPv4 Tailscale address from
 `tailscale ip -4` and `127.0.0.1`.

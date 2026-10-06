@@ -15,6 +15,7 @@
 | No host root Docker daemon | `/var/run/docker.sock` not mounted; reachable daemon is rootless                                                                                       |
 | No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true`                                                                           |
 | No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` — Tailnet address only                                                                                          |
+| No host services           | `devbox-docker-firewall`: the devbox bridge reaches only the project daemon's ports, its containers none of the host's addresses but loopback          |
 | No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`                                                                                   |
 | No private keys at rest    | Devbox holds no SSH private key; `AllowAgentForwarding yes` only lets `ssh -A devbox` borrow the laptop's forwarded 1Password agent for one connection |
 
@@ -57,12 +58,13 @@ identity's `gh` token, each configured App's private key, every project's `.env`
 container's Tailnet namespace, and the rootless project Docker daemon ([Docker](docker.md)).
 
 **Cannot**: the host filesystem outside the data dir and world-readable paths, the host's **root** Docker daemon, the
-devbox container's own lifecycle, root inside the container, any unpublished port, and any 1Password vault.
+host's own services (its sshd included), the devbox container's own lifecycle, root inside the container, any
+unpublished port, and any 1Password vault.
 
 The consequence: an agent with shell access can push through the same App token or PAT `git`/`gh` already resolve, and
 read each configured App's private key, every identity's PAT, and every project's `.env` and GCP key directly. Your own
-GitHub push authority stays out of reach — no private key to steal — unless it's inside a `ssh -A devbox` connection you
-forwarded yourself (accepted limit 2).
+GitHub push authority stays out of reach — no private key to steal — unless an `ssh -A devbox` connection is open
+(accepted limit 2).
 
 > [!IMPORTANT]
 > Treat a compromise as "revoke every identity's PAT and App key, plus the service-account key," not "rebuild a laptop."
@@ -75,11 +77,14 @@ These are known and deliberate, not gaps to be closed later:
    poisoned issue or README can send whatever it holds anywhere: IAM and token scoping limit what it can _reach_, not
    _send_. The container is a containment boundary for authority, **not** confidentiality — assume anything inside can
    leave.
-2. **A forwarded agent is reachable by anything in that one connection.** `ssh -A devbox` exposes the 1Password agent
-   socket for the connection's lifetime; a hand-started process inside it — not through `git`, fenced to HTTPS by the
-   `omp`/`claude` launchers — could call `ssh` directly, requesting a signature. 1Password's per-use laptop approval is
-   the backstop: nothing signs without it. Plain `herdr` panes, `./bin/devbox shell`, and a bare `ssh devbox` never
-   forward it.
+2. **A forwarded agent is open to the whole devbox while it lasts.** `ssh -A devbox` exposes the 1Password agent
+   socket for the connection's lifetime, and the socket belongs to `dev`: every process in the container can use it, not
+   just the shell you forwarded it into. Only agent git is fenced (HTTPS, through the `omp`/`claude` launchers). And
+   1Password approves per key and per application, not per use — a key your terminal app is already approved for (by
+   this connection, or by anything since 1Password last locked) signs without a prompt. What a key can reach is
+   therefore the limit: `devbox.pub` opens only the devbox, and the workstation's sshd is out of the devbox's network
+   reach (`devbox-docker-firewall`) — leaving your GitHub push authority for the connection's lifetime. Plain `herdr`
+   panes, `./bin/devbox shell` and a bare `ssh devbox` never forward one.
 3. **No isolation between projects.** One container, one `dev` user, one bind mount: an agent in project A can read
    project B's `.env` and GCP key. Cloning something less trusted is where per-project containers or separate users stop
    being over-engineering.
@@ -93,8 +98,9 @@ These are known and deliberate, not gaps to be closed later:
    account.
 6. **A project port is one firewall rule away from the Tailnet.** Rootless Docker binds every published port on
    `0.0.0.0`, with no way to change that — `devbox-docker-firewall`, an nftables table dropping input to that daemon's
-   sockets outside loopback and the devbox bridge, confines them. `./bin/devbox doctor` fails if inactive; removed,
-   every project port reaches the Tailnet and LAN. See [Docker](docker.md).
+   sockets outside loopback and the devbox bridge, confines them, and keeps the host's own services away from the
+   devbox and its project containers. `./bin/devbox doctor` fails if it is inactive or stale; removed, every project
+   port reaches the Tailnet and LAN, and the host's sshd the devbox. See [Docker](docker.md).
 7. **On the laptop, an agent is only as contained as your OS user.** The launchers, the `gh` shim and the SSH fence
    choose which credential an agent session uses _by default_; they cannot stop a process running as you from calling
    the real `gh` with your OAuth login, reading the keychain, or asking the 1Password agent for a key (1Password's
@@ -182,7 +188,7 @@ agent, not just by you at a prompt. Install the App on repos that matter instead
 
 The SSH keys are 1Password items, not files, so the laptop carries no key — but remove the _Devbox Laptop_ item from
 GitHub or `DEVBOX_EXTRA_AUTHORIZED_KEYS` anyway, restart the container (`authorized_keys` rebuilds on every start), and
-drop it from the workstation's own `~/.ssh/authorized_keys`. What the laptop **does** hold in plaintext, if
-`./bin/devbox agent install` ran there, is the agent's own credentials: one `GH_TOKEN_<SLUG>` per identity in
-`~/.config/devbox/secrets.env`, and each configured identity's App pem under its own `app` directory. Revoke every
-identity's PAT, rotate every App private key — same list as a container compromise above.
+drop the default identity's key from the workstation's own `~/.ssh/authorized_keys`. What the laptop **does** hold in
+plaintext, if `./bin/devbox agent install` ran there, is the agent's own credentials: one `GH_TOKEN_<SLUG>` per
+identity in `~/.config/devbox/secrets.env`, and each configured identity's App pem under its own `app` directory.
+Revoke every identity's PAT, rotate every App private key — same list as a container compromise above.

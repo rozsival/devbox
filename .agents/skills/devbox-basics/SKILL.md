@@ -39,7 +39,8 @@ Four facts:
    publishes project ports on the devbox bridge gateway (`--ip` plus `--default-network-opt`, since `--ip`
    alone covers only the default bridge). `devbox-docker-firewall` - nftables matching the daemon's socket
    cgroup - holds the line regardless: even an explicit `0.0.0.0:` port never reaches the Tailnet or the
-   LAN (`docs/docker.md`).
+   LAN, and neither the devbox nor its project containers reach the host's own services, sshd included
+   (`docs/docker.md`).
 
 ## The four ways in
 
@@ -77,7 +78,7 @@ fetches - unlike `includeIf gitdir:`, which needs the directory to exist first. 
 (`core.sshCommand = ssh -P <slug>`) that picks the identity's key in `~/.ssh/config`.
 
 The devbox holds no private key for any identity: manual git (pane push, signed commit) borrows the
-laptop's 1Password agent, forwarded per connection with `ssh -A devbox`; agent sessions never touch it - the
+laptop's 1Password agent, forwarded per connection with `ssh -A devbox`; agent git never touches it - the
 `omp`/`claude` launchers rewrite their git to HTTPS with a repo-scoped token (GitHub App installation token or
 fine-grained PAT) and bot author, unsigned; their `gh` on a repo the App covers uses the same App token, so
 PRs carry the bot author too. Full mechanism: `docs/git.md`.

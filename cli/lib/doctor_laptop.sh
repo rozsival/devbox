@@ -154,15 +154,15 @@ doctor_laptop() {
   fi
   # Not identity-derived: no slug names the workstation, so it comes from
   # DEVBOX_HOST (env or .push.env) rather than a hard-coded hostname in a repo
-  # meant to go public.
-  if [[ -n ${workstation_host} ]]; then
-    if ((identities_ok)); then
-      check_host "${workstation_host}" '' devbox "id_${default_slug}"
-    else
-      check_host "${workstation_host}" '' devbox
-    fi
-  else
+  # meant to go public. Its key is the default identity's, never devbox.pub:
+  # 1Password approves a key per application, so for the lifetime of an `ssh -A
+  # devbox` anything in the devbox can sign with the key that connection used.
+  if [[ -z ${workstation_host} ]]; then
     log_info 'DEVBOX_HOST not set (env or .push.env) - skipping the Host <workstation> ssh config check'
+  elif ((identities_ok)); then
+    check_host "${workstation_host}" '' "id_${default_slug}"
+  else
+    log_warn 'identity registry unusable - skipping the Host <workstation> key check'
   fi
   check_host devbox '' devbox
   if [[ "$(ssh -G devbox 2>/dev/null | sed -n 's/^forwardagent //p')" == yes ]]; then
@@ -462,7 +462,24 @@ doctor_laptop() {
     if ssh -o BatchMode=yes -o ConnectTimeout=10 "${workstation_host}" true 2>/dev/null; then
       log_success "ssh ${workstation_host}"
     else
-      fail "ssh ${workstation_host} failed - is 1Password unlocked and the Devbox Laptop key approved?"
+      fail "ssh ${workstation_host} failed - is 1Password unlocked and the default identity's key approved?"
+    fi
+    # Whether the host would take devbox.pub, asked without ever signing: `-v`
+    # reports "Server accepts key" before a signature is requested, and with no
+    # agent and no private key on disk none can be made - so no 1Password prompt,
+    # just one refused login in the host's log. `-i` is offered ahead of the
+    # config's own IdentityFile; ControlPath=none keeps a shared master
+    # connection from skipping authentication altogether.
+    if [[ -f ${SSH_DIR}/devbox.pub ]]; then
+      key_probe="$(ssh -v -o BatchMode=yes -o ConnectTimeout=10 -o ControlPath=none -o IdentityAgent=none \
+        -o IdentitiesOnly=yes -i "${SSH_DIR}/devbox.pub" "${workstation_host}" true 2>&1 || true)"
+      if [[ ${key_probe} == *"Server accepts key: ${SSH_DIR}/devbox.pub"* ]]; then
+        fail "${workstation_host} accepts devbox.pub - take it out of that account's ~/.ssh/authorized_keys: 1Password approves it for every ssh -A devbox, so anything in the devbox could log in to the host with it"
+      elif [[ ${key_probe} == *"Offering public key: ${SSH_DIR}/devbox.pub"* ]]; then
+        log_success "${workstation_host} refuses devbox.pub"
+      else
+        log_warn "could not ask ${workstation_host} whether it accepts devbox.pub - the connection never got to offering it"
+      fi
     fi
   else
     log_info 'DEVBOX_HOST not set (env or .push.env) - skipping ssh reachability check for the workstation'

@@ -317,7 +317,8 @@ removing `op` shrinks blast radius without weakening anything at rest.
 
 No — unrelated to `op`. Manual signing (`ssh -A devbox`) borrows the laptop's forwarded 1Password _SSH agent_, signing
 with `ssh-keygen -Y sign` — different from the uninstalled `op` CLI. Agent sessions don't sign at all: `agent.gitconfig`
-sets `commit.gpgsign = false`, with no key or forwarded agent in reach. See [Git Identities](git.md#-signing).
+sets `commit.gpgsign = false`, and their git never touches a key or a forwarded agent. See
+[Git Identities](git.md#-signing).
 
 ### Why does `.env` on the host hold no secrets?
 

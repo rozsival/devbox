@@ -22,11 +22,13 @@ start under macOS's /bin/bash 3.2, so `/usr/bin/env bash` must find the Homebrew
 The workstation's Ubuntu bash is fine.
 
 The key is a 1Password SSH item served by its agent; only the public half lands in `~/.ssh/devbox.pub`,
-which `IdentityFile` selects. Steps: `docs/installation.md#1-create-the-laptop-key`:
+which `IdentityFile` selects. It opens the devbox and nothing else - the workstation's sshd takes the default
+identity's `id_<slug>.pub`, because every `ssh -A devbox` leaves `devbox.pub` approved in 1Password for
+anything in the devbox to sign with. Steps: `docs/installation.md#1-create-the-laptop-key`:
 
 ```bash
-ssh-copy-id -i ~/.ssh/devbox.pub -p 2222 <user>@<workstation>  # host sshd, needed by deploy
-cat ~/.ssh/devbox.pub                                        # goes into .env in phase 3
+ssh-copy-id -i ~/.ssh/id_<slug>.pub -p 2222 <user>@<workstation>  # host sshd, needed by deploy - never devbox.pub
+cat ~/.ssh/devbox.pub                                           # goes into .env in phase 3
 ```
 
 herdr's saved-machine connections run in background, needing 1Password unlocked, the key approved - a
@@ -37,8 +39,8 @@ unworkable: a dedicated passphrase-less file key (documented).
 
 Two `Host` entries, same machine, different ports: `2222` the workstation's sshd (needed by
 `devbox deploy`), `2223` the container's. Copy both blocks verbatim from
-`docs/installation.md#2-add-the-sshconfig-blocks` (the workstation block may name the default identity's
-`id_<slug>.pub` instead, if that key is the one authorized there); the field people drop and debug for an hour is
+`docs/installation.md#2-add-the-sshconfig-blocks` (the workstation block names the default identity's
+`id_<slug>.pub`, never `devbox.pub`); the field people drop and debug for an hour is
 `IdentitiesOnly yes` - without it the agent offers every key it holds and the server rejects with
 `Too many authentication failures` before the right one.
 
@@ -71,7 +73,8 @@ ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'
 Needs `sudo`, idempotent; `--check` reports state, no changes made. Installs `uidmap`, `slirp4netns`;
 creates unprivileged host user `dev:devbox`, daemon owner; moves `DEVBOX_DATA_DIR` to `/home/dev`, chowns
 the tree; installs the nftables table and `devbox-docker-firewall.service`, keeping project ports off the
-Tailnet and LAN; enables a lingering rootless `dockerd` on `/run/devbox/docker.sock`.
+Tailnet and LAN and the host's own sshd out of the devbox's reach; enables a lingering rootless `dockerd` on
+`/run/devbox/docker.sock`.
 
 Two caveats (`docs/docker.md`):
 
@@ -89,8 +92,8 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
 
 `doctor` is the acceptance test for phases 3 and 4: compose; `BIND_ADDR` vs Tailscale; something on
 `BIND_ADDR:${DEVBOX_SSH_PORT}` and **nothing** on `0.0.0.0`; container health; PID 1 `dev`; project Docker
-daemon answering, rootless; `host.docker.internal` resolving; project-port boundary service active; toolchain
-probes - exits non-zero on any failure. Then `ssh devbox 'docker run --rm hello-world'`.
+daemon answering, rootless; `host.docker.internal` resolving; project-port boundary service active and
+current; toolchain probes - exits non-zero on any failure. Then `ssh devbox 'docker run --rm hello-world'`.
 
 If the node's Tailscale address changes later, `doctor` reports `BIND_ADDR is X but Tailscale reports Y`;
 re-run `./bin/devbox env && ./bin/devbox up`.

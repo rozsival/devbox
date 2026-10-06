@@ -30,9 +30,12 @@ file names follow from them:
 
 | file                 | 1Password item              | used by                                                                                                            |
 | -------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `id_<slug>.pub`      | that identity's auth key    | `Host <host>` (plain) or `Match host <host> tagged <slug>` (its own key)                                           |
+| `id_<slug>.pub`      | that identity's auth key    | `Host <host>` (plain) or `Match host <host> tagged <slug>` (its own key); the default's also `Host <workstation>`  |
 | `signing_<slug>.pub` | that identity's signing key | `~/.gitconfig` `user.signingkey` (default) or `user-<slug>.gitconfig`/`org-<slug>.gitconfig`; GitHub _Signing_ key |
-| `devbox.pub`         | Devbox Laptop               | `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS`; `Host <workstation>` (or the default's `id_<slug>.pub`)             |
+| `devbox.pub`         | Devbox Laptop               | `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS` - never the workstation                                              |
+
+Never authorize `devbox.pub` on the workstation: 1Password approves a key per application, so every
+`ssh -A devbox` leaves it approved for anything inside the devbox to sign with.
 
 Auth/signing are separate files: GitHub registers each separately, per account - signing with auth key
 verifies locally, shows _Unverified_ on GitHub.
@@ -59,10 +62,11 @@ Check: `ssh -G devbox | grep -E 'identityfile|identitiesonly|identityagent'`, th
 plus `ssh -P <slug> -T git@github.com` per identity with a tag (`devbox-identities get <slug> tag`) - each
 must greet a different account, unless the two blocks deliberately share one `pubkey` (one account split by
 directory, e.g. a private org).
-`devbox doctor laptop` also checks the `Host <workstation>` block, but the repo names no workstation hostname:
-set `DEVBOX_HOST` (environment, or `DEVBOX_HOST=<alias>` in `.push.env`, which `devbox deploy` reads too) or
-that one check is skipped. It also flags any leftover `Host <slug>.<host>` block - aliases are gone; the
-tag replaces it.
+`devbox doctor laptop` also checks the `Host <workstation>` block (the default identity's `id_<slug>.pub`) and
+asks the workstation, without signing, whether it would accept `devbox.pub` - but the repo names no
+workstation hostname: set `DEVBOX_HOST` (environment, or `DEVBOX_HOST=<alias>` in `.push.env`, which
+`devbox deploy` reads too) or both are skipped. It also flags any leftover `Host <slug>.<host>` block -
+aliases are gone; the tag replaces it.
 
 ## Phase 3 - gitconfigs
 
@@ -189,7 +193,8 @@ repo.
 | `differ from a fresh render of the templates`                                 | `./bin/devbox agent install` (templates or `identities.conf` changed since last install)                                               |
 | `the keychain holds an agent token`                                           | Homebrew's `osxkeychain` preempted the helper; erase via `git credential-osxkeychain erase`, reinstall                                 |
 | `no <slug> token` / `token is rejected`                                       | Fill/re-issue `GH_TOKEN_<SLUG>` in `secrets.env` (phase 5)                                                                             |
-| `ssh devbox failed`                                                           | 1Password locked, or Devbox Laptop key unapproved for this app                                                                         |
+| `ssh devbox failed` / `ssh <workstation> failed`                              | 1Password locked, or that host's key (`devbox.pub` / the default `id_<slug>.pub`) unapproved for this app                              |
+| `<workstation> accepts devbox.pub`                                            | Delete that key from the account's `~/.ssh/authorized_keys` on the workstation; it takes the default `id_<slug>.pub` (phase 1)         |
 | `[<slug>] and [<slug>] both reach <login>`                                    | Two identities' `id_<slug>.pub` files hold the same key while their registry `pubkey`s differ; re-export the wrong one (phase 1)       |
 | `… is not a symlink onto …/bin/devbox` / `bash completion … missing or stale` | `./bin/devbox install` from the checkout you want `devbox` to run                                                                      |
 | `a login shell does not find devbox` / `… does not load bash-completion`      | Add the printed `PATH` line, or `brew install bash-completion@2` and source it from `~/.bashrc`                                        |

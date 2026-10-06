@@ -43,19 +43,23 @@ No private key sits on the laptop's disk — a 1Password SSH item served by the 
 2. Save its public key as `~/.ssh/devbox.pub` (the item's _public key_ field, or via `ssh-add -l`/
    `ssh-add -L | grep <fingerprint>`).
 
-Authorize it in both places:
+It opens the devbox and nothing else. The workstation's own sshd takes a different key — your default identity's
+`id_<slug>.pub`, the GitHub key saved the same way ([Git Identities](git.md#-laptop-install)) — because 1Password
+approves a key per application, not per use: while an `ssh -A devbox` connection lasts, anything in the devbox can sign
+with the key that connection authenticated with.
 
 ```bash
-# workstation host (needed by ./bin/devbox deploy)
-ssh-copy-id -i ~/.ssh/devbox.pub -p 2222 <user>@<workstation>
+# workstation host (needed by ./bin/devbox deploy): never devbox.pub
+ssh-copy-id -i ~/.ssh/id_<slug>.pub -p 2222 <user>@<workstation>
 
-# devbox container: paste the same public key into DEVBOX_EXTRA_AUTHORIZED_KEYS in .env (step 3)
+# devbox container: paste devbox.pub into DEVBOX_EXTRA_AUTHORIZED_KEYS in .env (step 3)
 cat ~/.ssh/devbox.pub
 ```
 
 herdr's background connections need 1Password unlocked and the key's herdr approval remembered. A machine flapping
 `connecting`/`offline` under a locked 1Password reflects that — unlock or approve it. Unworkable? A passphrase-less
-_file_ key (`ssh-keygen -t ed25519 -N '' -f ~/.ssh/devbox`) serves only these two blocks, never GitHub.
+_file_ key (`ssh-keygen -t ed25519 -N '' -f ~/.ssh/devbox`) serves only the `devbox` block, never the workstation or
+GitHub.
 
 ### 2. Add the `~/.ssh/config` blocks
 
@@ -70,7 +74,7 @@ Host <workstation>
   Port 2222
   User <user>
   IdentitiesOnly yes
-  IdentityFile ~/.ssh/devbox.pub
+  IdentityFile ~/.ssh/id_<slug>.pub
   ServerAliveInterval 30
 
 Host devbox
@@ -88,8 +92,9 @@ herdr's connection. GitHub `Host`/`Match` blocks come from `~/.config/devbox/ide
 `Host github.com` block naming the key most identities on it share, plus a `Match host github.com tagged <slug>` block
 per identity whose key differs — see [Git Identities](git.md#-laptop-install).
 
-`Host <workstation>` may name the default identity's `id_<slug>.pub` instead of `devbox.pub`, if that is the key
-authorized on the host; `devbox doctor laptop` accepts either. `Host devbox` must name `devbox.pub`.
+`Host <workstation>` names the default identity's `id_<slug>.pub`, never `devbox.pub`; `Host devbox` names `devbox.pub`
+and nothing else. `devbox doctor laptop` checks both, and asks the workstation — without signing anything, so without a
+1Password prompt — whether it would accept `devbox.pub`.
 
 > [!NOTE]
 > On a laptop set up with [rozsival/dotfiles](https://github.com/rozsival/dotfiles), none of this is written by hand:
@@ -220,9 +225,10 @@ App credentials there. See [Git Identities](git.md#-laptop-install).
 
 `./bin/devbox doctor laptop` is the laptop's acceptance test. It covers steps 1, 2 and 6 plus the GitHub `Host` blocks
 and the signing config: keys held by 1Password with none on disk, every `Host` selecting one `.pub` per registry
-identity, every gitconfig signing via `op-ssh-sign`, the override current, every identity's token accepted, and all
-connections authenticating. It names what is missing; the [devbox-laptop](../.agents/skills/devbox-laptop/SKILL.md)
-skill and [Git Identities](git.md#-laptop-install) walk the fixes. Details: [CLI Reference](cli.md#-devbox-doctor).
+identity, every gitconfig signing via `op-ssh-sign`, the override current, every identity's token accepted, all
+connections authenticating, and the workstation refusing `devbox.pub`. It names what is missing; the
+[devbox-laptop](../.agents/skills/devbox-laptop/SKILL.md) skill and [Git Identities](git.md#-laptop-install) walk the
+fixes. Details: [CLI Reference](cli.md#-devbox-doctor).
 
 ## 🧾 `.env` reference
 
@@ -278,7 +284,7 @@ publishes only on `BIND_ADDR`.
 
 No. Every key — devbox key, every GitHub identity — is a 1Password item; `~/.ssh` holds only `.pub` halves. Reason for a
 file key: herdr's background connection failing while 1Password is locked ([step 1](#1-create-the-laptop-key)) —
-serving the workstation and devbox blocks only.
+serving the `devbox` block only.
 
 ### `up` failed with an empty `BIND_ADDR`. Is that a bug?
 

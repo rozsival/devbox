@@ -53,20 +53,20 @@ container's hardening untouched: nothing in `docker-compose.yml` was relaxed.
 
 ## 🧰 What the prep script does
 
-| Piece                                                                     | What it does and why                                                                                                                                                                                                                      |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uidmap`, `slirp4netns`                                                   | `newuidmap` maps subordinate ids; without it, one uid only, so privilege-dropping images (postgres, redis, node) can't start                                                                                                              |
-| Host user `dev:devbox`, uid 1001                                          | The daemon's authority ceiling: a dedicated account keeps your home, SSH keys and sudo out of reach                                                                                                                                       |
-| `DEVBOX_DATA_DIR` → `/home/dev`                                           | Path identity ([below](#-path-identity)); refuses mid-run, since it's just a `mv` plus `chown` — nothing recreated or lost                                                                                                                |
-| `chown -R dev:devbox /home/dev`                                           | Daemon and container share a uid, so either writes files owned by `dev`                                                                                                                                                                   |
-| One `ufw` rule                                                            | `allow in on docker0 to <gateway>`: container-to-host traffic traverses `INPUT` (see [Networking](networking.md#why-ufw-cannot-help)), which UFW's default deny would drop — scoped to the one bridge and address the daemon publishes on |
-| `/etc/tmpfiles.d/devbox-docker.conf`                                      | `/run/devbox` must exist _before_ the daemon starts: rootlesskit copy-ups `/run`, symlinking only what's already there; tmpfiles recreates it on boot                                                                                     |
-| `loginctl enable-linger dev`                                              | A never-logged-in account gets no systemd user manager, so the daemon couldn't boot or survive                                                                                                                                            |
-| Unit in `/etc/systemd/user`, owned by root                                | `dockerd-rootless-setuptool.sh install` would put it in `~/.config/systemd/user` on the bind mount, letting the container rewrite the daemon's command line; the script runs only for its prerequisite `check`, owning the unit itself    |
-| `/etc/nftables.d/devbox-docker.nft` plus `devbox-docker-firewall.service` | The publish boundary, the one non-obvious piece ([below](#-where-a-published-port-is-bound))                                                                                                                                              |
+| Piece                                                                     | What it does and why                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uidmap`, `slirp4netns`                                                   | `newuidmap` maps subordinate ids; without it, one uid only, so privilege-dropping images (postgres, redis, node) can't start                                                                                                                                                                          |
+| Host user `dev:devbox`, uid 1001                                          | The daemon's authority ceiling: a dedicated account keeps your home, SSH keys and sudo out of reach                                                                                                                                                                                                   |
+| `DEVBOX_DATA_DIR` → `/home/dev`                                           | Path identity ([below](#-path-identity)); refuses mid-run, since it's just a `mv` plus `chown` — nothing recreated or lost                                                                                                                                                                            |
+| `chown -R dev:devbox /home/dev`                                           | Daemon and container share a uid, so either writes files owned by `dev`                                                                                                                                                                                                                               |
+| One `ufw` rule                                                            | `allow in on docker0 to <gateway>`: container-to-host traffic traverses `INPUT` (see [Networking](networking.md#why-ufw-cannot-help)), which UFW's default deny would drop — scoped to the one bridge and address the daemon publishes on, narrowed by the boundary table to the daemon's own sockets |
+| `/etc/tmpfiles.d/devbox-docker.conf`                                      | `/run/devbox` must exist _before_ the daemon starts: rootlesskit copy-ups `/run`, symlinking only what's already there; tmpfiles recreates it on boot                                                                                                                                                 |
+| `loginctl enable-linger dev`                                              | A never-logged-in account gets no systemd user manager, so the daemon couldn't boot or survive                                                                                                                                                                                                        |
+| Unit in `/etc/systemd/user`, owned by root                                | `dockerd-rootless-setuptool.sh install` would put it in `~/.config/systemd/user` on the bind mount, letting the container rewrite the daemon's command line; the script runs only for its prerequisite `check`, owning the unit itself                                                                |
+| `/etc/nftables.d/devbox-docker.nft` plus `devbox-docker-firewall.service` | The publish boundary and the one around the host's own services, the non-obvious piece ([below](#-where-a-published-port-is-bound))                                                                                                                                                                   |
 
-`./bin/devbox doctor` checks `host.docker.internal` resolves and the boundary service is active — a project port
-silently exposed on every interface gets reported, not discovered.
+`./bin/devbox doctor` checks `host.docker.internal` resolves and the boundary service is active with the ruleset this
+checkout writes — a project port silently exposed on every interface gets reported, not discovered.
 
 ## 🧱 Where a published port is bound
 
@@ -95,8 +95,16 @@ table inet devbox {
   chain input {
     type filter hook input priority filter - 10; policy accept;
     ct state established,related accept
-    iifname { "lo", "docker0" } accept
+    iifname "lo" accept
+    iifname "docker0" socket cgroupv2 level 2 "user.slice/user-1001.slice" accept
+    iifname "docker0" drop
     socket cgroupv2 level 2 "user.slice/user-1001.slice" drop
+  }
+
+  chain output {
+    type filter hook output priority filter - 10; policy accept;
+    meta skuid 1001 ct state new fib daddr type local ip daddr != 127.0.0.0/8 drop
+    meta skuid 1001 ct state new fib daddr type local ip6 daddr != ::1 drop
   }
 }
 ```
@@ -110,6 +118,15 @@ Matching is by the **listening socket's cgroup**, covering every port that daemo
 without knowing port numbers: loopback and the devbox bridge are accepted, everywhere else dropped — so
 `ports: ['5432:5432']` works from the devbox and host, invisible from Tailnet and LAN, whatever the compose file asks.
 Unlike the DNAT case in [Networking](networking.md), these are ordinary host sockets, so `INPUT` genuinely applies.
+
+The same table is the boundary around the host's own services. ufw's rule admits `docker0` to every port on the
+gateway and the workstation's sshd listens on all addresses, so from `docker0` only the daemon's sockets are accepted
+and the rest is dropped: the devbox reaches project ports and nothing else on the host. Its project containers would
+get there one hop later — they leave through slirp4netns, a `dev` process in the host namespace — hence the output
+chain refusing new connections from uid 1001 to any of the host's addresses. Loopback stays open, since the daemon's
+DNS goes through systemd-resolved's stub there, and no container reaches it: `dockerd-rootless.sh` turns off
+slirp4netns' host-loopback mapping. Ports the host's root daemon publishes are untouched, DNATed to their containers
+before this table sees the packet.
 
 It lives in its own `inet` table at lower priority than ufw's chains, so neither touches the other's rules; ufw still
 needs its allow rule, since a packet accepted in one table isn't exempt from later ones.
@@ -265,7 +282,18 @@ that's the point.
 No, by two independent mechanisms: the daemon publishes on the bridge gateway by default (`--default-network-opt`, so
 `docker ps` shows `172.17.0.1:5432`), and `devbox-docker-firewall` drops input to those sockets outside loopback and the
 bridge, even when a port spec overrides the default. `./bin/devbox doctor` fails if the boundary service is inactive or
-the address drifted.
+stale, or the address drifted.
+
+### Can the devbox reach the workstation's own services?
+
+No — only the project daemon's published ports. `devbox-docker-firewall` drops everything else `docker0` sends the
+host, the workstation's sshd included, and stops project containers getting there through slirp4netns. Both checks
+should come back empty:
+
+```bash
+ssh devbox 'timeout 3 bash -c "</dev/tcp/host.docker.internal/2222" && echo reachable'
+ssh devbox 'docker run --rm alpine:3 nc -w 3 <workstation-lan-ip> 2222 </dev/null'
+```
 
 ### Why does `doctor` say `devbox-docker-firewall is inactive` after a reboot?
 

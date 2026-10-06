@@ -104,8 +104,8 @@ if ${identities_ok}; then
   # names as the signing key. Two files per identity because GitHub registers
   # authentication and signing keys separately and each account uses a different
   # key for each; signing with the auth key verifies locally and shows
-  # Unverified on GitHub. Agent sessions never see the forwarded agent: their
-  # git goes over HTTPS with per-operation tokens (§12).
+  # Unverified on GitHub. Agent git never uses the forwarded agent: it goes over
+  # HTTPS with per-operation tokens (§12).
   mkdir -p "${SSH_DIR}"
   chmod 700 "${SSH_DIR}"
   for slug in ${slugs}; do
