@@ -114,9 +114,9 @@ shell keeps it from ever acting with your PAT.
 The variable follows the identity's host: `GH_TOKEN` for `github.com` (and GHE.com), `GH_ENTERPRISE_TOKEN` for a GitHub
 Enterprise Server `host` — the only one gh reads for such a host. Exported as `GH_TOKEN`, an Enterprise token would go
 to `github.com` with every request gh sends there. `devbox-identities get <slug> gh_env` names it; an explicit
-`GH_ENTERPRISE_TOKEN` passes through like an explicit `GH_TOKEN`. For an identity whose `host` is not `github.com` the
-shim also exports `GH_HOST=<host>` with the token (unless `GH_HOST` is already set): gh refuses a host it holds no login
-for unless `GH_HOST` names it, and these sessions hold no login by design.
+`GH_ENTERPRISE_TOKEN` passes through like an explicit `GH_TOKEN`. Only for an identity whose `host` is not `github.com`
+does the shim also export `GH_HOST=<host>` with the token, and only when `GH_HOST` is unset: gh refuses a host it holds
+no login for unless `GH_HOST` names it, and these sessions hold no login by design.
 
 An agent's directory comes late: the session opens in `$HOME`, then works a project as cwd. A token resolved once at
 startup would pin the default identity for the whole session, including a second identity's tree; resolving per
@@ -136,7 +136,8 @@ read with `nounset` off, and a read that fails anyway falls through to the same 
 
 `devbox-gh-token --identity <slug>` returns that identity's token whatever the working directory and ignoring an
 inherited `GH_TOKEN` — for a caller that already knows whose token it needs, like the per-identity checks of `bootstrap`
-and `devbox doctor laptop`, which export `GH_HOST` with it for an identity off `github.com`.
+and `devbox doctor laptop`, which export `GH_HOST` set to that identity's host with it for every identity, `github.com`
+included.
 
 Three consequences:
 

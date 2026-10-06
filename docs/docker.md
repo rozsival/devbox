@@ -431,5 +431,5 @@ No — they live under `/home/dev/.local/share/docker` on the bind mount, which 
 ### Can I use the host's root daemon for something else?
 
 It still runs the devbox container itself, and it's yours over `ssh <workstation>`. Nothing inside the devbox can reach
-it. Give anything else you run on it its own network, as the AI stack has: a container it puts on the default bridge
-(`docker0`) shares the devbox's boundary — no host services, no Tailnet.
+it. Give anything else you run on it its own network, as a compose project's default network does: a container it puts
+on the default bridge (`docker0`) shares the devbox's boundary — no host services, no Tailnet.

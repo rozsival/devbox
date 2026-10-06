@@ -154,7 +154,8 @@ exist first (`./bin/devbox env`).
 > slower to stop; one without a restart policy stays down until its `docker compose up -d`. The devbox itself runs on
 > the host's root daemon and is untouched.
 
-As root it never acts on paths inside the bind mount: everything there — removing the `docker.service` and wants link
+As root it never follows a path inside the bind mount: the ownership fix-up is a `chown -R` that never follows
+symlinks, and everything else there — removing the `docker.service` and wants link
 an earlier `systemctl --user enable` left in `~/.config/systemd/user` — runs as `dev`, so a symlink planted from the
 devbox can't steer a root `rm`. Every `docker` call it makes as `dev` runs with `DOCKER_CONFIG` outside `/home/dev`, so
 `~/.docker/config.json` and `~/.docker/cli-plugins` from the bind mount are never read or executed on the host.

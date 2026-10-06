@@ -51,9 +51,11 @@ No private key sits on the laptop's disk — a 1Password SSH item served by the 
 It opens the devbox and nothing else. The workstation's own sshd takes a different key — your default identity's
 `id_<slug>.pub`, the GitHub key saved the same way ([Git Identities](git.md#-laptop-install)) — because 1Password
 approves a key per application, not per use: while an `ssh -A devbox` connection lasts, anything in the devbox can sign
-with the key that connection authenticated with. That narrows the exposure, it does not close it: an approval lasts
-until 1Password locks, so any key used through `ssh -A devbox` can sign from the devbox too. What keeps the devbox off
-the workstation's sshd is `devbox-docker-firewall` ([Docker](docker.md)); `devbox.pub` is never registered on GitHub.
+with the key that connection authenticated with. Nor is that the only key: an approval covers the whole terminal app
+until 1Password locks, so any key that app has used since then — `id_<slug>.pub` after a `devbox deploy` or an
+`ssh <workstation>` included — can sign from the devbox while an `ssh -A devbox` from it is open. What keeps the devbox
+off the workstation's sshd is `devbox-docker-firewall` ([Docker](docker.md)); `devbox.pub` is never registered on
+GitHub.
 
 ```bash
 # workstation host (needed by ./bin/devbox deploy): never devbox.pub
@@ -241,7 +243,7 @@ fixes. Details: [CLI Reference](cli.md#-devbox-doctor).
 
 | Variable                       | Default                | Purpose                                                         |
 | ------------------------------ | ---------------------- | --------------------------------------------------------------- |
-| `BIND_ADDR`                    | _(empty)_              | Publish address; empty = every compose command refuses          |
+| `BIND_ADDR`                    | _(empty)_              | Publish address; empty = `up`, `down`, `logs`, `ps` refuse      |
 | `DEVBOX_SSH_PORT`              | `2223`                 | Host port (container always uses `2222`)                        |
 | `DEVBOX_DATA_DIR`              | `/home/dev`            | Host path; must equal container home (path identity)            |
 | `HOST_UID` / `HOST_GID`        | `1001`                 | Dedicated `dev` host user; owns the data dir and project daemon |
@@ -295,9 +297,10 @@ serving the `devbox` block only.
 
 ### `up` failed with an empty `BIND_ADDR`. Is that a bug?
 
-No — the preflight is working as intended. Every compose command fails while `BIND_ADDR` is empty — `down`, `logs` and
-`shell` included, not only `up` — and a bare `docker compose` stops with `required variable BIND_ADDR is missing a
-value` for the same reason. Run `./bin/devbox env` (Tailscale up first), or set the address by hand. A box already
+No — the preflight is working as intended. Every command that loads the compose project fails while `BIND_ADDR` is
+empty — `up`, `down`, `logs` and `ps` — and a bare `docker compose` stops with `required variable BIND_ADDR is missing a
+value` for the same reason. The exec-based ones (`shell`, `bootstrap`, `hook`, `sessions`) still work, so the recovery
+shell stays available. Run `./bin/devbox env` (Tailscale up first), or set the address by hand. A box already
 published on `0.0.0.0` can't wait for that: `docker rm -f devbox` removes it without compose. `0.0.0.0` as fallback
 would expose devbox publicly.
 

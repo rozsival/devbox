@@ -31,8 +31,9 @@ Four facts:
 3. **The published port is the entire network boundary**: `${BIND_ADDR}:2223:2222` in `docker-compose.yml`
    plus `127.0.0.1:2223`. Docker's DNAT matches the bound address, so UFW can't restrict it - binding to the
    Tailscale IP keeps devbox off the public internet. An empty `BIND_ADDR` makes `./bin/devbox up` - and
-   compose itself, via `${BIND_ADDR:?}` - refuse to start rather than publish on `0.0.0.0`; every compose
-   command, `down` included, fails until `./bin/devbox env` fills it.
+   compose itself, via `${BIND_ADDR:?}` - refuse to start rather than publish on `0.0.0.0`; commands that
+   load the compose project (`up`, `down`, `logs`, `ps`) fail until `./bin/devbox env` fills it, while
+   exec-based ones (`shell`, `bootstrap`, `hook`, `sessions`) still work, so the recovery shell stays available.
 4. **No root, no root socket.** `USER dev`, PID 1 `dev`, `cap_drop: [ALL]`, `no-new-privileges`; the host's
    root Docker socket is never mounted. Project containers come from a _second_ daemon: a rootless
    `dockerd` owned by the dedicated host user `dev`, socket `/run/devbox/docker.sock`, provisioned once by

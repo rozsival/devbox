@@ -27,9 +27,11 @@ Two 1Password SSH items served by its agent: the devbox key, whose public half l
 and the default identity's key, `~/.ssh/id_<slug>.pub` - only the public halves on disk, which `IdentityFile`
 selects. `devbox.pub` opens the devbox and nothing else (never registered on GitHub) - the workstation's sshd
 takes the default identity's `id_<slug>.pub`, because every `ssh -A devbox` leaves `devbox.pub` approved in
-1Password for anything in the devbox to sign with. That narrows, not closes: approval is per application until
-1Password locks, so a key used through `ssh -A devbox` signs from the devbox too - `devbox-docker-firewall` is
-what keeps the devbox off the workstation's sshd. Steps: `docs/installation.md#1-create-the-laptop-key`:
+1Password for anything in the devbox to sign with. Not only that key: an approval covers the whole terminal
+app until 1Password locks, so any key that app has used since then (`id_<slug>.pub` after a `devbox deploy` or
+`ssh <workstation>` included) can sign from the devbox while an `ssh -A devbox` from it is open -
+`devbox-docker-firewall` is what keeps the devbox off the workstation's sshd. Steps:
+`docs/installation.md#1-create-the-laptop-key`:
 
 ```bash
 ssh-copy-id -f -i ~/.ssh/id_<slug>.pub -p 2222 <user>@<workstation>  # host sshd, needed by deploy - never devbox.pub
@@ -61,8 +63,10 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox env'
 
 `env` creates `.env` from `.env.example` (never clobbers an existing), filling `BIND_ADDR` from
 `tailscale ip -4` plus `HOST_UID`/`HOST_GID` - the dedicated `dev` host user if it exists, else the invoking
-user. Tailscale must be up first: down means no address to write, and every compose command (`up`, `down`,
-`logs`, `shell`) refuses the empty value. Then edit `~/devbox/.env` on the workstation - at minimum, `devbox.pub`
+user. Tailscale must be up first: down means no address to write, and every command that loads the compose
+project (`up`, `down`, `logs`, `ps`) refuses the empty value - exec-based ones (`shell`, `bootstrap`, `hook`,
+`sessions`) still work, so the recovery shell stays available. Then edit `~/devbox/.env` on the workstation -
+at minimum, `devbox.pub`
 in `DEVBOX_EXTRA_AUTHORIZED_KEYS` (newline-separated).
 
 `.env` is gitignored **and** excluded from `devbox deploy`, so later deploys never touch it.
@@ -190,7 +194,7 @@ idempotent; details: `docs/toolchain.md#-agent-skills-and-browser-automation`.
 | Symptom                                 | Cause and fix                                                                                                                                                                    |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `up` aborts on empty `BIND_ADDR`        | Preflight by design - Tailscale up, then `env`                                                                                                                                   |
-| `Too many authentication failures`      | `IdentitiesOnly yes` missing from the `Host` block, or more than its one key (`devbox.pub` / `id_<slug>.pub`)                                                                    |
+| `Too many authentication failures`      | `IdentitiesOnly yes` missing from that `Host` block (which names exactly one key: `devbox.pub` / `id_<slug>.pub`)                                                                |
 | `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS`; restart (never register `devbox.pub` on GitHub)                                                                                       |
 | herdr machine stuck `offline`           | `~/.ssh/config` no longer parses (`ssh -G devbox` names the line; herdr's system `ssh -o BatchMode=yes` logs only `connection was lost`), or 1Password locked / key not approved |
 | `Host key verification failed`          | Data dir was wiped; `ssh-keygen -R '[<workstation>]:2223'`                                                                                                                       |

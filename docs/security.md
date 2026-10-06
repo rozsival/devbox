@@ -54,8 +54,8 @@ Notably absent: any 1Password account (`op` isn't installed), any GitHub private
 ## 🔍 What an agent inside the devbox can reach
 
 **Can**: the whole `/home/dev` tree — every identity's public keys (useless without the laptop's forwarded agent), every
-identity's `gh` token, each configured App's private key, every project's `.env` and GCP key — plus the internet and
-the rootless project Docker daemon ([Docker](docker.md)).
+identity's `gh` token, each configured App's private key, every project's `.env` and GCP key — plus the internet, the
+LAN (Tailnet peers included, at their LAN addresses) and the rootless project Docker daemon ([Docker](docker.md)).
 
 **Cannot**: the host filesystem outside the data dir and world-readable paths, the host's **root** Docker daemon, the
 host's own services (its sshd included), other Tailnet machines over the overlay (accepted limits 1 and 8 name the

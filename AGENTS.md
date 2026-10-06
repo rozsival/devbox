@@ -121,8 +121,8 @@ the host's root Docker daemon.
   identity leaves no stale `includeIf`); 8 `allowed_signers`; 9
   GitHub App credential directories per identity (created, never fetched - only placed by hand); 10 shell;
   11 the box-wide `secrets.env`; 12 `gh` (the `~/.local/libexec/devbox-agent` shim plus the per-identity
-  token checklist, each identity checked with its own `devbox-gh-token --identity <slug>` and `GH_HOST` for a
-  host off `github.com`); 13 the agent git override (`agent-launch` and both launchers plus their `omp`/`claude`
+  token checklist, each identity checked with its own `devbox-gh-token --identity <slug>` and `GH_HOST` set to
+  that identity's host, for every identity); 13 the agent git override (`agent-launch` and both launchers plus their `omp`/`claude`
   symlinks, credential helper,
   fence, the *rendered* `agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir` -
   every one of them, inherited authors included, since git applies every matching `includeIf` and a nested
@@ -169,8 +169,9 @@ the host's root Docker daemon.
   the user puts first on the PATH. Beside them, the `gh` shim that deliberately shadows
   the real `gh` on the PATH: with `devbox-gh-token` it resolves `GH_TOKEN_<SLUG>` per invocation from the
   working directory, on the same `dir` prefixes in `identities.conf` that git's `includeIf` uses, because
-  an agent's cwd is a project while its shell was opened in `$HOME`, and exports `GH_HOST=<host>` with it for
-  an identity off `github.com` (gh refuses a host it holds no login for otherwise). In an agent session
+  an agent's cwd is a project while its shell was opened in `$HOME`, and exports `GH_HOST=<host>` with it only
+  for an identity off `github.com` and only when `GH_HOST` is unset (gh refuses a host it holds no login for
+  otherwise). In an agent session
   (`GIT_CONFIG_GLOBAL` is `agent.gitconfig`), a command about one repository - `pr`, `issue`, `run`, ...,
   `api repos/<o>/<r>/...`, `api graphql` inside a checkout
   - takes that repository's App installation token from `devbox-git-credential token` instead, so agent PRs
@@ -302,8 +303,8 @@ the host's root Docker daemon.
     `~/.local/bin/devbox-identities` still a symlink onto the libexec reader (the only hop that makes
     `devbox-identities` resolve by name), `~/.config/devbox/git` still unwritable and no login shell writing a
     git identity into it, no agent token in the macOS keychain (a system `credential.helper` running ahead of
-    ours), every identity's own PAT (`devbox-gh-token --identity <slug>`, with `GH_HOST` for a host off
-    `github.com`) accepted by `gh`, every App pem valid, and every configured connection
+    ours), every identity's own PAT (`devbox-gh-token --identity <slug>`, with `GH_HOST` set to that identity's
+    host, for every identity) accepted by `gh`, every App pem valid, and every configured connection
     authenticating - including `Host <workstation>`, whose hostname the repo names nowhere: it reads
     `DEVBOX_HOST` from the environment or `.push.env` - the same per-laptop value `devbox deploy` resolves,
     deliberately one name and one file rather than two - and skips that one check when it is unset. Unsets
