@@ -129,16 +129,23 @@ repo_scoped() {
 # only, and a GitHub Enterprise Server host's token from GH_ENTERPRISE_TOKEN.
 # Exported as GH_TOKEN, a GHES identity's token would go to github.com with
 # every request gh sends there - and never be used for its own host. The
-# registry knows which variable each identity needs (gh_env).
+# registry knows which variable each identity needs (gh_env), and which host it
+# is for: gh refuses a host other than github.com that it has no stored login
+# for unless GH_HOST names it, and the devbox and agent sessions have no stored
+# login by design.
 token_env=GH_TOKEN
+token_host=github.com
 library="${self%/*}/devbox-identities"
 [[ -r ${library} ]] || library="${self%/*}/../devbox-identities"
 [[ -r ${library} ]] || library="${HOME}/.local/libexec/devbox-identities"
 if [[ -r ${library} ]]; then
   # shellcheck source=../devbox-identities
   . "${library}"
-  token_env="$(di_get "$(di_for "${PWD}")" gh_env 2>/dev/null)" || token_env=GH_TOKEN
+  slug="$(di_for "${PWD}" 2>/dev/null)" || slug=''
+  token_env="$(di_get "${slug}" gh_env 2>/dev/null)" || token_env=GH_TOKEN
   [[ ${token_env} == GH_ENTERPRISE_TOKEN ]] || token_env=GH_TOKEN
+  token_host="$(di_get "${slug}" host 2>/dev/null)" || token_host=github.com
+  [[ -n ${token_host} ]] || token_host=github.com
 fi
 
 # An explicit GH_TOKEN in the environment wins, even an empty one: gh gives the
@@ -167,6 +174,9 @@ if [[ -z ${GH_TOKEN+set} && (${token_env} == GH_TOKEN || -z ${GH_ENTERPRISE_TOKE
   fi
   if [[ -n ${token} ]]; then
     export "${token_env}=${token}"
+    if [[ ${token_host} != github.com && -z ${GH_HOST:-} ]]; then
+      export GH_HOST="${token_host}"
+    fi
   fi
 fi
 

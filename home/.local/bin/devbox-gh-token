@@ -100,12 +100,15 @@ secrets_file="${HOME:-/home/dev}/.config/devbox/secrets.env"
 if [[ -z ${token} && -r ${secrets_file} ]]; then
   # Read in a subshell so a stray `export`, an unrelated variable or a syntax
   # error in a hand-edited credential file cannot affect this script's own
-  # state; only the one value is carried back.
+  # state; only the one value is carried back. nounset is off while sourcing:
+  # `NODE_OPTIONS="$NODE_OPTIONS ..."` is fine in a login shell and must not
+  # kill the read here. A read that dies anyway (an unterminated `X=(`) leaves
+  # the token empty, for the diagnostics below.
   # `GH_TOKEN` first, mirroring step 1 above: a file that sets both must resolve
   # the same way whether or not the caller's shell already sourced it - and,
   # as in step 1, not for a named identity.
   token="$(
-    set -a
+    set +u -a
     # shellcheck source=/dev/null # a runtime credential file, not repo content
     . "${secrets_file}" >/dev/null 2>&1 || true
     set +a
@@ -114,7 +117,7 @@ if [[ -z ${token} && -r ${secrets_file} ]]; then
     else
       printf '%s' "${GH_TOKEN:-${!var:-}}"
     fi
-  )"
+  )" || token=''
 fi
 
 # A hand-edited credential file with a shell syntax error stops `.` at that

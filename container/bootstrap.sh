@@ -412,22 +412,25 @@ if grep -qE '^[[:space:]]*GH_TOKEN=' "${secrets_file}" 2>/dev/null; then
   register_action "Split the box-wide GH_TOKEN in ${secrets_file} into one GH_TOKEN_<IDENTITY> per identity in ${identities_file} (as written, the per-directory choice never applies)"
 fi
 
-# One check per identity, driven by the registry: the directory that selects it
-# is the only input the resolver takes. Adding an account is a block in
-# identities.conf and a token in secrets.env - nothing here changes.
+# One check per identity, driven by the registry. Adding an account is a block
+# in identities.conf and a token in secrets.env - nothing here changes.
 if ${identities_ok}; then
   for slug in ${slugs}; do
-    dir="$(di_get "${slug}" dir)"
+    host="$(di_get "${slug}" host)"
     # Ask the resolver instead of reading the variables here, so this check
-    # exercises the exact path `gh` takes - including secrets.env being read
-    # directly - and needs no assumption about bootstrap's own cwd.
-    if ! token="$(devbox-gh-token "${dir:-${HOME_DIR}}" 2>/dev/null)" || [[ -z "${token}" ]]; then
+    # exercises the path `gh` takes - including secrets.env being read
+    # directly. By --identity, not by directory: a directory lookup lets an
+    # inherited GH_TOKEN answer for every identity, so a missing token would
+    # show as accepted.
+    if ! token="$(devbox-gh-token --identity "${slug}" 2>/dev/null)" || [[ -z "${token}" ]]; then
       register_action "Add a fine-grained GitHub token for the ${slug} account to ${secrets_file} as $(di_get "${slug}" token_var) (contents write on the repositories agents push without an App; actions and checks read; issues or pull-requests write only if agents should post)"
     # gh_env: a GitHub Enterprise Server token is read from GH_ENTERPRISE_TOKEN,
     # and checked against its own host - as GH_TOKEN it would be tried on
-    # github.com and reported rejected. A subshell export keeps it off argv.
-    elif ! (export "$(di_get "${slug}" gh_env)=${token}" &&
-      timeout 15 gh auth status --hostname "$(di_get "${slug}" host)" >/dev/null 2>&1); then
+    # github.com and reported rejected. GH_HOST because gh refuses a host it
+    # has no stored login for, and this box has none. A subshell export keeps
+    # the token off argv.
+    elif ! (export "$(di_get "${slug}" gh_env)=${token}" GH_HOST="${host}" &&
+      timeout 15 gh auth status --hostname "${host}" >/dev/null 2>&1); then
       # Present but rejected - expired, revoked, or the forge unreachable; a
       # variable-is-set check cannot see any of those. `timeout` because this
       # runs from the entrypoint before `exec sshd`: no check may delay SSH
