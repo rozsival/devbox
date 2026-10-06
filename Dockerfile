@@ -120,6 +120,9 @@ RUN if getent passwd "${HOST_UID}" >/dev/null; then userdel -r "$(getent passwd 
 # Every download is verified: against upstream's checksum file where it
 # publishes one, else against the SHA-256 GitHub records for the release asset
 # (herdr publishes no checksum file; its release API carries the asset digest).
+# The one exception is nvm's install.sh further down: upstream publishes neither
+# a checksum file nor release assets for it, so its pinned tag over TLS is the
+# contract - nvm itself then checks Node against nodejs.org's SHASUMS256.txt.
 # The compose and buildx plugins' checksums.txt mark the name for binary mode
 # (`*name`), hence the extra `sub()` those two awk filters carry and the others
 # do not.
@@ -131,14 +134,16 @@ RUN if getent passwd "${HOST_UID}" >/dev/null; then userdel -r "$(getent passwd 
 # download.docker.com publishes no checksum for the tarball, while apt checks
 # every package against the repository's signed Release file. The key is
 # fetched from the same host, so its fingerprint - the one Docker's install
-# docs publish - is pinned here; a key that does not match fails the build.
+# docs publish - is pinned here, and it must be the file's only primary key:
+# signed-by trusts every key in the file, so a second key appended beside
+# Docker's would sign a repository of its own. Anything else fails the build.
 # /usr/bin/docker is on the non-interactive PATH like /usr/local/bin.
 RUN set -eux; \
   . /etc/os-release; \
   install -m 0755 -d /etc/apt/keyrings; \
   curl -fsSL -o /etc/apt/keyrings/docker.asc https://download.docker.com/linux/ubuntu/gpg; \
-  fpr="$(gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | awk -F: '/^fpr:/ { print $10; exit }')"; \
-  test "${fpr}" = 9DC858229FC7DD38854AE2D88D81803C0EBFCD88; \
+  fprs="$(gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | awk -F: '$1 == "pub" { want = 1; next } want && $1 == "fpr" { print $10; want = 0 }')"; \
+  test "${fprs}" = 9DC858229FC7DD38854AE2D88D81803C0EBFCD88; \
   echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" \
     >/etc/apt/sources.list.d/docker.list; \
   apt-get update; \
