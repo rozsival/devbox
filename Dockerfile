@@ -10,19 +10,19 @@ ARG HOST_GID=1000
 # Pinned toolchain. Every version is a real upstream release asset; bump one arg
 # at a time and rebuild with `./bin/devbox rebuild`.
 ARG HERDR_VERSION=0.9.3
-ARG NVM_VERSION=0.40.7
+ARG NVM_VERSION=0.40.8
 ARG NODE_VERSION=24.21.0
-ARG PNPM_VERSION=12.4.1
-ARG GH_VERSION=2.100.0
-ARG LAZYGIT_VERSION=0.65.0
-ARG WORKTRUNK_VERSION=0.77.0
-ARG TERRAFORM_VERSION=1.16.2
+ARG PNPM_VERSION=12.9.1
+ARG GH_VERSION=2.102.0
+ARG LAZYGIT_VERSION=0.66.0
+ARG WORKTRUNK_VERSION=0.80.0
+ARG TERRAFORM_VERSION=1.16.5
 # Client only - the daemon lives on the host as the `dev` user (docs/docker.md).
 # Keep DOCKER_CLI_VERSION equal to the host daemon's version; compose refuses to
 # talk to an API newer than the server it reaches.
-ARG DOCKER_CLI_VERSION=29.8.0
-ARG DOCKER_COMPOSE_VERSION=5.5.1
-ARG DOCKER_BUILDX_VERSION=0.37.1
+ARG DOCKER_CLI_VERSION=29.8.2
+ARG DOCKER_COMPOSE_VERSION=5.6.0
+ARG DOCKER_BUILDX_VERSION=0.37.2
 
 ENV DEBIAN_FRONTEND=noninteractive
 

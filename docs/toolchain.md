@@ -15,15 +15,15 @@
 |------------------|-----------|----------------------------------------------------|
 | `herdr`          | `0.9.3`   | `/usr/local/bin/herdr`                             |
 | `node`           | `24.21.0` | nvm in `/opt/nvm`, symlinked into `/usr/local/bin` |
-| `pnpm`           | `12.4.1`  | `npm install -g`, symlinked into `/usr/local/bin`  |
-| `gh`             | `2.100.0` | pinned `.deb`                                      |
-| `lazygit`        | `0.65.0`  | `/usr/local/bin/lazygit` (alias `lg`)              |
-| `wt` (worktrunk) | `0.77.0`  | `/usr/local/bin/wt` + `git-wt`                     |
-| `terraform`      | `1.16.2`  | `/usr/local/bin/terraform`                         |
-| `nvm`            | `0.40.7`  | `/opt/nvm`                                         |
-| Docker CLI       | `29.8.0`  | `/usr/local/bin/docker`                            |
-| Compose plugin   | `5.5.1`   | `/usr/local/lib/docker/cli-plugins/docker-compose` |
-| Buildx plugin    | `0.37.1`  | `/usr/local/lib/docker/cli-plugins/docker-buildx`  |
+| `pnpm`           | `12.9.1`  | `npm install -g`, symlinked into `/usr/local/bin`  |
+| `gh`             | `2.102.0` | pinned `.deb`                                      |
+| `lazygit`        | `0.66.0`  | `/usr/local/bin/lazygit` (alias `lg`)              |
+| `wt` (worktrunk) | `0.80.0`  | `/usr/local/bin/wt` + `git-wt`                     |
+| `terraform`      | `1.16.5`  | `/usr/local/bin/terraform`                         |
+| `nvm`            | `0.40.8`  | `/opt/nvm`                                         |
+| Docker CLI       | `29.8.2`  | `/usr/local/bin/docker`                            |
+| Compose plugin   | `5.6.0`   | `/usr/local/lib/docker/cli-plugins/docker-compose` |
+| Buildx plugin    | `0.37.2`  | `/usr/local/lib/docker/cli-plugins/docker-buildx`  |
 
 Also from the Ubuntu archive: `git`, `git-lfs`, `starship`, `ripgrep`, `fd` (symlinked from `fdfind`), `jq`, `curl`,
 `rsync`, `build-essential`, `python3`, `openssh-server`/`-client`, `nano`, `less`, `procps`, `iproute2`, `socat` (backs
@@ -222,10 +222,10 @@ Re-running `./bin/devbox skills` is safe: npm and `npx skills add` overwrite in 
 
 ```bash
 node -v      # v24.21.0
-pnpm -v      # 12.4.1
+pnpm -v      # 12.9.1
 ```
 
-pnpm installs via `npm install -g pnpm@12.4.1`, not `corepack prepare`: pnpm 12's JS wrapper loads a native binary from
+pnpm installs via `npm install -g pnpm@12.9.1`, not `corepack prepare`: pnpm 12's JS wrapper loads a native binary from
 its own `node_modules`, but corepack's cache held only the wrapper — every shimmed call re-downloaded it. `corepack`
 stays enabled for `yarn`, with `COREPACK_HOME` set so repos declaring `packageManager` still work.
 
