@@ -241,8 +241,9 @@ the host's root Docker daemon.
     peers for any local caller, so a project container that bind-mounts `/run/tailscale` relays through it, and
     peers stay reachable at their LAN or public addresses (accepted limits, `docs/security.md`); before 1.98
     tailscaled relayed a LocalAPI dial to any address as root, the host's own services included, so `doctor
-    host` fails on a `tailscale version` below 1.98. `doctor host` also fails until the loaded file matches the
-    ruleset the checkout writes and the installed unit matches the one `netfilter_unit` writes. Setup also
+    host` fails when the running tailscaled (`tailscale version --daemon`, falling back to the CLI's `tailscale
+    version`) is below 1.98. `doctor host` also fails until the loaded file matches the ruleset the checkout writes
+    and the installed unit matches the one `netfilter_unit` writes. Setup also
     adds the one `ufw` rule that lets the devbox bridge reach the gateway, and runs a lingering rootless
     `dockerd` on `/run/devbox/docker.sock` from a root-owned unit in `/etc/systemd/user`, so nothing in the bind
     mount can rewrite the daemon's command line - plus a `user@1001.service` drop-in pointing dev's

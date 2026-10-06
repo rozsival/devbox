@@ -1742,17 +1742,31 @@ doctor_host() {
   # anything that reaches /run/tailscale/tailscaled.sock - a project container
   # through a bind mount - gets past the firewall's uid rules to the host's
   # sshd and loopback services; 1.98 and later relay only Tailnet routes.
+  # The relay lives in the running tailscaled, which can lag a CLI upgrade, so
+  # read its version from the Daemon line of 'tailscale version --daemon'; with
+  # no such line (daemon unreachable, or a CLI without --daemon) fall back to
+  # the first line of plain 'tailscale version', the CLI's own version.
   # Without tailscale the BIND_ADDR check above already fails.
-  local ts_version
+  local ts_version='' ts_source='running tailscaled' ts_output ts_line
   if command -v tailscale >/dev/null 2>&1; then
-    ts_version="$(tailscale version 2>/dev/null || true)"
-    ts_version="${ts_version%%$'\n'*}"
+    ts_output="$(tailscale version --daemon 2>/dev/null || true)"
+    while IFS= read -r ts_line; do
+      if [[ "${ts_line}" == 'Daemon: '* ]]; then
+        ts_version="${ts_line#Daemon: }"
+        break
+      fi
+    done <<<"${ts_output}"
+    if [[ -z "${ts_version}" ]]; then
+      ts_source='tailscale CLI - tailscaled did not report its version'
+      ts_version="$(tailscale version 2>/dev/null || true)"
+      ts_version="${ts_version%%$'\n'*}"
+    fi
     if [[ ! "${ts_version}" =~ ^([0-9]+)\.([0-9]+) ]]; then
-      fail "could not read the Tailscale version ('${ts_version}') - 1.98 or later is required"
+      fail "could not read the Tailscale version from the ${ts_source} ('${ts_version}') - 1.98 or later is required"
     elif ((10#${BASH_REMATCH[1]} < 1 || (10#${BASH_REMATCH[1]} == 1 && 10#${BASH_REMATCH[2]} < 98))); then
-      fail "Tailscale ${ts_version} is older than 1.98 - its tailscaled relays LocalAPI dials to any address as root, the host's sshd and loopback services included: upgrade Tailscale"
+      fail "Tailscale ${ts_version} (${ts_source}) is older than 1.98 - its tailscaled relays LocalAPI dials to any address as root, the host's sshd and loopback services included: upgrade Tailscale"
     else
-      log_success "Tailscale ${ts_version} relays LocalAPI dials only to the Tailnet"
+      log_success "Tailscale ${ts_version} (${ts_source}) relays LocalAPI dials only to the Tailnet"
     fi
   fi
 

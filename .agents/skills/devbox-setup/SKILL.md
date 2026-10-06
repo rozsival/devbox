@@ -21,7 +21,8 @@ Laptop prerequisite: bash >= 4.2 (`brew install bash`) - `bin/devbox` is bashly-
 start under macOS's /bin/bash 3.2, so `/usr/bin/env bash` must find the Homebrew one first on the PATH.
 The workstation's Ubuntu bash is fine. Workstation prerequisite: Tailscale >= 1.98 - older tailscaled relays
 its LocalAPI `dial` to any address as root (host sshd and loopback included) for anything reaching
-`/run/tailscale/tailscaled.sock`, which a project container can bind-mount; `doctor` fails on an older one.
+`/run/tailscale/tailscaled.sock`, which a project container can bind-mount; `doctor` fails on an older one,
+reading the running tailscaled's version (`tailscale version --daemon`), falling back to the CLI's.
 
 Two 1Password SSH items served by its agent: the devbox key, whose public half lands in `~/.ssh/devbox.pub`,
 and the default identity's key, `~/.ssh/id_<slug>.pub` - only the public halves on disk, which `IdentityFile`
@@ -112,10 +113,10 @@ Then start the container:
 ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
 ```
 
-`doctor` is the acceptance test for phases 3 and 4: compose; `BIND_ADDR` vs Tailscale; Tailscale >= 1.98; something on
-`BIND_ADDR:${DEVBOX_SSH_PORT}` and **nothing** on `0.0.0.0`; container health; PID 1 `dev`; project Docker
-daemon answering, rootless; `host.docker.internal` resolving; project-port boundary service active and
-current; toolchain probes - exits non-zero on any failure. Then `ssh devbox 'docker run --rm hello-world'`.
+`doctor` is the acceptance test for phases 3 and 4: compose; `BIND_ADDR` vs Tailscale; running tailscaled at
+1.98 or later; something on `BIND_ADDR:${DEVBOX_SSH_PORT}` and **nothing** on `0.0.0.0`; container health; PID 1
+`dev`; project Docker daemon answering, rootless; `host.docker.internal` resolving; project-port boundary service
+active and current; toolchain probes - exits non-zero on any failure. Then `ssh devbox 'docker run --rm hello-world'`.
 
 If the node's Tailscale address changes later, `doctor` reports `BIND_ADDR is X but Tailscale reports Y`;
 re-run `./bin/devbox env && ./bin/devbox up`.

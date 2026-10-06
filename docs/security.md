@@ -132,7 +132,8 @@ These are known and deliberate, not gaps to be closed later:
    and its `dial` endpoint has `tailscaled`, as root, open a connection for any local caller. From 1.98 it relays only
    Tailnet routes — a peer, its sshd included — and answers a non-Tailscale address with Dial-Self; before 1.98 it
    dialled any address, so the host's own services, its sshd and loopback included, were reachable too, past the
-   boundary's uid rules. `./bin/devbox doctor host` therefore fails on a `tailscale version` below 1.98. The project
+   boundary's uid rules. `./bin/devbox doctor host` therefore fails when the running `tailscaled` is below 1.98 (read
+   from `tailscale version --daemon`, falling back to the CLI's version when the daemon doesn't answer). The project
    daemon can bind-mount any host path `dev` reaches, so a project container can relay to a peer through that socket.
    The boundary stops direct connections from the devbox and its containers, not this relay. Not applied, being the
    host's decision: restricting `/run/tailscale` through a `tailscaled` drop-in, or hiding it from dev's user manager.

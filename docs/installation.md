@@ -21,7 +21,8 @@
 
 Tailscale before 1.98 relays its LocalAPI `dial` to any address as root, the host's sshd and loopback services
 included, for anything that can reach `/run/tailscale/tailscaled.sock` — a project container can bind-mount it. 1.98
-and later relay only Tailnet routes ([Security](security.md)); `./bin/devbox doctor` fails on an older version.
+and later relay only Tailnet routes ([Security](security.md)); `./bin/devbox doctor` fails on an older version, reading
+the running tailscaled's (`tailscale version --daemon`) and falling back to the CLI's when the daemon doesn't answer.
 
 > [!IMPORTANT]
 > Not optional: two **1Password SSH keys** — the Devbox Laptop key and your default identity's key — with only
