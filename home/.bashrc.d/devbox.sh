@@ -65,9 +65,9 @@ fi
 
 # Box-wide tool credentials: plain KEY=value pairs, mode 600, on the bind mount.
 # Sourced outside the interactive guard on purpose - agents and tooling arrive
-# as `ssh devbox <cmd>`, which is non-interactive, and they need the GitHub
-# tokens and model keys just as much as a pane does. `set -a` exports every
-# assignment without repeating `export` in the file.
+# as `ssh devbox <cmd>`, which is non-interactive, and they need the model keys
+# just as much as a pane does. `set -a` exports every assignment without
+# repeating `export` in the file.
 #
 # Per-project secrets do NOT belong here: each project keeps its own .env, so a
 # leak stays scoped to one project. That includes GOOGLE_APPLICATION_CREDENTIALS
@@ -77,6 +77,10 @@ if [ -r "$HOME/.config/devbox/secrets.env" ]; then
   # shellcheck source=/dev/null # a runtime credential file, not repo content
   . "$HOME/.config/devbox/secrets.env"
   set +a
+  # Except the per-identity GitHub tokens: exported, every dev server, test
+  # runner and install script would inherit every account's PAT. Only
+  # devbox-gh-token needs them, and it reads them from the file by name.
+  unset "${!GH_TOKEN_@}"
 fi
 
 # GH_TOKEN is deliberately *not* derived here. The account belongs to the

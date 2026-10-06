@@ -100,10 +100,11 @@ key**, **no Google user credential** (`gcloud` not installed). Three layers:
   `signing_pubkey` for signing - GitHub registers them separately); no private key at rest - same
   borrow/token split as above.
 - **Box-wide tool credentials** - `~/.config/devbox/secrets.env`, plain `KEY=value` mode 600, sourced by
-  every shell including non-interactive `ssh devbox <cmd>`; holds model API keys, one fine-grained GitHub
-  token per identity (`GH_TOKEN_<SLUG>`, e.g. `GH_TOKEN_PERSONAL`). Nothing exports `GH_TOKEN` - the `gh`
-  shim in `~/.local/libexec/devbox-agent` resolves it per invocation from the working directory, same rule
-  as git identity (`devbox-gh-token --account` reports it); plus the Claude Code OAuth login in
+  every shell including non-interactive `ssh devbox <cmd>`; holds model API keys (exported) and one
+  fine-grained GitHub token per identity (`GH_TOKEN_<SLUG>`, e.g. `GH_TOKEN_PERSONAL` - unset again right
+  after sourcing, so no process inherits them). Nothing exports `GH_TOKEN` - the `gh` shim in
+  `~/.local/libexec/devbox-agent` resolves it per invocation from the working directory, reading the file,
+  same rule as git identity (`devbox-gh-token --account` reports it); plus the Claude Code OAuth login in
   `~/.claude/.credentials.json`, from one `/login`
 - **Per project** - that project's `.env`, rendered on the laptop, copied in, so a leak stays scoped there;
   GCP keys are per-project too, via `GOOGLE_APPLICATION_CREDENTIALS`

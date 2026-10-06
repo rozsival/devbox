@@ -53,7 +53,10 @@ Everything lives on the `/home/dev` bind mount, so it survives container/image r
 `~/.config/devbox/secrets.env` is plain `KEY=value` pairs at mode 600, installed from
 `home/.config/devbox/secrets.env.example` if absent, never overwritten. `~/.bashrc.d/devbox.sh` sources it inside
 `set -a`/`set +a`, **outside** the interactive guard, because agents arrive as `ssh devbox <cmd>` (non-interactive);
-`container/bootstrap.sh` prepends the `~/.bashrc.d` loader ahead of Ubuntu's `~/.bashrc` so that path reads it too.
+`container/bootstrap.sh` prepends the `~/.bashrc.d` loader ahead of Ubuntu's `~/.bashrc` so that path reads it too. It
+then unsets every `GH_TOKEN_<SLUG>` again: only `devbox-gh-token` needs them, and it reads them from the file by name,
+so a dev server, a test runner or a package's install script never inherits every account's PAT. Model keys stay
+exported — OMP reads them from its environment.
 
 ```dotenv
 GH_TOKEN_PERSONAL=github_pat_...
@@ -197,9 +200,10 @@ approval interactively. A `claude` that bypasses the launcher (absolute path) wo
 `agent.gitconfig` and `devbox-git-credential`. See [Git Identities](git.md#-agent-sessions) for the mechanism; this page
 covers only where those secrets live — `~/.config/devbox/secrets.env` and each identity's `app` directory
 (`{app-id,app.pem}`) on the laptop too, read there by its copy of the helper (`./bin/devbox agent install`). On the
-devbox, `~/.bashrc.d/devbox.sh` sources the file under `set -a` into every shell, which is how OMP sees model keys; the
-laptop installs no such rc line, so there `devbox-gh-token` and the credential helper read only the `GH_TOKEN_<SLUG>`
-lines, by name, and model keys in it are unused. Neither copy travels: `devbox sync` carries `identities.conf` and the
+devbox, `~/.bashrc.d/devbox.sh` sources the file under `set -a` into every shell, which is how OMP sees model keys,
+then unsets the `GH_TOKEN_<SLUG>` variables; the laptop installs no such rc line. On both, `devbox-gh-token` and the
+credential helper read the `GH_TOKEN_<SLUG>` lines straight from the file, by name; model keys on the laptop are unused.
+Neither copy travels: `devbox sync` carries `identities.conf` and the
 OMP preset, not secrets.
 
 ---
@@ -345,8 +349,9 @@ further fine-grained tokens as `GH_TOKEN_<SLUG>` for each other identity, reconn
 
 ### `echo $GH_TOKEN` is empty — is `gh` broken?
 
-No. Nothing exports `GH_TOKEN`; the `gh` shim resolves it per invocation from the working directory. Check with
-`devbox-gh-token --account` and `gh auth status`; for your own calls use `GH_TOKEN=$(devbox-gh-token)`.
+No. Nothing exports `GH_TOKEN`, nor the `GH_TOKEN_<SLUG>` variables; the `gh` shim resolves a token per invocation from
+the working directory, read from `secrets.env`. Check with `devbox-gh-token --account` and `gh auth status`; for your
+own calls use `GH_TOKEN=$(devbox-gh-token)`.
 
 ### What does `devbox-gh-token: GH_TOKEN_WORK is unset` mean?
 

@@ -76,13 +76,14 @@ var="$(di_get "${account}" token_var)"
 # Resolution order, first hit wins:
 #   1. an explicit GH_TOKEN in the environment - a deliberate one-off
 #      (`GH_TOKEN=$other gh ...`)
-#   2. the identity's variable in the environment (a shell that sourced
-#      secrets.env through ~/.bashrc.d/devbox.sh)
+#   2. the identity's variable in the environment - set for one command, since
+#      ~/.bashrc.d/devbox.sh sources secrets.env but unsets these again
 #   3. the same variable read straight out of secrets.env
 #
-# Step 3 is what makes this independent of shell startup: a token added to
-# secrets.env works in the session that is already open, and the error below is
-# then true in every case - the file really is the only place looked at.
+# Step 3 is what every shell relies on: no process but the one asking holds a
+# token, a token added to secrets.env works in the session that is already
+# open, and the error below is true in every case - the file really is the
+# only place looked at.
 if [[ -n ${GH_TOKEN:-} ]]; then
   printf '%s\n' "${GH_TOKEN}"
   exit 0
