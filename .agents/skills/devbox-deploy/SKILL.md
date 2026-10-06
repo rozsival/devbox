@@ -124,7 +124,8 @@ stopped fails - `./bin/devbox hook` restarts it), project Docker daemon reachabl
 resolving to publish address, `devbox-docker-firewall` active with the ruleset and unit this checkout writes, the
 daemon's user manager reading root-owned `/etc/devbox-docker` (drop-in current, manager started after it), and the
 host's sshd effectively denying `dev` (each stale after a deploy that changed it, until
-`sudo ./bin/devbox docker setup`).
+`sudo ./bin/devbox docker setup`), and Tailscale 1.98 or later (older tailscaled relays LocalAPI `dial` to the
+host's own services - upgrade Tailscale).
 
 If `doctor` reports `BIND_ADDR is X but Tailscale reports Y`, the node's address changed:
 `./bin/devbox env && ./bin/devbox up`.

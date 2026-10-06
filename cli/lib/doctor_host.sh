@@ -31,6 +31,24 @@ doctor_host() {
     log_success "BIND_ADDR matches the Tailscale address (${bind_addr})"
   fi
 
+  # tailscaled before 1.98 relays a LocalAPI dial to any address as root, so
+  # anything that reaches /run/tailscale/tailscaled.sock - a project container
+  # through a bind mount - gets past the firewall's uid rules to the host's
+  # sshd and loopback services; 1.98 and later relay only Tailnet routes.
+  # Without tailscale the BIND_ADDR check above already fails.
+  local ts_version
+  if command -v tailscale >/dev/null 2>&1; then
+    ts_version="$(tailscale version 2>/dev/null || true)"
+    ts_version="${ts_version%%$'\n'*}"
+    if [[ ! "${ts_version}" =~ ^([0-9]+)\.([0-9]+) ]]; then
+      fail "could not read the Tailscale version ('${ts_version}') - 1.98 or later is required"
+    elif ((10#${BASH_REMATCH[1]} < 1 || (10#${BASH_REMATCH[1]} == 1 && 10#${BASH_REMATCH[2]} < 98))); then
+      fail "Tailscale ${ts_version} is older than 1.98 - its tailscaled relays LocalAPI dials to any address as root, the host's sshd and loopback services included: upgrade Tailscale"
+    else
+      log_success "Tailscale ${ts_version} relays LocalAPI dials only to the Tailnet"
+    fi
+  fi
+
   if grep -qE "${bind_addr}:${ssh_port}\b" <<<"$(ss -ltn 2>/dev/null)"; then
     log_success "sshd published on ${bind_addr}:${ssh_port}"
   else

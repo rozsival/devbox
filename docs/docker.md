@@ -77,8 +77,9 @@ to stop, and one without a restart policy stays down until `docker compose up -d
 
 `./bin/devbox doctor` checks `host.docker.internal` resolves, the boundary service is active with the ruleset and unit
 this checkout writes, the daemon's user manager reads the root-owned directories and started after the drop-in last
-changed, and the host sshd's effective configuration denies `dev` — a project port silently exposed on every interface,
-or a daemon configuration the bind mount controls, gets reported, not discovered.
+changed, the host sshd's effective configuration denies `dev`, and Tailscale is 1.98 or later
+([below](#2-the-boundary)) — a project port silently exposed on every interface, a daemon configuration the bind mount
+controls, or a LocalAPI that relays to the host's own services, gets reported, not discovered.
 
 ### The user manager is not fenced off
 
@@ -179,9 +180,11 @@ default route out to the ISP.
 
 These rules stop direct connections over the overlay, nothing more. A peer stays reachable at its LAN or public
 address, like the rest of the network. And `tailscaled`'s LocalAPI socket, `/run/tailscale/tailscaled.sock`, is
-world-accessible (`0666`): its `dial` endpoint has `tailscaled`, as root, open a connection to a peer for any local
-caller, and a project container can bind-mount any host path `dev` reaches — so it can relay to the Tailnet through
-it. Both are accepted limits ([Security Model](security.md#-accepted-limits)).
+world-accessible (`0666`): its `dial` endpoint has `tailscaled`, as root, open a connection for any local caller, and a
+project container can bind-mount any host path `dev` reaches — so it can relay to the Tailnet through it. Since 1.98
+`tailscaled` relays only Tailnet routes, answering any other address with Dial-Self; before 1.98 it dialled any
+address, the host's sshd and loopback services included, past every uid rule above — so `./bin/devbox doctor host`
+fails below 1.98. Both are accepted limits ([Security Model](security.md#-accepted-limits)).
 
 > [!WARNING]
 > An **exit node** on the workstation leaves the devbox and the project daemon without internet: with one set, every
@@ -379,7 +382,8 @@ ssh devbox 'docker run --rm alpine:3 ping -c1 -W2 <peer-tailscale-ip> >/dev/null
 
 Two routes stay open, both accepted limits ([Security Model](security.md#-accepted-limits)): a peer's LAN or public
 address, reachable like the rest of the network, and `tailscaled`'s world-accessible LocalAPI socket, whose `dial`
-endpoint a project container bind-mounting `/run/tailscale` can use to relay to any peer.
+endpoint a project container bind-mounting `/run/tailscale` can use to relay to any peer (Tailscale 1.98 or later,
+which `doctor host` requires, relays nothing else).
 
 ### Why does `doctor` say `devbox-docker-firewall is inactive` after a reboot?
 

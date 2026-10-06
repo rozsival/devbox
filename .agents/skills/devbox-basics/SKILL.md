@@ -45,8 +45,9 @@ Four facts:
    included, but systemd-resolved's DNS stub) or a Tailnet peer
    over the overlay (`tailscale0`, Tailscale's ranges). Accepted limits (`docs/security.md`): peers stay
    reachable at LAN or public addresses; a project container can relay to them through `tailscaled`'s
-   world-accessible LocalAPI socket, or drive dev's user manager through `/run/user/1001`. A Tailscale exit
-   node on the workstation cuts the devbox's internet (`docs/docker.md`).
+   world-accessible LocalAPI socket (Tailnet routes only from Tailscale 1.98, which `doctor host` requires;
+   older versions also reached the host's own services), or drive dev's user manager through `/run/user/1001`.
+   A Tailscale exit node on the workstation cuts the devbox's internet (`docs/docker.md`).
 
 ## The four ways in
 

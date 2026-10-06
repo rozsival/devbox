@@ -14,7 +14,7 @@ the host's root Docker daemon.
 
 ## Stack
 
-- **Host**: Ubuntu 26.04 LTS, Docker with compose v2, Tailscale; repo lives at `~/devbox`
+- **Host**: Ubuntu 26.04 LTS, Docker with compose v2, Tailscale >= 1.98; repo lives at `~/devbox`
 - **Image**: `ubuntu:26.04` + pinned `herdr`, `gh`, `lazygit`, `wt` (worktrunk), `terraform`, the Docker CLI
   with the compose and buildx plugins, and Node 24 / pnpm 12 through nvm in `/opt/nvm`. No `op` and no
   `gcloud`: the container holds no vault and no Google account (see `docs/secrets.md`)
@@ -234,11 +234,12 @@ the host's root Docker daemon.
     rendered from `/etc/subuid` at run time, `{ 1001, 165536-231071 }` by default) and both off the Tailnet (no
     new connection from `docker0` or those uids through `tailscale0` or to `100.64.0.0/10`/`fd7a:115c:a1e0::/48`,
     evaluated after Docker's DNAT so a root-daemon port on the host's Tailscale address still works). That covers
-    direct connections to the overlay only: tailscaled's LocalAPI socket is world-accessible and dials peers for
-    any local caller, so a project container that bind-mounts `/run/tailscale` relays through it, and peers stay
-    reachable at their LAN or public addresses (accepted limits, `docs/security.md`). `doctor host` fails until
-    the loaded file matches the ruleset the checkout writes and the installed unit matches the one
-    `netfilter_unit` writes. Setup also
+    direct connections to the overlay only: tailscaled's LocalAPI socket is world-accessible and dials Tailnet
+    peers for any local caller, so a project container that bind-mounts `/run/tailscale` relays through it, and
+    peers stay reachable at their LAN or public addresses (accepted limits, `docs/security.md`); before 1.98
+    tailscaled relayed a LocalAPI dial to any address as root, the host's own services included, so `doctor
+    host` fails on a `tailscale version` below 1.98. `doctor host` also fails until the loaded file matches the
+    ruleset the checkout writes and the installed unit matches the one `netfilter_unit` writes. Setup also
     adds the one `ufw` rule that lets the devbox bridge reach the gateway, and runs a lingering rootless
     `dockerd` on `/run/devbox/docker.sock` from a root-owned unit in `/etc/systemd/user`, so nothing in the bind
     mount can rewrite the daemon's command line - plus a `user@1001.service` drop-in pointing dev's

@@ -40,7 +40,7 @@ agents inside — the container is the agent sandbox.
 
 ## 🚀 Quick start
 
-**Requires** a workstation running Ubuntu 26.04 LTS with Docker and Tailscale, two **1Password SSH keys** — the Devbox
+**Requires** a workstation running Ubuntu 26.04 LTS with Docker and Tailscale ≥ 1.98, two **1Password SSH keys** — the Devbox
 Laptop key and your default identity's key, with only `~/.ssh/devbox.pub` and `~/.ssh/id_<slug>.pub` on disk — the two
 **`~/.ssh/config` blocks**, a non-empty **`BIND_ADDR`** and **bash >= 4.2 on the laptop** (`brew install bash`; macOS
 ships 3.2, which the generated `bin/devbox` refuses) — see [Installation](docs/installation.md). A laptop set up with

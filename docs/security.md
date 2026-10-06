@@ -129,11 +129,13 @@ These are known and deliberate, not gaps to be closed later:
    on the laptop, a `gh auth logout` (your own `gh` on fine-grained PATs too) and 1Password set to approve every SSH
    request remove what a bypass could reach.
 8. **`tailscaled`'s LocalAPI relays to the Tailnet.** `/run/tailscale/tailscaled.sock` is world-accessible (`0666`),
-   and its `dial` endpoint has `tailscaled`, as root, open a connection to a Tailnet peer for any local caller. The
-   project daemon can bind-mount any host path `dev` reaches, so a project container can relay to a peer — its sshd
-   included — through that socket. The boundary stops direct connections from the devbox and its containers, not this
-   relay. Not applied, being the host's decision: restricting `/run/tailscale` through a `tailscaled` drop-in, or hiding
-   it from dev's user manager.
+   and its `dial` endpoint has `tailscaled`, as root, open a connection for any local caller. From 1.98 it relays only
+   Tailnet routes — a peer, its sshd included — and answers a non-Tailscale address with Dial-Self; before 1.98 it
+   dialled any address, so the host's own services, its sshd and loopback included, were reachable too, past the
+   boundary's uid rules. `./bin/devbox doctor host` therefore fails on a `tailscale version` below 1.98. The project
+   daemon can bind-mount any host path `dev` reaches, so a project container can relay to a peer through that socket.
+   The boundary stops direct connections from the devbox and its containers, not this relay. Not applied, being the
+   host's decision: restricting `/run/tailscale` through a `tailscaled` drop-in, or hiding it from dev's user manager.
 
 ### Command allowlists are a guardrail, not a control
 

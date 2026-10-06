@@ -10,14 +10,18 @@
 
 ## 🧰 Prerequisites
 
-| Where       | Requirement                                                                  |
-| ----------- | ---------------------------------------------------------------------------- |
-| Workstation | Ubuntu 26.04, Docker with compose v2, Tailscale up, `rsync`, a known UID/GID |
-| Laptop      | `rsync`, an SSH client, and a [herdr](https://herdr.dev) client              |
-|             | bash ≥ 4.2 (`brew install bash`) — macOS's 3.2 can't run `./bin/devbox`      |
+| Where       | Requirement                                                                         |
+| ----------- | ----------------------------------------------------------------------------------- |
+| Workstation | Ubuntu 26.04, Docker with compose v2, Tailscale ≥ 1.98 up, `rsync`, a known UID/GID |
+| Laptop      | `rsync`, an SSH client, and a [herdr](https://herdr.dev) client                     |
+|             | bash ≥ 4.2 (`brew install bash`) — macOS's 3.2 can't run `./bin/devbox`             |
 
 `./bin/devbox` is bashly-generated and refuses older bash; Homebrew's bash, first on the `PATH`, is the one
 `#!/usr/bin/env bash` finds. The workstation's Ubuntu bash is new enough.
+
+Tailscale before 1.98 relays its LocalAPI `dial` to any address as root, the host's sshd and loopback services
+included, for anything that can reach `/run/tailscale/tailscaled.sock` — a project container can bind-mount it. 1.98
+and later relay only Tailnet routes ([Security](security.md)); `./bin/devbox doctor` fails on an older version.
 
 > [!IMPORTANT]
 > Not optional: two **1Password SSH keys** — the Devbox Laptop key and your default identity's key — with only
@@ -27,7 +31,7 @@
 Check the workstation in one call:
 
 ```bash
-ssh <workstation> 'docker --version && docker compose version && tailscale ip -4 && id -u && command -v rsync'
+ssh <workstation> 'docker --version && docker compose version && tailscale version && tailscale ip -4 && id -u && command -v rsync'
 ```
 
 Different host UID is fine: `./bin/devbox env` derives `HOST_UID`/`HOST_GID` from the current user, owning the
