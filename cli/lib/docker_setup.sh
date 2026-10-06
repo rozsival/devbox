@@ -158,35 +158,52 @@ DenyUsers ${DEV_USER}
 SSHD_BODY
 }
 
+# Every failure here `fail`s and returns rather than aborting: the firewall and
+# the daemon's own isolation still have to be set up, and the final exit status
+# reports what went wrong.
 step_sshd() {
   if ! command -v sshd >/dev/null 2>&1; then
     log_success "no sshd on this host - nothing ${DEV_USER} could log in to"
     return 0
   fi
+  local sshd_error
   if [[ "$(cat "${SSHD_DROPIN}" 2>/dev/null)" == "$(sshd_dropin)" ]]; then
     log_success "${SSHD_DROPIN} current"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
     fail "${SSHD_DROPIN} missing or stale - a key written into /home/dev from the devbox could open a host login as ${DEV_USER}"
   else
+    # Validated before anything is written as well as after: a configuration
+    # sshd already rejects would otherwise be blamed on this file, and removed
+    # with it, while the real error goes unseen.
+    if ! sshd_error="$(sshd -t 2>&1)"; then
+      fail "sshd -t already rejects this host's configuration, so ${SSHD_DROPIN} was not written - fix it, then re-run; sshd says: ${sshd_error}"
+      return 0
+    fi
     log_info "Writing ${SSHD_DROPIN}..."
     install -d -m 755 "$(dirname "${SSHD_DROPIN}")"
     sshd_dropin >"${SSHD_DROPIN}"
     chmod 644 "${SSHD_DROPIN}"
     # Validated before anything reloads: a configuration sshd rejects would
     # otherwise cost the next login - yours.
-    if ! sshd -t 2>/dev/null; then
+    if ! sshd_error="$(sshd -t 2>&1)"; then
       rm -f "${SSHD_DROPIN}"
-      log_error "sshd -t rejects ${SSHD_DROPIN} (removed again) - add 'DenyUsers ${DEV_USER}' to /etc/ssh/sshd_config by hand"
+      fail "sshd -t rejects ${SSHD_DROPIN} (removed again) - add 'DenyUsers ${DEV_USER}' to /etc/ssh/sshd_config by hand; sshd says: ${sshd_error}"
+      return 0
     fi
     # Reloads a running sshd and leaves a socket-activated one to read the file
     # on its next start; open sessions are separate processes and keep going.
     systemctl try-reload-or-restart ssh.service
   fi
   # The file only counts if sshd reads it: a sshd_config without the stock
-  # `Include /etc/ssh/sshd_config.d/*.conf` never does.
-  if sshd -T -C "user=${DEV_USER},host=localhost,addr=127.0.0.1" 2>/dev/null |
-    grep -qiE "^denyusers( .*)? ${DEV_USER}( |\$)"; then
+  # `Include /etc/ssh/sshd_config.d/*.conf` never does. Captured before
+  # matching: `grep -q` stops reading at the match, and under pipefail the
+  # SIGPIPE that leaves sshd -T with would read as a mismatch.
+  local effective
+  effective="$(sshd -T -C "user=${DEV_USER},host=localhost,addr=127.0.0.1" 2>/dev/null || true)"
+  if grep -qiE "^denyusers( .*)? ${DEV_USER}( |\$)" <<<"${effective}"; then
     log_success "host sshd refuses ${DEV_USER}"
+  elif [[ -z "${effective}" ]]; then
+    fail "sshd -T printed nothing, so whether host sshd refuses ${DEV_USER} is unknown - see: sshd -t"
   else
     fail "host sshd does not apply ${SSHD_DROPIN} - /etc/ssh/sshd_config lacks 'Include /etc/ssh/sshd_config.d/*.conf'; add 'DenyUsers ${DEV_USER}' there yourself"
   fi

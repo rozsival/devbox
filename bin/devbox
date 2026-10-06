@@ -326,7 +326,7 @@ devbox_docker_usage() {
 devbox_docker_setup_usage() {
   if [[ -n $long_usage ]]; then
     printf "devbox docker setup\n\n"
-    printf "  Provision the rootless project Docker daemon (needs sudo)\n  \n  - installs uidmap and slirp4netns\n  - creates the unprivileged host user dev:devbox that owns the daemon\n  - moves DEVBOX_DATA_DIR to /home/dev, so container and host paths match\n  - keeps published project ports off every interface but the devbox bridge\n  - lets the devbox bridge reach the address ports are published on\n  - enables the lingering rootless dockerd on /run/devbox/docker.sock\n  - points .env at the new uid, data dir and socket\n  \n  Finish with './bin/devbox rebuild' as your own user.\n\n"
+    printf "  Provision the rootless project Docker daemon (needs sudo)\n  \n  - installs uidmap and slirp4netns\n  - creates the unprivileged host user dev:devbox that owns the daemon\n  - denies dev in the host's sshd (/etc/ssh/sshd_config.d/devbox-docker.conf)\n  - moves DEVBOX_DATA_DIR to /home/dev, so container and host paths match\n  - keeps published project ports off every interface but the devbox bridge\n  - lets the devbox bridge reach the address ports are published on\n  - points dev's user manager at root-owned /etc/devbox-docker, restarting it\n    (and the project containers) when that changes\n  - enables the lingering rootless dockerd on /run/devbox/docker.sock\n  - points .env at the new uid, data dir and socket\n  \n  Finish with './bin/devbox rebuild' as your own user.\n\n"
   else
     printf "devbox docker setup - Provision the rootless project Docker daemon (needs sudo)\n\n"
   fi
@@ -1051,35 +1051,52 @@ DenyUsers ${DEV_USER}
 SSHD_BODY
 }
 
+# Every failure here `fail`s and returns rather than aborting: the firewall and
+# the daemon's own isolation still have to be set up, and the final exit status
+# reports what went wrong.
 step_sshd() {
   if ! command -v sshd >/dev/null 2>&1; then
     log_success "no sshd on this host - nothing ${DEV_USER} could log in to"
     return 0
   fi
+  local sshd_error
   if [[ "$(cat "${SSHD_DROPIN}" 2>/dev/null)" == "$(sshd_dropin)" ]]; then
     log_success "${SSHD_DROPIN} current"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
     fail "${SSHD_DROPIN} missing or stale - a key written into /home/dev from the devbox could open a host login as ${DEV_USER}"
   else
+    # Validated before anything is written as well as after: a configuration
+    # sshd already rejects would otherwise be blamed on this file, and removed
+    # with it, while the real error goes unseen.
+    if ! sshd_error="$(sshd -t 2>&1)"; then
+      fail "sshd -t already rejects this host's configuration, so ${SSHD_DROPIN} was not written - fix it, then re-run; sshd says: ${sshd_error}"
+      return 0
+    fi
     log_info "Writing ${SSHD_DROPIN}..."
     install -d -m 755 "$(dirname "${SSHD_DROPIN}")"
     sshd_dropin >"${SSHD_DROPIN}"
     chmod 644 "${SSHD_DROPIN}"
     # Validated before anything reloads: a configuration sshd rejects would
     # otherwise cost the next login - yours.
-    if ! sshd -t 2>/dev/null; then
+    if ! sshd_error="$(sshd -t 2>&1)"; then
       rm -f "${SSHD_DROPIN}"
-      log_error "sshd -t rejects ${SSHD_DROPIN} (removed again) - add 'DenyUsers ${DEV_USER}' to /etc/ssh/sshd_config by hand"
+      fail "sshd -t rejects ${SSHD_DROPIN} (removed again) - add 'DenyUsers ${DEV_USER}' to /etc/ssh/sshd_config by hand; sshd says: ${sshd_error}"
+      return 0
     fi
     # Reloads a running sshd and leaves a socket-activated one to read the file
     # on its next start; open sessions are separate processes and keep going.
     systemctl try-reload-or-restart ssh.service
   fi
   # The file only counts if sshd reads it: a sshd_config without the stock
-  # `Include /etc/ssh/sshd_config.d/*.conf` never does.
-  if sshd -T -C "user=${DEV_USER},host=localhost,addr=127.0.0.1" 2>/dev/null |
-    grep -qiE "^denyusers( .*)? ${DEV_USER}( |\$)"; then
+  # `Include /etc/ssh/sshd_config.d/*.conf` never does. Captured before
+  # matching: `grep -q` stops reading at the match, and under pipefail the
+  # SIGPIPE that leaves sshd -T with would read as a mismatch.
+  local effective
+  effective="$(sshd -T -C "user=${DEV_USER},host=localhost,addr=127.0.0.1" 2>/dev/null || true)"
+  if grep -qiE "^denyusers( .*)? ${DEV_USER}( |\$)" <<<"${effective}"; then
     log_success "host sshd refuses ${DEV_USER}"
+  elif [[ -z "${effective}" ]]; then
+    fail "sshd -T printed nothing, so whether host sshd refuses ${DEV_USER} is unknown - see: sshd -t"
   else
     fail "host sshd does not apply ${SSHD_DROPIN} - /etc/ssh/sshd_config lacks 'Include /etc/ssh/sshd_config.d/*.conf'; add 'DenyUsers ${DEV_USER}' there yourself"
   fi
@@ -1921,13 +1938,30 @@ doctor_host() {
 
   # dev's home is the bind mount, so a key written there from the devbox must
   # not open a host login: `docker setup` denies the account in the host's
-  # sshd. Whether sshd applies the file takes root (`sshd -T`) - `sudo
-  # ./bin/devbox docker setup --check` asks that; this compares the file.
-  if [[ -x /usr/sbin/sshd ]] || command -v sshd >/dev/null 2>&1; then
-    if [[ "$(cat "${SSHD_DROPIN}" 2>/dev/null)" == "$(sshd_dropin)" ]]; then
-      log_success "host sshd denies ${DEV_USER} (${SSHD_DROPIN})"
-    else
+  # sshd. The file first, then whether sshd applies it: `sshd -T` needs no root,
+  # only a host key to load, and the host's own are root-only - so it gets a
+  # throwaway one through -h.
+  local sshd_bin key_dir effective
+  sshd_bin="$(command -v sshd 2>/dev/null || echo /usr/sbin/sshd)"
+  if [[ -x "${sshd_bin}" ]]; then
+    if [[ "$(cat "${SSHD_DROPIN}" 2>/dev/null)" != "$(sshd_dropin)" ]]; then
       fail "${SSHD_DROPIN} is missing or stale - a key written into ${DEV_HOME} from the devbox could open a host login as ${DEV_USER}:"' sudo ./bin/devbox docker setup'
+    else
+      effective=''
+      if command -v ssh-keygen >/dev/null 2>&1 && key_dir="$(mktemp -d)"; then
+        if ssh-keygen -q -t ed25519 -N '' -f "${key_dir}/hk" >/dev/null 2>&1; then
+          effective="$("${sshd_bin}" -T -h "${key_dir}/hk" \
+            -C "user=${DEV_USER},host=localhost,addr=127.0.0.1" 2>/dev/null || true)"
+        fi
+        rm -rf "${key_dir}"
+      fi
+      if [[ -z "${effective}" ]]; then
+        log_warn "could not confirm host sshd applies ${SSHD_DROPIN} (sshd -T unusable here) - sudo ./bin/devbox docker setup --check asks it"
+      elif grep -qiE "^denyusers( .*)? ${DEV_USER}( |\$)" <<<"${effective}"; then
+        log_success "host sshd denies ${DEV_USER} (effective config)"
+      else
+        fail "host sshd does not apply ${SSHD_DROPIN} - /etc/ssh/sshd_config lacks 'Include /etc/ssh/sshd_config.d/*.conf'; add 'DenyUsers ${DEV_USER}' there yourself"
+      fi
     fi
   fi
 
@@ -2834,6 +2868,9 @@ devbox_docker_setup_command() {
     log_success 'Rootless project docker is fully provisioned.'
     exit 0
   fi
+  # A step that could not apply - sshd rejecting its config, say - reports and
+  # lets the rest run, so the exit status is where it surfaces.
+  ((failures == 0)) || log_error "${failures} step(s) could not be applied - see the warnings above, fix them and re-run."
   log_success 'Done. Next: ./bin/devbox rebuild (as your own user, not root).'
 
 }

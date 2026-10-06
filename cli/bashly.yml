@@ -88,9 +88,12 @@ commands:
 
           - installs uidmap and slirp4netns
           - creates the unprivileged host user dev:devbox that owns the daemon
+          - denies dev in the host's sshd (/etc/ssh/sshd_config.d/devbox-docker.conf)
           - moves DEVBOX_DATA_DIR to /home/dev, so container and host paths match
           - keeps published project ports off every interface but the devbox bridge
           - lets the devbox bridge reach the address ports are published on
+          - points dev's user manager at root-owned /etc/devbox-docker, restarting it
+            (and the project containers) when that changes
           - enables the lingering rootless dockerd on /run/devbox/docker.sock
           - points .env at the new uid, data dir and socket
 

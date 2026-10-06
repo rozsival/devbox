@@ -278,13 +278,30 @@ doctor_host() {
 
   # dev's home is the bind mount, so a key written there from the devbox must
   # not open a host login: `docker setup` denies the account in the host's
-  # sshd. Whether sshd applies the file takes root (`sshd -T`) - `sudo
-  # ./bin/devbox docker setup --check` asks that; this compares the file.
-  if [[ -x /usr/sbin/sshd ]] || command -v sshd >/dev/null 2>&1; then
-    if [[ "$(cat "${SSHD_DROPIN}" 2>/dev/null)" == "$(sshd_dropin)" ]]; then
-      log_success "host sshd denies ${DEV_USER} (${SSHD_DROPIN})"
-    else
+  # sshd. The file first, then whether sshd applies it: `sshd -T` needs no root,
+  # only a host key to load, and the host's own are root-only - so it gets a
+  # throwaway one through -h.
+  local sshd_bin key_dir effective
+  sshd_bin="$(command -v sshd 2>/dev/null || echo /usr/sbin/sshd)"
+  if [[ -x "${sshd_bin}" ]]; then
+    if [[ "$(cat "${SSHD_DROPIN}" 2>/dev/null)" != "$(sshd_dropin)" ]]; then
       fail "${SSHD_DROPIN} is missing or stale - a key written into ${DEV_HOME} from the devbox could open a host login as ${DEV_USER}:"' sudo ./bin/devbox docker setup'
+    else
+      effective=''
+      if command -v ssh-keygen >/dev/null 2>&1 && key_dir="$(mktemp -d)"; then
+        if ssh-keygen -q -t ed25519 -N '' -f "${key_dir}/hk" >/dev/null 2>&1; then
+          effective="$("${sshd_bin}" -T -h "${key_dir}/hk" \
+            -C "user=${DEV_USER},host=localhost,addr=127.0.0.1" 2>/dev/null || true)"
+        fi
+        rm -rf "${key_dir}"
+      fi
+      if [[ -z "${effective}" ]]; then
+        log_warn "could not confirm host sshd applies ${SSHD_DROPIN} (sshd -T unusable here) - sudo ./bin/devbox docker setup --check asks it"
+      elif grep -qiE "^denyusers( .*)? ${DEV_USER}( |\$)" <<<"${effective}"; then
+        log_success "host sshd denies ${DEV_USER} (effective config)"
+      else
+        fail "host sshd does not apply ${SSHD_DROPIN} - /etc/ssh/sshd_config lacks 'Include /etc/ssh/sshd_config.d/*.conf'; add 'DenyUsers ${DEV_USER}' there yourself"
+      fi
     fi
   fi
 
