@@ -12,6 +12,13 @@ log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
 # Pinned like every other tool in this repo; override to move a single one.
 SKILLS_CLI_VERSION="${SKILLS_CLI_VERSION:-1.5.26}"
 AGENT_BROWSER_VERSION="${AGENT_BROWSER_VERSION:-0.37.1}"
+# The skills too: a bare `owner/repo` installs whatever the default branch holds
+# at that moment, and a skill is instructions an agent follows. A GitHub tree
+# URL pins the ref (the CLI fails on one that does not exist). Where the
+# repository tags its releases, the tag of the tool already pinned above is
+# used, so a skill and the CLI it drives move together; anthropics/skills has
+# no tags, hence a commit.
+SKILL_CREATOR_REF="${SKILL_CREATOR_REF:-683bc88e56f3e09ba94f7055977f3d3aa499f202}"
 
 readonly HOME_DIR="${HOME:-/home/dev}"
 export PATH="${HOME_DIR}/.local/bin:${PATH}"
@@ -49,9 +56,9 @@ skills_add() {
     --yes
 }
 
-skills_add vercel-labs/agent-browser agent-browser
-skills_add anthropics/skills skill-creator
-skills_add vercel-labs/skills find-skills
+skills_add "https://github.com/vercel-labs/agent-browser/tree/v${AGENT_BROWSER_VERSION}" agent-browser
+skills_add "https://github.com/anthropics/skills/tree/${SKILL_CREATOR_REF}" skill-creator
+skills_add "https://github.com/vercel-labs/skills/tree/v${SKILLS_CLI_VERSION}" find-skills
 
 log_success 'Agent skills and agent-browser ready.'
 log_info "Installed: $(agent-browser --version)"

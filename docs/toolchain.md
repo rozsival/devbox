@@ -195,11 +195,15 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'
 `~/.agents/skills`, which OMP reads, and a symlink to it in `~/.claude/skills`, the only skills directory Claude Code
 reads:
 
-| Skill           | Source                      | What it is for                                       |
-| --------------- | --------------------------- | ---------------------------------------------------- |
-| `agent-browser` | `vercel-labs/agent-browser` | Browser automation: navigate, fill, screenshot, test |
-| `skill-creator` | `anthropics/skills`         | Authoring, editing and evaluating skills             |
-| `find-skills`   | `vercel-labs/skills`        | Discovering and installing more skills mid-task      |
+| Skill           | Source, pinned at                                                          | What it is for                                       |
+| --------------- | -------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `agent-browser` | `vercel-labs/agent-browser` @ `v${AGENT_BROWSER_VERSION}`, the CLI's tag   | Browser automation: navigate, fill, screenshot, test |
+| `skill-creator` | `anthropics/skills` @ `SKILL_CREATOR_REF`, a commit (the repo has no tags) | Authoring, editing and evaluating skills             |
+| `find-skills`   | `vercel-labs/skills` @ `v${SKILLS_CLI_VERSION}`, the skills CLI's tag      | Discovering and installing more skills mid-task      |
+
+A skill is instructions an agent follows, so it is pinned like a binary: each comes from a GitHub tree URL at that ref,
+which the CLI refuses when the ref doesn't exist — a bare `owner/repo` would install whatever the default branch holds
+that day.
 
 Also installs the pinned `agent-browser` CLI and Chrome build:
 
@@ -223,7 +227,8 @@ agent-browser close
 > its default Node in every interactive shell — do neither.
 
 Re-running `./bin/devbox skills` is safe: npm and `npx skills add` overwrite in place, Chrome skips if present. Bump
-`SKILLS_CLI_VERSION`/`AGENT_BROWSER_VERSION` in `container/skills.sh` to move a pin, or export either for one run.
+`SKILLS_CLI_VERSION`/`AGENT_BROWSER_VERSION`/`SKILL_CREATOR_REF` in `container/skills.sh` to move a pin (the first two
+move their skill with them), or export any of them for one run.
 
 ## 📦 Node and pnpm
 
@@ -338,5 +343,6 @@ plus `snapshot`. Headed mode needs the omitted GTK packages and a virtual displa
 
 ### Do the skills survive a rebuild?
 
-Yes — `~/.agents/skills` is on the bind mount. Only Chrome's shared libraries live in the image, rebuilt with it;
-`npx skills update --global -y` refreshes the skills themselves.
+Yes — `~/.agents/skills` is on the bind mount. Only Chrome's shared libraries live in the image, rebuilt with it. To move
+a skill, bump its pin in `container/skills.sh` and re-run `./bin/devbox skills`; `npx skills update` would pull each
+repository's default branch instead, past the pins.

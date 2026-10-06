@@ -129,7 +129,9 @@ the host's root Docker daemon.
   container holds no private key of its own) and `MaxSessions 32` (herdr channels)
 - `container/skills.sh` - optional, explicitly invoked (`./bin/devbox skills`): pinned `agent-browser` CLI +
   Chrome build, then `agent-browser`, `skill-creator` and `find-skills` via
-  `npx skills add --global --agent universal claude-code --yes` - `~/.agents/skills` for OMP, a symlink per
+  `npx skills add <github tree URL at a pinned ref> --global --agent universal claude-code --yes` - each skill
+  pinned like a binary (agent-browser and find-skills at the tag of the CLI version already pinned there,
+  skill-creator at a commit) - `~/.agents/skills` for OMP, a symlink per
   skill in `~/.claude/skills` for Claude Code. Chrome's shared libraries are in the `Dockerfile`
   because `--with-deps` needs root. Global npm installs pass `--prefix "$HOME/.local"` per call so the bins
   stay on the bind mount; never export `NPM_CONFIG_PREFIX` - nvm then refuses to activate its default Node
