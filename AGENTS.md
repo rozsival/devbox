@@ -204,7 +204,9 @@ the host's root Docker daemon.
     fails); `keys` prints every identity's installed public keys (or "not set") plus the sshd host-key
     fingerprint - nothing to paste anywhere, since they are already the laptop's own keys
   - `devbox docker setup` - needs `sudo`, idempotent, `--check` reports only: installs `uidmap` and
-    `slirp4netns`, creates the `dev:devbox` host user with pinned uid/gid 1001, moves `DEVBOX_DATA_DIR` to
+    `slirp4netns`, creates the `dev:devbox` host user with pinned uid/gid 1001 and denies it in the host's sshd
+    (`DenyUsers dev` in `/etc/ssh/sshd_config.d/devbox-docker.conf`, `sshd -t` before the reload, `sshd -T`
+    to confirm it applies: its `~/.ssh` is the bind mount), moves `DEVBOX_DATA_DIR` to
     `/home/dev` (path identity), writes `/etc/tmpfiles.d/devbox-docker.conf`, installs the nftables table plus
     `devbox-docker-firewall.service` that keeps published project ports off every interface but loopback and
     `docker0` (`--ip` covers only the default bridge, so the unit also passes `--default-network-opt` and the

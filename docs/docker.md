@@ -57,6 +57,7 @@ container's hardening untouched: nothing in `docker-compose.yml` was relaxed.
 | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `uidmap`, `slirp4netns`                                                   | `newuidmap` maps subordinate ids; without it, one uid only, so privilege-dropping images (postgres, redis, node) can't start                                                                                                                                                                          |
 | Host user `dev:devbox`, uid 1001                                          | The daemon's authority ceiling: a dedicated account keeps your home, SSH keys and sudo out of reach                                                                                                                                                                                                   |
+| `DenyUsers dev` in `/etc/ssh/sshd_config.d/devbox-docker.conf`            | `dev`'s `~/.ssh` is the bind mount, so the container can give the account a key — and a locked password doesn't stop a key login under `UsePAM yes`. Validated with `sshd -t` before the reload; reported if the host's `sshd_config` doesn't include the directory                                   |
 | `DEVBOX_DATA_DIR` → `/home/dev`                                           | Path identity ([below](#-path-identity)); refuses mid-run, since it's just a `mv` plus `chown` — nothing recreated or lost                                                                                                                                                                            |
 | `chown -R dev:devbox /home/dev`                                           | Daemon and container share a uid, so either writes files owned by `dev`                                                                                                                                                                                                                               |
 | One `ufw` rule                                                            | `allow in on docker0 to <gateway>`: container-to-host traffic traverses `INPUT` (see [Networking](networking.md#why-ufw-cannot-help)), which UFW's default deny would drop — scoped to the one bridge and address the daemon publishes on, narrowed by the boundary table to the daemon's own sockets |
@@ -284,9 +285,10 @@ namespaces with setuid helpers, ruled out by `cap_drop: ALL` and `no-new-privile
 
 ### Does the container now have host root?
 
-No — the socket belongs to `dev`: no password, no keys, no sudo, no files outside `/home/dev`. A container started
-through it can bind-mount host paths but reads only world-readable ones, writing only what `dev` owns. The host's root
-daemon isn't exposed.
+No — the socket belongs to `dev`: no password, no sudo, no files outside `/home/dev`, and no host login — its
+`~/.ssh` is the bind mount, writable from the container, so `docker setup` denies the account in the host's sshd. A
+container started through it can bind-mount host paths but reads only world-readable ones, writing only what `dev`
+owns. The host's root daemon isn't exposed.
 
 ### Why a separate user instead of my own account?
 

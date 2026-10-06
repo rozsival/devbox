@@ -269,6 +269,18 @@ doctor_host() {
     fi
   fi
 
+  # dev's home is the bind mount, so a key written there from the devbox must
+  # not open a host login: `docker setup` denies the account in the host's
+  # sshd. Whether sshd applies the file takes root (`sshd -T`) - `sudo
+  # ./bin/devbox docker setup --check` asks that; this compares the file.
+  if [[ -x /usr/sbin/sshd ]] || command -v sshd >/dev/null 2>&1; then
+    if [[ "$(cat "${SSHD_DROPIN}" 2>/dev/null)" == "$(sshd_dropin)" ]]; then
+      log_success "host sshd denies ${DEV_USER} (${SSHD_DROPIN})"
+    else
+      fail "${SSHD_DROPIN} is missing or stale - a key written into ${DEV_HOME} from the devbox could open a host login as ${DEV_USER}:"' sudo ./bin/devbox docker setup'
+    fi
+  fi
+
   log_info 'devbox command'
   devbox_command_checks
 

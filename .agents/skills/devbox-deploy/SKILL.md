@@ -34,19 +34,19 @@ local Docker daemon, and `deploy`/`sync`/`agent install` only on the laptop. Fro
 
 ## Which apply step does the change need
 
-| Changed                                                                 | Apply with                       | Why                               |
-| ----------------------------------------------------------------------- | -------------------------------- | --------------------------------- |
-| `docker-compose.yml`, `.env`                                            | `up`                             | Config hash change recreates      |
-| `Dockerfile`, apt list, install block                                   | `up`                             | Rebuilds changed layers           |
-| A pinned `ARG <TOOL>_VERSION`                                           | `up`, or `rebuild` for no cache  | `ARG` invalidates that layer      |
-| `container/*`, `home/*`                                                 | `up`                             | In build context, recreate        |
-| Re-apply user setup only                                                | `bootstrap`                      | No restart, no lost panes         |
-| `bin/devbox` (regenerated from `cli/`)                                  | nothing                          | Read at invocation, on host       |
-| `container/skills.sh`                                                   | `up`, then `./bin/devbox skills` | Only run on demand                |
-| `~/.omp/agent/config.yml` (laptop)                                      | `./bin/devbox sync omp`          | Personal state, not repo content  |
-| `~/.config/devbox/identities.conf`                                      | `./bin/devbox sync identities`   | Hand-held state, not repo content |
-| A new host needing project Docker                                       | `sudo ./bin/devbox docker setup` | Host provisioning, needs sudo     |
-| `cli/lib/docker_setup.sh` (firewall, daemon unit, user manager drop-in) | `sudo ./bin/devbox docker setup` | `doctor` flags the stale file     |
+| Changed                                                                           | Apply with                       | Why                               |
+| --------------------------------------------------------------------------------- | -------------------------------- | --------------------------------- |
+| `docker-compose.yml`, `.env`                                                      | `up`                             | Config hash change recreates      |
+| `Dockerfile`, apt list, install block                                             | `up`                             | Rebuilds changed layers           |
+| A pinned `ARG <TOOL>_VERSION`                                                     | `up`, or `rebuild` for no cache  | `ARG` invalidates that layer      |
+| `container/*`, `home/*`                                                           | `up`                             | In build context, recreate        |
+| Re-apply user setup only                                                          | `bootstrap`                      | No restart, no lost panes         |
+| `bin/devbox` (regenerated from `cli/`)                                            | nothing                          | Read at invocation, on host       |
+| `container/skills.sh`                                                             | `up`, then `./bin/devbox skills` | Only run on demand                |
+| `~/.omp/agent/config.yml` (laptop)                                                | `./bin/devbox sync omp`          | Personal state, not repo content  |
+| `~/.config/devbox/identities.conf`                                                | `./bin/devbox sync identities`   | Hand-held state, not repo content |
+| A new host needing project Docker                                                 | `sudo ./bin/devbox docker setup` | Host provisioning, needs sudo     |
+| `cli/lib/docker_setup.sh` (firewall, daemon unit, user manager and sshd drop-ins) | `sudo ./bin/devbox docker setup` | `doctor` flags the stale file     |
 
 `up` = `docker compose build` then `docker compose up -d` behind a preflight (`BIND_ADDR` non-empty,
 `${DEVBOX_DATA_DIR}` present and owned by `HOST_UID:HOST_GID`); missing project Docker socket only warns -
@@ -116,9 +116,9 @@ to `tailscale ip -4`, port listening on `BIND_ADDR`, **nothing** on `0.0.0.0`, c
 as `dev`, twelve toolchain probes, real exit codes, the agent git override intact (`omp` and `claude` each
 resolving through a symlink to their launcher, not a file an update replaced), `moshi-hook` running (unpaired warns,
 stopped fails - `./bin/devbox hook` restarts it), project Docker daemon reachable and rootless, `host.docker.internal`
-resolving to publish address, `devbox-docker-firewall` active with the ruleset this checkout writes, and the
-daemon's user manager reading root-owned `/etc/devbox-docker` (either stale after a deploy that changed it, until
-`sudo ./bin/devbox docker setup`).
+resolving to publish address, `devbox-docker-firewall` active with the ruleset this checkout writes, the
+daemon's user manager reading root-owned `/etc/devbox-docker`, and the host's sshd denying `dev` (each stale after
+a deploy that changed it, until `sudo ./bin/devbox docker setup`).
 
 If `doctor` reports `BIND_ADDR is X but Tailscale reports Y`, the node's address changed:
 `./bin/devbox env && ./bin/devbox up`.

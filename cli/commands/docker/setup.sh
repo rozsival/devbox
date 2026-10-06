@@ -8,6 +8,7 @@
 
 step_packages
 step_user
+step_sshd
 step_data_dir
 step_firewall
 step_netfilter

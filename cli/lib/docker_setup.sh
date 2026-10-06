@@ -33,6 +33,7 @@ readonly WANTS_LINK="${MANAGER_CONFIG}/systemd/user/default.target.wants/docker.
 # Stated in the unit rather than derived from XDG_DATA_HOME, which no longer
 # points into /home/dev.
 readonly DATA_ROOT="${DEV_HOME}/.local/share/docker"
+readonly SSHD_DROPIN='/etc/ssh/sshd_config.d/devbox-docker.conf'
 readonly NFT_CONF='/etc/nftables.d/devbox-docker.nft'
 readonly NFT_SERVICE='devbox-docker-firewall.service'
 readonly NFT_UNIT="/etc/systemd/system/${NFT_SERVICE}"
@@ -134,6 +135,60 @@ step_user() {
   else
     log_info "Adding subordinate id ranges ${SUBID_RANGE}..."
     usermod --add-subuids "${SUBID_RANGE}" --add-subgids "${SUBID_RANGE}" "${DEV_USER}"
+  fi
+}
+
+# -- 2b. No host login for the daemon's user -----------------------------------
+# "No password, no keys" does not hold for long: dev's home is the devbox bind
+# mount, so anything in the container can write /home/dev/.ssh/authorized_keys.
+# A locked password does not stop a key login under `UsePAM yes` (Ubuntu's
+# default), and a login - even a shell-less `ssh -N` with forwarding - would put
+# the container's agent on this host as dev, in the host's network namespace.
+# DenyUsers is the one control that holds whatever else the host's sshd_config
+# says; it accumulates with an AllowUsers line, it never replaces it.
+#
+# A function because `doctor host` compares the installed file against it.
+sshd_dropin() {
+  cat <<SSHD_BODY
+# Managed by ./bin/devbox docker setup - do not edit.
+# ${DEV_USER} owns the project Docker daemon and nothing else. Its home is the
+# devbox bind mount, which anything in the container can write, so an
+# authorized_keys put there must never open a login on this host.
+DenyUsers ${DEV_USER}
+SSHD_BODY
+}
+
+step_sshd() {
+  if ! command -v sshd >/dev/null 2>&1; then
+    log_success "no sshd on this host - nothing ${DEV_USER} could log in to"
+    return 0
+  fi
+  if [[ "$(cat "${SSHD_DROPIN}" 2>/dev/null)" == "$(sshd_dropin)" ]]; then
+    log_success "${SSHD_DROPIN} current"
+  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
+    fail "${SSHD_DROPIN} missing or stale - a key written into /home/dev from the devbox could open a host login as ${DEV_USER}"
+  else
+    log_info "Writing ${SSHD_DROPIN}..."
+    install -d -m 755 "$(dirname "${SSHD_DROPIN}")"
+    sshd_dropin >"${SSHD_DROPIN}"
+    chmod 644 "${SSHD_DROPIN}"
+    # Validated before anything reloads: a configuration sshd rejects would
+    # otherwise cost the next login - yours.
+    if ! sshd -t 2>/dev/null; then
+      rm -f "${SSHD_DROPIN}"
+      log_error "sshd -t rejects ${SSHD_DROPIN} (removed again) - add 'DenyUsers ${DEV_USER}' to /etc/ssh/sshd_config by hand"
+    fi
+    # Reloads a running sshd and leaves a socket-activated one to read the file
+    # on its next start; open sessions are separate processes and keep going.
+    systemctl try-reload-or-restart ssh.service
+  fi
+  # The file only counts if sshd reads it: a sshd_config without the stock
+  # `Include /etc/ssh/sshd_config.d/*.conf` never does.
+  if sshd -T -C "user=${DEV_USER},host=localhost,addr=127.0.0.1" 2>/dev/null |
+    grep -qiE "^denyusers( .*)? ${DEV_USER}( |\$)"; then
+    log_success "host sshd refuses ${DEV_USER}"
+  else
+    fail "host sshd does not apply ${SSHD_DROPIN} - /etc/ssh/sshd_config lacks 'Include /etc/ssh/sshd_config.d/*.conf'; add 'DenyUsers ${DEV_USER}' there yourself"
   fi
 }
 

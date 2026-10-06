@@ -148,7 +148,11 @@ reading them stays allowed; `env -i` prompts instead, since this repo's own smok
    on the SSH port.
 2. **`authorized_keys` trusts a GitHub account.** Every key on the `DEVBOX_GITHUB_USER` account can log in — the same
    trust model the workstation's host sshd uses. Narrow it: clear `DEVBOX_GITHUB_USER`, list keys explicitly in
-   `DEVBOX_EXTRA_AUTHORIZED_KEYS`.
+   `DEVBOX_EXTRA_AUTHORIZED_KEYS`. The file itself is the bind mount's, so an agent can add a key to it: that key opens
+   the devbox — from the Tailnet only — until the next container start rebuilds the file. Without root at runtime there
+   is no file sshd reads that `dev` can't write. It opens nothing on the host: `docker setup` puts `DenyUsers dev` in
+   the host's sshd (`/etc/ssh/sshd_config.d/devbox-docker.conf`), since `/home/dev/.ssh` is that account's too and a
+   locked password doesn't stop a key login under `UsePAM yes`.
 3. **The `dev` host user owns the data, and root can read everything.** The bind mount belongs to the dedicated `dev`
    account, which also owns the project Docker daemon; your host account reaches it only via `sudo`. The container
    protects the host from the agent, not the files from its owner.
