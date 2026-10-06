@@ -10,6 +10,11 @@ step_packages
 step_user
 step_sshd
 step_data_dir
+# Before step_netfilter: restarting the firewall unit starts dev's user manager
+# (its Wants=), which must read root-owned configuration from that first start.
+if getent passwd "${DEV_USER}" >/dev/null; then
+  step_manager
+fi
 step_firewall
 step_netfilter
 if getent passwd "${DEV_USER}" >/dev/null; then

@@ -916,7 +916,7 @@ readonly TMPFILES_CONF='/etc/tmpfiles.d/devbox-docker.conf'
 readonly UNIT='/etc/systemd/user/docker.service'
 # dev's systemd user manager reads units, drop-ins, wants links and
 # environment.d from XDG_CONFIG_HOME and XDG_DATA_HOME - by default ~/.config
-# and ~/.local/share, the devbox bind mount. step_daemon points both at these
+# and ~/.local/share, the devbox bind mount. step_manager points both at these
 # root-owned directories instead (see manager_dropin).
 readonly MANAGER_DIR='/etc/devbox-docker'
 readonly MANAGER_CONFIG="${MANAGER_DIR}/config"
@@ -1147,6 +1147,73 @@ step_data_dir() {
   upsert_env_key HOST_GID "$(getent group "${DEV_GROUP}" | cut -d: -f3)"
 }
 
+# -- 3b. The daemon user manager's configuration ------------------------------
+# The daemon runs under dev's systemd user manager, and that manager takes its
+# configuration from ~/.config and ~/.local/share - the devbox bind mount. A
+# unit there outranks the root-owned one step_daemon writes, drop-ins and
+# wants links from there are merged in, and environment.d feeds every unit's
+# environment: so anything in the container could rewrite the daemon's command
+# line or have the host run a service of its own as dev at every boot, without
+# ever touching the daemon's API. This drop-in moves both directories somewhere
+# root-owned. It closes the files, not the manager's bus: a project container
+# that bind-mounts /run/user/<uid> can still start units as dev, which is why
+# step_netfilter holds dev's uids, not just the daemon's sockets. A running
+# manager keeps the environment it started with, so it only takes effect from
+# the manager's next start.
+#
+# A function because `doctor host` compares the installed file against it.
+manager_dropin() {
+  cat <<DROPIN
+# Managed by ./bin/devbox docker setup - do not edit.
+# dev's systemd user manager reads its units, drop-ins and environment.d here,
+# not from /home/dev - the devbox bind mount.
+[Service]
+Environment=XDG_CONFIG_HOME=${MANAGER_CONFIG} XDG_DATA_HOME=${MANAGER_DATA}
+DROPIN
+}
+
+# The manager's own configuration directories: root-owned, empty but for the
+# wants link that starts the daemon at boot. Root makes that link - `systemctl
+# --user enable` cannot, since the manager runs as dev.
+#
+# Before anything can start user@<uid>: step_netfilter's restart of the
+# firewall unit pulls it in through Wants=, and step_daemon's linger starts it
+# too. Written first, the manager that either starts on a first provisioning
+# already reads ${MANAGER_DIR}, never the bind mount. ${UNIT} is only written in
+# step_daemon (reloading it needs that running manager), so at that first start
+# the link may dangle - systemd merely warns - and the unit is written and
+# loaded before anything restarts the manager or starts the daemon, so a
+# restarted manager finds it current.
+#
+# MANAGER_CHANGED tells step_daemon that a running manager predates the
+# drop-in and has to be restarted.
+MANAGER_CHANGED='false'
+step_manager() {
+  if [[ -L "${WANTS_LINK}" && "$(readlink "${WANTS_LINK}")" == "${UNIT}" ]]; then
+    log_success "${WANTS_LINK} present"
+  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
+    fail "${WANTS_LINK} missing - the daemon would not start at boot"
+  else
+    log_info "Linking ${WANTS_LINK}..."
+    install -d -m 755 "${MANAGER_DIR}" "${MANAGER_CONFIG}" "${MANAGER_CONFIG}/systemd" \
+      "${MANAGER_CONFIG}/systemd/user" "$(dirname "${WANTS_LINK}")" "${MANAGER_DATA}"
+    ln -sfn "${UNIT}" "${WANTS_LINK}"
+  fi
+
+  if [[ "$(cat "${MANAGER_DROPIN}" 2>/dev/null)" == "$(manager_dropin)" ]]; then
+    log_success "${MANAGER_DROPIN} current"
+  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
+    fail "${MANAGER_DROPIN} missing or stale - dev's user manager reads its configuration from the bind mount"
+  else
+    log_info "Writing ${MANAGER_DROPIN}..."
+    install -d -m 755 "$(dirname "${MANAGER_DROPIN}")"
+    manager_dropin >"${MANAGER_DROPIN}"
+    chmod 644 "${MANAGER_DROPIN}"
+    systemctl daemon-reload
+    MANAGER_CHANGED='true'
+  fi
+}
+
 # -- 4. Firewall path to the published ports ----------------------------------
 # Packets from the devbox container to a host address are delivered locally, so
 # unlike a *published* port they do traverse INPUT and UFW's default deny stops
@@ -1340,6 +1407,8 @@ dev_ids() {
 # every project port on the Tailnet until someone ran doctor. So: pulled in by
 # and ordered after user@<uid>.service, whose slice is the one matched, and
 # PartOf it, so a restarted user manager (new slice, new id) reloads the table.
+# Pulling it in means restarting this unit starts dev's user manager, which is
+# why setup runs step_manager before step_netfilter.
 #
 # Before the host's docker.service, which starts the devbox container: at boot
 # the root daemon was restoring it while this table was still loading, so for
@@ -1457,65 +1526,9 @@ step_socket_dir() {
 }
 
 # -- 6. The daemon itself -----------------------------------------------------
-# The daemon runs under dev's systemd user manager, and that manager takes its
-# configuration from ~/.config and ~/.local/share - the devbox bind mount. A
-# unit there outranks the root-owned one below, drop-ins and wants links from
-# there are merged in, and environment.d feeds every unit's environment: so
-# anything in the container could rewrite the daemon's command line or have
-# the host run a service of its own as dev at every boot, without ever
-# touching the daemon's API. This drop-in moves both directories somewhere
-# root-owned. It closes the files, not the manager's bus: a project container
-# that bind-mounts /run/user/<uid> can still start units as dev, which is why
-# step_netfilter holds dev's uids, not just the daemon's sockets. A running
-# manager keeps the environment it started with, so it only takes effect from
-# the manager's next start.
-#
-# A function because `doctor host` compares the installed file against it.
-manager_dropin() {
-  cat <<DROPIN
-# Managed by ./bin/devbox docker setup - do not edit.
-# dev's systemd user manager reads its units, drop-ins and environment.d here,
-# not from /home/dev - the devbox bind mount.
-[Service]
-Environment=XDG_CONFIG_HOME=${MANAGER_CONFIG} XDG_DATA_HOME=${MANAGER_DATA}
-DROPIN
-}
-
+# Runs under dev's user manager, which step_manager has already pointed at
+# ${MANAGER_DIR}; this step makes sure that manager is running and reads it.
 step_daemon() {
-  # The manager's own configuration directories: root-owned, empty but for the
-  # wants link that starts the daemon at boot. Root makes that link - `systemctl
-  # --user enable` cannot, since the manager runs as dev. The link and the
-  # drop-in come before linger, so the manager that linger starts on a first
-  # provisioning already reads ${MANAGER_DIR}, never the bind mount. ${UNIT} is
-  # only written further down (reloading it needs that running manager), so at
-  # that first start the link may dangle - systemd merely warns - and the unit
-  # is written and loaded before anything restarts the manager or starts the
-  # daemon, so a restarted manager finds it current.
-  if [[ -L "${WANTS_LINK}" && "$(readlink "${WANTS_LINK}")" == "${UNIT}" ]]; then
-    log_success "${WANTS_LINK} present"
-  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    fail "${WANTS_LINK} missing - the daemon would not start at boot"
-  else
-    log_info "Linking ${WANTS_LINK}..."
-    install -d -m 755 "${MANAGER_DIR}" "${MANAGER_CONFIG}" "${MANAGER_CONFIG}/systemd" \
-      "${MANAGER_CONFIG}/systemd/user" "$(dirname "${WANTS_LINK}")" "${MANAGER_DATA}"
-    ln -sfn "${UNIT}" "${WANTS_LINK}"
-  fi
-
-  local manager_changed='false'
-  if [[ "$(cat "${MANAGER_DROPIN}" 2>/dev/null)" == "$(manager_dropin)" ]]; then
-    log_success "${MANAGER_DROPIN} current"
-  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    fail "${MANAGER_DROPIN} missing or stale - dev's user manager reads its configuration from the bind mount"
-  else
-    log_info "Writing ${MANAGER_DROPIN}..."
-    install -d -m 755 "$(dirname "${MANAGER_DROPIN}")"
-    manager_dropin >"${MANAGER_DROPIN}"
-    chmod 644 "${MANAGER_DROPIN}"
-    systemctl daemon-reload
-    manager_changed='true'
-  fi
-
   if loginctl show-user "${DEV_USER}" -p Linger --value 2>/dev/null | grep -qx yes; then
     log_success "linger enabled for ${DEV_USER}"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
@@ -1637,7 +1650,7 @@ UNIT_BODY
   # started before the drop-in existed, left running by a run interrupted
   # between writing it and this restart - means the manager still reads the
   # bind mount.
-  if [[ "${manager_changed}" == 'true' ]] ||
+  if [[ "${MANAGER_CHANGED}" == 'true' ]] ||
     ! grep -qx "XDG_CONFIG_HOME=${MANAGER_CONFIG}" <<<"${manager_env}"; then
     # Restarts the daemon, and every project container with it; PartOf= also
     # reloads the step_netfilter table. Ubuntu's user@.service stops with
@@ -2891,6 +2904,11 @@ devbox_docker_setup_command() {
   step_user
   step_sshd
   step_data_dir
+  # Before step_netfilter: restarting the firewall unit starts dev's user manager
+  # (its Wants=), which must read root-owned configuration from that first start.
+  if getent passwd "${DEV_USER}" >/dev/null; then
+    step_manager
+  fi
   step_firewall
   step_netfilter
   if getent passwd "${DEV_USER}" >/dev/null; then

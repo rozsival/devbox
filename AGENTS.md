@@ -245,8 +245,10 @@ the host's root Docker daemon.
     `XDG_CONFIG_HOME`/`XDG_DATA_HOME` at root-owned `/etc/devbox-docker`, since the user manager would otherwise
     read units, drop-ins, wants links and `environment.d` from the bind mount (the unit therefore passes
     `--data-root` itself, and root makes the wants link `systemctl --user enable` no longer can). The wants link
-    and the drop-in (then `daemon-reload`) come before `loginctl enable-linger`, so a first provisioning's
-    manager starts on `/etc/devbox-docker`; `user@1001` is restarted only when the drop-in changed or the running
+    and the drop-in (then `daemon-reload`) are written by `step_manager`, right after the data dir moves and
+    before the firewall and netfilter steps, so this root-owned manager configuration exists before anything -
+    `loginctl enable-linger` or the firewall unit's `Wants=user@1001.service` - can start `user@1001`, and a
+    first provisioning's manager never reads the bind mount; `user@1001` is restarted only when the drop-in changed or the running
     manager's environment lacks `XDG_CONFIG_HOME=/etc/devbox-docker/config`, which restarts the project daemon
     and every project container (Ubuntu's `TimeoutStopSec=5` SIGKILLs slow ones; one without a restart policy
     stays down until `docker compose up -d`) - re-runs are no-ops once current, and `doctor host` compares the
