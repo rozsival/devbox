@@ -95,6 +95,7 @@ if [[ ${named} == false && -n ${GH_TOKEN:-} ]]; then
 fi
 
 token="${!var:-}"
+read_failed=false
 
 secrets_file="${HOME:-/home/dev}/.config/devbox/secrets.env"
 if [[ -z ${token} && -r ${secrets_file} ]]; then
@@ -103,7 +104,7 @@ if [[ -z ${token} && -r ${secrets_file} ]]; then
   # state; only the one value is carried back. nounset is off while sourcing:
   # `NODE_OPTIONS="$NODE_OPTIONS ..."` is fine in a login shell and must not
   # kill the read here. A read that dies anyway (an unterminated `X=(`) leaves
-  # the token empty, for the diagnostics below.
+  # the token empty and is recorded, for the diagnostics below.
   # `GH_TOKEN` first, mirroring step 1 above: a file that sets both must resolve
   # the same way whether or not the caller's shell already sourced it - and,
   # as in step 1, not for a named identity.
@@ -117,14 +118,18 @@ if [[ -z ${token} && -r ${secrets_file} ]]; then
     else
       printf '%s' "${GH_TOKEN:-${!var:-}}"
     fi
-  )" || token=''
+  )" || {
+    token=''
+    read_failed=true
+  }
 fi
 
 # A hand-edited credential file with a shell syntax error stops `.` at that
 # line, exactly as it stops ~/.bashrc.d/devbox.sh at shell startup - so the
 # variable below can be present in the file and still be unreachable. Say which
-# of the two it is; "unset" would send someone looking for a missing line.
-if [[ -z ${token} && -r ${secrets_file} ]] && ! bash -n "${secrets_file}" 2>/dev/null; then
+# of the two it is; "unset" would send someone looking for a missing line. A
+# read that died counts too: bash 3.2's `bash -n` passes an unterminated `X=(`.
+if [[ -z ${token} && -r ${secrets_file} ]] && { [[ ${read_failed} == true ]] || ! bash -n "${secrets_file}" 2>/dev/null; }; then
   printf '%s\n' "devbox-gh-token: ${secrets_file} has a shell syntax error, so nothing after it is read (check it with: bash -n ${secrets_file})" >&2
   exit 1
 fi
