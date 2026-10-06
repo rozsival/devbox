@@ -291,7 +291,8 @@ serve the request's host — the one owning the working directory first, then th
 with two Apps on the same host stay apart:
 
 1. For each candidate identity with `app` credentials (`app-id` + `app.pem`) at that path: sign a JWT (RS256,
-   `openssl`), call `GET /repos/{owner}/{repo}/installation` against that identity's API (`https://api.github.com`, or
+   `openssl`; handed to `curl` on stdin, never on its command line, which any local user can read), call
+   `GET /repos/{owner}/{repo}/installation` against that identity's API (`https://api.github.com`, or
    `https://<host>/api/v3` for a GitHub Enterprise `host`). `200` → mint an installation token
    (`POST /app/installations/{id}/access_tokens`, `repositories:[repo]`, one hour) and use it. `404` → try the next
    candidate identity; any other status → hard failure, never a silent PAT downgrade.
