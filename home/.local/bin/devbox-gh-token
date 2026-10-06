@@ -12,7 +12,7 @@
 #   devbox-gh-token                   # token for $PWD
 #   devbox-gh-token ~/projects/x      # token for another directory
 #   devbox-gh-token --account         # print the identity slug instead
-#   devbox-gh-token --identity work   # token for a named identity, ignoring $PWD
+#   devbox-gh-token --identity work   # token for a named identity, ignoring $PWD and GH_TOKEN
 #
 # The `gh` shim next to this file calls it on every invocation, so the account
 # follows the directory even when the shell that started the agent was opened
@@ -28,6 +28,7 @@ library="${self_dir}/../libexec/devbox-identities"
 
 account_only=false
 account=''
+named=false
 while [[ ${1:-} == -* ]]; do
   case "$1" in
   --account)
@@ -43,6 +44,7 @@ while [[ ${1:-} == -* ]]; do
       exit 1
     }
     account="$2"
+    named=true
     shift 2
     ;;
   *)
@@ -75,7 +77,10 @@ var="$(di_get "${account}" token_var)"
 
 # Resolution order, first hit wins:
 #   1. an explicit GH_TOKEN in the environment - a deliberate one-off
-#      (`GH_TOKEN=$other gh ...`)
+#      (`GH_TOKEN=$other gh ...`) - unless --identity named the account: that
+#      caller asked for one identity's token, typically for another forge than
+#      the directory's, and a GH_TOKEN inherited from wherever the process
+#      started (the gh shim exports one before gh runs git) would be sent there
 #   2. the identity's variable in the environment - set for one command, since
 #      ~/.bashrc.d/devbox.sh sources secrets.env but unsets these again
 #   3. the same variable read straight out of secrets.env
@@ -84,7 +89,7 @@ var="$(di_get "${account}" token_var)"
 # token, a token added to secrets.env works in the session that is already
 # open, and the error below is true in every case - the file really is the
 # only place looked at.
-if [[ -n ${GH_TOKEN:-} ]]; then
+if [[ ${named} == false && -n ${GH_TOKEN:-} ]]; then
   printf '%s\n' "${GH_TOKEN}"
   exit 0
 fi
@@ -97,13 +102,18 @@ if [[ -z ${token} && -r ${secrets_file} ]]; then
   # error in a hand-edited credential file cannot affect this script's own
   # state; only the one value is carried back.
   # `GH_TOKEN` first, mirroring step 1 above: a file that sets both must resolve
-  # the same way whether or not the caller's shell already sourced it.
+  # the same way whether or not the caller's shell already sourced it - and,
+  # as in step 1, not for a named identity.
   token="$(
     set -a
     # shellcheck source=/dev/null # a runtime credential file, not repo content
     . "${secrets_file}" >/dev/null 2>&1 || true
     set +a
-    printf '%s' "${GH_TOKEN:-${!var:-}}"
+    if [[ ${named} == true ]]; then
+      printf '%s' "${!var:-}"
+    else
+      printf '%s' "${GH_TOKEN:-${!var:-}}"
+    fi
   )"
 fi
 
