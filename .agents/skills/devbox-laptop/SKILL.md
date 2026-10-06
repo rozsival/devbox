@@ -134,11 +134,13 @@ agent sessions silently fell back to `~/.gitconfig` - SSH remotes, your keys. Re
 `./bin/devbox agent install` if a session ever reaches for a key; the symlinks are what `devbox doctor laptop`
 checks.
 
-`devbox agent install` also seeds `~/.omp/agent/config.yml` when absent - `bash.patterns` denying the obvious
-reach past the scoped tokens (`gh auth token|login|…`, keychain reads, force push). An existing config is
-never edited; one without a `bash:` block is listed as a manual step (copy the block from
-`home/.omp/agent/config.yml`). On a dotfiles laptop its own seed lands first, carrying a copy of that block
-that `dot doctor` compares against this template. It is a guardrail, not a boundary: on the laptop an agent runs as you and can
+`devbox agent install` also seeds `~/.omp/agent/config.yml` when absent from `home/.omp/agent/config.yml`, the
+one OMP preset the laptop and the devbox share: model roles, feature flags and `bash.patterns` denying the
+obvious reach past the scoped tokens (`gh auth token|login|…`, keychain reads, force push). An existing config
+is never edited; one without a `bash:` block is listed as a manual step (copy the block from
+`home/.omp/agent/config.yml`). On a dotfiles laptop `dot setup` seeds the same file first, before OMP ever
+starts, and `dot doctor` flags any difference between the live file and this template. It is a guardrail, not
+a boundary: on the laptop an agent runs as you and can
 still reach your `gh` login or 1Password by other means - `docs/security.md`, accepted limit 7.
 
 A session's git config is the file `GIT_CONFIG_GLOBAL` names, so any `git config --global …` in its

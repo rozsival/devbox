@@ -1,8 +1,59 @@
-# Seeded once by container/bootstrap.sh (devbox) and `devbox agent install` (laptop)
-# when absent; OMP owns the file afterwards. An existing file is never touched -
-# both installers say so when it lacks the `bash:` block below, so you can copy
-# the block in by hand. dotfiles seeds its own preset first and carries a copy of
-# this block (`dot doctor` flags drift): change it here, then mirror it there.
+# The one OMP preset for the laptop and the devbox: model roles, feature flags, `secrets` and the
+# `bash.patterns` guardrail. Seeded when absent by container/bootstrap.sh (devbox), `devbox agent install`
+# (laptop) and dotfiles' `dot setup` (laptop, before OMP first starts); OMP owns the live file afterwards.
+# An existing file is never touched - both installers here report one that lacks the `bash:` block.
+# A setting changed in OMP on the laptop lands in ~/.omp/agent/config.yml: copy that file over this one
+# (`make fmt`; `dot doctor` flags any difference), commit, then `devbox sync omp` brings the devbox along.
+modelRoles:
+  slow: anthropic/claude-opus-5-5:max
+  smol: anthropic/claude-haiku-4-5:medium
+  default: anthropic/claude-opus-5-5:medium
+  plan: anthropic/claude-opus-5-5:high
+  task: anthropic/claude-sonnet-5-5:high
+  advisor: anthropic/claude-fable-5-1:high
+  vision: anthropic/claude-sonnet-5-5:medium
+  designer: anthropic/claude-opus-5-5:medium
+  commit: anthropic/claude-haiku-4-5:low
+  tiny: anthropic/claude-haiku-4-5:low
+symbolPreset: unicode
+theme:
+  dark: titanium
+setupVersion: 2
+memory:
+  backend: mnemopi
+autolearn:
+  enabled: false
+  autoContinue: false
+defaultThinkingLevel: auto
+dev:
+  autoqaConsent: granted
+display:
+  showTokenUsage: true
+checkpoint:
+  enabled: true
+mnemopi:
+  scoping: per-project-tagged
+power:
+  sleepPrevention: idle
+features:
+  unexpectedStopDetection: none
+error:
+  notify: 'on'
+composer:
+  shape: claude
+extendedContext: false
+statusLine:
+  compactThinkingLevel: false
+disabledProviders: []
+advisor:
+  enabled: true
+  syncBacklog: '1'
+  maxNotesPerUpdate: 4
+  immuneTurns: 3
+github:
+  enabled: true
+tier:
+  advisor: none
 
 # `secrets.enabled` obfuscates any API key found in the environment - from
 # ~/.config/devbox/secrets.env or a project .env - before it can reach a provider.

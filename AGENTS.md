@@ -121,8 +121,9 @@ the host's root Docker daemon.
   fence, the *rendered* `agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir` -
   every one of them, inherited authors included, since git applies every matching `includeIf` and a nested
   tree would otherwise keep the outer author; the includes are emitted shortest `dir` first so the longest
-  match is read last and wins); 14 OMP config (seeded if absent with `secrets` and the `bash.patterns`
-  guardrail, an existing file lacking a `bash:` block reported, never merged into); 15 `moshi-hook` plus its OMP
+  match is read last and wins); 14 OMP config (seeded if absent with the preset the laptop shares - model roles,
+  feature flags, `secrets` and the `bash.patterns` guardrail - an existing file lacking a `bash:` block reported,
+  never merged into); 15 `moshi-hook` plus its OMP
   extension and Claude Code hooks (`--target omp,claude`); 16 the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels), `AllowAgentForwarding yes` (the `ssh -A devbox` escape hatch only - the
@@ -246,7 +247,7 @@ the host's root Docker daemon.
     `omp` already resolves through that directory, since until the PATH line exists the old link is what
     keeps `omp` fenced), and prints the `cp` command for `~/.config/devbox/identities.conf` rather than
     seeding it; regenerates every generated file, reads/edits nothing of the user's own `identities.conf` or
-    shell rc; seeds `~/.omp/agent/config.yml` (the same guardrail template) only when absent, reporting an
+    shell rc; seeds `~/.omp/agent/config.yml` (the same shared preset) only when absent, reporting an
     existing one without a `bash:` block; reports whether `omp` and `claude` resolve to their launchers -
     printing the one `PATH` line for the user's shell rc until they do - and the remaining manual steps (PATs,
     App credentials)

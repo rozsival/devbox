@@ -79,7 +79,8 @@ GitHub records for the asset) is checked first, and the file is renamed into pla
 check skips OMP and leaves a checklist item; it never stops the rest of `bootstrap`.
 
 `~/.omp/agent/config.yml` seeds from `home/.omp/agent/config.yml` only if absent — by `bootstrap` on the devbox, by
-`./bin/devbox agent install` on the laptop — with `secrets: { enabled: true }` obfuscating an API key in the environment
+`./bin/devbox agent install` on the laptop. That file is the one preset the laptop and the devbox share: model roles,
+theme and feature flags, `secrets: { enabled: true }` obfuscating an API key in the environment
 (`~/.config/devbox/secrets.env` or a project `.env`) before it reaches a provider, and a `bash.patterns` guardrail:
 
 | Action   | Commands                                                                                                                                                                                                                                                                                                         |
@@ -94,7 +95,8 @@ layers. What it does and does not stop: [Security Model](security.md#-accepted-l
 Local workstation-served models are opt-in: copy your model-serving repo's `harnesses/omp.yml` into
 `~/.omp/agent/models.yml`, pointing the provider `baseUrl` at the workstation's Tailscale address.
 
-Sync the laptop's preset so devbox panes share model roles, theme and feature flags:
+A setting changed in OMP on the laptop lands in the laptop's live file only: copy it over `home/.omp/agent/config.yml`
+(`make fmt`), commit, and push the live file so devbox panes match:
 
 ```bash
 ./bin/devbox sync omp              # laptop → devbox:~/.omp/agent/config.yml
