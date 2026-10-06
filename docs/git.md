@@ -206,8 +206,8 @@ It also clears what the shell that started it may carry for you: an IDE terminal
 `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN`, `SSH_AUTH_SOCK` (a forwarded agent on the devbox;
 on the laptop the session's own `ssh` still reaches 1Password through `IdentityAgent`), and `GIT_CONFIG_COUNT`/
 `GIT_CONFIG_PARAMETERS`, which outrank every config file. `GH_TOKEN` stays: the `gh` shim honours an explicit one as a
-deliberate choice. Clearing is a default, not a boundary — a forwarded agent's socket is still in `/tmp` for anything
-that looks ([accepted limit 2](security.md#-accepted-limits)).
+deliberate choice. Clearing is a default, not a boundary — a forwarded agent's socket is still under `~/.ssh/agent/`
+(OpenSSH >= 10.1), on the bind mount, for anything that looks ([accepted limit 2](security.md#-accepted-limits)).
 
 `GIT_CONFIG_GLOBAL` beats `includeIf` via `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*`, which ignores `includeIf gitdir:` and
 can't follow the repo tree like `agent.gitconfig`'s `includeIf`. Pointing `GIT_CONFIG_GLOBAL` at a file that itself
@@ -295,27 +295,29 @@ with two Apps on the same host stay apart:
    `GET /repos/{owner}/{repo}/installation` against that identity's API (`https://api.github.com`, or
    `https://<host>/api/v3` for a GitHub Enterprise `host`). `200` → mint an installation token
    (`POST /app/installations/{id}/access_tokens`, `repositories:[repo]`, one hour) and use it. `404` → try the next
-   candidate identity; any other status → hard failure, never a silent PAT downgrade.
+   candidate identity; any other status, or a failed mint, → hard failure, never a silent PAT downgrade.
 2. Otherwise, the fine-grained PAT of the identity the working directory belongs to — `devbox-gh-token`, the same rule
    `gh` and git's `includeIf` use.
 
 Any failure past the host check also prints `quit=1`: git otherwise reads a failed helper as "no answer" and asks the
-next source, an askpass program. A failure therefore ends the operation, with the helper's one-line reason.
+next source, an askpass program. A failure therefore ends the operation, with the helper's one-line reason. A failed App
+lookup or mint is never cached, and `devbox-git-credential token` exits non-zero on it, so the `gh` shim stops there
+instead of falling back to the PAT. Only a definitive "App not installed" (every candidate `404`) falls back.
 
 `store` and `erase` are accepted and ignored. Two subcommands inspect it:
 
-| Command                                          | Prints                                                                                                                                                                                                       |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `devbox-git-credential explain owner/repo [dir]` | Which path a request would take — `app:<slug>:<installation-id>` or `pat:<slug>` — without minting anything                                                                                                  |
-| `devbox-git-credential token owner/repo [dir]`   | Just the App token, or nothing when no App covers the repository: the `gh` shim's way to act as the same bot in an agent session ([Secrets](secrets.md#agent-sessions-the-app-for-one-repositorys-commands)) |
+| Command                                          | Prints                                                                                                                                                                                                                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `devbox-git-credential explain owner/repo [dir]` | Which path a request would take — `app:<slug>:<installation-id>` or `pat:<slug>` — without minting anything                                                                                                                                             |
+| `devbox-git-credential token owner/repo [dir]`   | Just the App token, or nothing when no App covers the repository, and exits 1 when the lookup or mint fails: the `gh` shim's way to act as the same bot in an agent session ([Secrets](secrets.md#agent-sessions-the-app-for-one-repositorys-commands)) |
 
 Minting takes two API round trips (~0.75 s), so the App answer is cached per repository and per working directory's
 identity: a token for 30 of its 60 minutes (whoever receives it keeps at least half an hour — `gh run watch` included),
-"no App installed" for 5 minutes, so installing the App on a repository takes effect within that. The cache is
-`devbox-agent-<uid>/` under `$XDG_RUNTIME_DIR`, else `/dev/shm` (the container's tmpfs), else `$TMPDIR` (the laptop) —
-mode 700, files 600, never under `$HOME`, which is the bind mount and gets backed up; a directory not owned by you there
-disables caching rather than trusting it. Delete it to force a fresh mint. The PAT path was never slow and is not
-cached.
+"no App installed" for 5 minutes, so installing the App on a repository takes effect within that; a failure is never
+cached. The cache is `devbox-agent-<uid>/` under `$XDG_RUNTIME_DIR`, else `/dev/shm` (the container's tmpfs), else
+`$TMPDIR` (the laptop) — mode 700, files 600, never under `$HOME`, which is the bind mount and gets backed up; a
+directory not owned by you there disables caching rather than trusting it. Delete it to force a fresh mint. The PAT path
+was never slow and is not cached.
 
 An App is scoped per repository by its installation — no allowlist; installing it is all the configuration. A repo
 without the App gets the PAT, needing `contents: write` there, not read-only — see [Secrets](secrets.md#gh). A host
@@ -401,7 +403,8 @@ export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"
 Only a launcher's own `PATH` puts the libexec directory itself first — an ordinary shell or IDE never resolves the `gh`
 shim, so your `gh` keeps its OAuth login. Whatever else resolves `omp`/`claude` is "the real" one; the installer reports
 which, whether each name resolves to its launcher, and prints the line above as a manual step until it does. An agent
-that is not installed is fine — its launcher waits for it.
+that is not installed is fine — its launcher waits for it, and until then prints how to install it (OMP's points the
+devbox at `./bin/devbox bootstrap`, the laptop at the `omp.sh` installer).
 
 ### Remaining manual steps
 
@@ -577,8 +580,8 @@ author from the shell doing the rewrite, so from your own terminal it stamps you
 commit to rewrite, and leave your own commits alone: `git rebase -i <base>` from your own terminal with
 `exec git commit --amend --no-edit --no-gpg-sign --author='your-agent <your-agent@users.noreply.github.com>'` after each
 offending pick. `--no-gpg-sign` matters: your `commit.gpgsign = true` would otherwise sign the bot-authored commits with
-_your_ key. Commits of yours that the rebase re-creates are re-signed automatically (1Password prompts per commit). Then
-force-push, after checking nobody else has pulled the branch.
+_your_ key. Commits of yours that the rebase re-creates are re-signed automatically (1Password asks once per terminal
+app, then remembers until it locks). Then force-push, after checking nobody else has pulled the branch.
 
 ### Why are agent commits unsigned?
 

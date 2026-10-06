@@ -41,7 +41,9 @@ the host's root Docker daemon.
 3. **Pinned versions only** - every external binary comes from an explicit `ARG <TOOL>_VERSION` and is
    verified: against upstream's checksum file where it publishes one, else against the SHA-256 GitHub records
    for the release asset (its release API's `digest`), else through a signed package repository whose key
-   fingerprint is pinned (the Docker CLI). Never invent a hash
+   fingerprint is pinned (the Docker CLI). The one exception is nvm's installer, pinned by tag over TLS only
+   (upstream publishes no checksum file or asset digest for it); nvm then checks Node against nodejs.org's
+   `SHASUMS256.txt`. Never invent a hash
 4. **No root in the container** - no `privileged`, no `cap_add`, no `/var/run/docker.sock` mount. `sshd` runs
    as `dev`. Project containers come from the *rootless sibling* daemon, never from the host's root daemon and
    never from a nested one: nesting needs setuid `newuidmap`, which `cap_drop: ALL` plus `no-new-privileges`
@@ -96,9 +98,10 @@ the host's root Docker daemon.
   because there is no systemd here: it becomes a child of `sshd` and is reaped by tini
 - `container/bootstrap.sh` - idempotent user setup, sixteen individually-guarded sections: 1 the agents (OMP
   straight from its latest GitHub release, checked against GitHub's asset digest before it is renamed into
-  place - upstream's `omp.sh` installer checks nothing - plus Claude Code via its native installer, which
-  verifies its own download; both non-fatal, and Claude's one-time `/login` registered as a
-  manual step until `~/.claude/.credentials.json` exists); 2 the
+  place - upstream's `omp.sh` installer checks nothing - after sweeping leftover `~/.local/bin/.omp.??????`
+  temp files, with a download that aborts only when stalled, never on a total time cap; plus Claude Code via
+  its native installer, which verifies its own download; both non-fatal, and Claude's one-time `/login`
+  registered as a manual step until `~/.claude/.credentials.json` exists); 2 the
   identity registry (installs `devbox-identities` in `~/.local/libexec` and symlinks it into
   `~/.local/bin`, since `devbox.sh` puts only the latter on the PATH and every checklist tells people to
   run `devbox-identities check`, then `di_check`s
@@ -116,7 +119,8 @@ the host's root Docker daemon.
   identity leaves no stale `includeIf`); 8 `allowed_signers`; 9
   GitHub App credential directories per identity (created, never fetched - only placed by hand); 10 shell;
   11 the box-wide `secrets.env`; 12 `gh` (the `~/.local/libexec/devbox-agent` shim plus the per-identity
-  token checklist); 13 the agent git override (`agent-launch` and both launchers plus their `omp`/`claude`
+  token checklist, each identity checked with its own `devbox-gh-token --identity <slug>` and `GH_HOST` for a
+  host off `github.com`); 13 the agent git override (`agent-launch` and both launchers plus their `omp`/`claude`
   symlinks, credential helper,
   fence, the *rendered* `agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir` -
   every one of them, inherited authors included, since git applies every matching `includeIf` and a nested
@@ -163,15 +167,16 @@ the host's root Docker daemon.
   the user puts first on the PATH. Beside them, the `gh` shim that deliberately shadows
   the real `gh` on the PATH: with `devbox-gh-token` it resolves `GH_TOKEN_<SLUG>` per invocation from the
   working directory, on the same `dir` prefixes in `identities.conf` that git's `includeIf` uses, because
-  an agent's cwd is a project while its shell was opened in `$HOME`. In an agent session (`GIT_CONFIG_GLOBAL`
-  is `agent.gitconfig`), a command about one repository - `pr`, `issue`, `run`, ..., `api repos/<o>/<r>/...`,
-  `api graphql` inside a checkout
+  an agent's cwd is a project while its shell was opened in `$HOME`, and exports `GH_HOST=<host>` with it for
+  an identity off `github.com` (gh refuses a host it holds no login for otherwise). In an agent session
+  (`GIT_CONFIG_GLOBAL` is `agent.gitconfig`), a command about one repository - `pr`, `issue`, `run`, ...,
+  `api repos/<o>/<r>/...`, `api graphql` inside a checkout
   - takes that repository's App installation token from `devbox-git-credential token` instead, so agent PRs
     carry the bot author their commits do; account-wide commands and every non-agent `gh` keep the PAT, and a
-    failed App lookup is an error, never a PAT fallback (a failing `get` also answers git `quit=1`, so git
-    asks no askpass program next). The helper caches App answers per repository on tmpfs
-    (`devbox-agent-<uid>/`, never under `$HOME`) because a mint is two API round trips. Nothing exports
-    `GH_TOKEN`; `gh auth
+    failed App lookup or mint is an error, never a PAT fallback (`token` exits 1 and the shim stops; a failing
+    `get` also answers git `quit=1`, so git asks no askpass program next). The helper caches App answers per
+    repository on tmpfs (`devbox-agent-<uid>/`, never under `$HOME`) because a mint is two API round trips;
+    a failure is never cached. Nothing exports `GH_TOKEN`; `gh auth
   login` is rejected by design (`docs/secrets.md`). `home/.config/devbox/git/agent.gitconfig.tpl` is the
     template `devbox-identities render agent-gitconfig` fills in with the registry's hosts and URL
     rewrites - edit it here, never the rendered `~/.config/devbox/git/agent.gitconfig` or the one
@@ -212,24 +217,44 @@ the host's root Docker daemon.
     fingerprint - nothing to paste anywhere, since they are already the laptop's own keys
   - `devbox docker setup` - needs `sudo`, idempotent, `--check` reports only: installs `uidmap` and
     `slirp4netns`, creates the `dev:devbox` host user with pinned uid/gid 1001 and denies it in the host's sshd
-    (`DenyUsers dev` in `/etc/ssh/sshd_config.d/devbox-docker.conf`, `sshd -t` before the reload, `sshd -T`
-    to confirm it applies: its `~/.ssh` is the bind mount), moves `DEVBOX_DATA_DIR` to
+    (`DenyUsers dev` in `/etc/ssh/sshd_config.d/devbox-docker.conf`: its `~/.ssh` is the bind mount; `sshd -t`
+    runs before the drop-in is written, so a pre-existing failure is not blamed on it, and again before the
+    reload, a failure there removing the drop-in; either shows sshd's own stderr and fails that step without
+    aborting the rest of setup; captured `sshd -T` output confirms it applies), moves `DEVBOX_DATA_DIR` to
     `/home/dev` (path identity), writes `/etc/tmpfiles.d/devbox-docker.conf`, installs the nftables table plus
     `devbox-docker-firewall.service` (ordered before the host's `docker.service`, which starts the devbox, and
-    with no `ExecStop` - a restart's `nft -f` swaps the table atomically) that keeps published project ports off every interface but loopback and
-    `docker0` (`--ip` covers only the default bridge, so the unit also passes `--default-network-opt` and the
-    table backs both up) and the host's own services out of the devbox's reach (from `docker0` only the daemon's
-    sockets answer; its containers, leaving through slirp4netns as uid 1001 in the host netns, open nothing on
-    the host's addresses but loopback) and both off the Tailnet (no new connection from `docker0` or uid 1001
+    with no `ExecStop` - a restart's `nft -f` swaps the table atomically) that keeps published project ports
+    off every interface but loopback and `docker0` (`--ip` covers only the default bridge, so the unit also
+    passes `--default-network-opt` and the table backs both up) and the host's own services out of the devbox's
+    reach (from `docker0` only the daemon's sockets answer; uid 1001's host processes - the daemon,
+    rootlesskit, slirp4netns and anything dev's user manager starts - open nothing on the host but
+    systemd-resolved's stub, `127.0.0.53`/`127.0.0.54` port 53, loopback included, because a project container
+    can drive that user manager, below) and both off the Tailnet (no new connection from `docker0` or uid 1001
     through `tailscale0` or to `100.64.0.0/10`/`fd7a:115c:a1e0::/48`, evaluated after Docker's DNAT so a
-    root-daemon port on the host's Tailscale address still works) - `doctor host` fails until the loaded file
-    matches the ruleset the checkout writes, adds the one `ufw` rule that lets the devbox bridge reach the gateway, and runs a
-    lingering rootless `dockerd` on `/run/devbox/docker.sock` from a root-owned unit in `/etc/systemd/user`,
-    so nothing in the bind mount can rewrite the daemon's command line - plus a `user@1001.service` drop-in
-    pointing dev's `XDG_CONFIG_HOME`/`XDG_DATA_HOME` at root-owned `/etc/devbox-docker`, since the user
-    manager would otherwise read units, drop-ins, wants links and `environment.d` from the bind mount (the
-    unit therefore passes `--data-root` itself, and root makes the wants link `systemctl --user enable` no
-    longer can)
+    root-daemon port on the host's Tailscale address still works). That covers direct connections to the
+    overlay only: tailscaled's LocalAPI socket is world-accessible and dials peers for any local caller, so a
+    project container that bind-mounts `/run/tailscale` relays through it, and peers stay reachable at their LAN
+    or public addresses (accepted limits, `docs/security.md`). `doctor host` fails until the loaded file matches
+    the ruleset the checkout writes and the installed unit matches the one `netfilter_unit` writes. Setup also
+    adds the one `ufw` rule that lets the devbox bridge reach the gateway, and runs a lingering rootless
+    `dockerd` on `/run/devbox/docker.sock` from a root-owned unit in `/etc/systemd/user`, so nothing in the bind
+    mount can rewrite the daemon's command line - plus a `user@1001.service` drop-in pointing dev's
+    `XDG_CONFIG_HOME`/`XDG_DATA_HOME` at root-owned `/etc/devbox-docker`, since the user manager would otherwise
+    read units, drop-ins, wants links and `environment.d` from the bind mount (the unit therefore passes
+    `--data-root` itself, and root makes the wants link `systemctl --user enable` no longer can). The wants link
+    and the drop-in (then `daemon-reload`) come before `loginctl enable-linger`, so a first provisioning's
+    manager starts on `/etc/devbox-docker`; `user@1001` is restarted only when the drop-in changed or the running
+    manager's environment lacks `XDG_CONFIG_HOME=/etc/devbox-docker/config`, which restarts the project daemon
+    and every project container (Ubuntu's `TimeoutStopSec=5` SIGKILLs slow ones; one without a restart policy
+    stays down until `docker compose up -d`) - re-runs are no-ops once current, and `doctor host` compares the
+    manager's `ExecMainStartTimestamp` with the drop-in's mtime. The relocation closes only the path the devbox
+    writes directly: through `/run/user/1001` (the bus, `systemd/private`) a project container can still change
+    the daemon's environment or start units as dev in the host network namespace - the uid-1001 rules above are
+    what bound such code. Old unit files in the bind mount are removed as dev, never by a root `rm` through
+    planted symlinks, and every docker CLI call as dev runs with `DOCKER_CONFIG` outside `/home/dev`, so the
+    bind mount's `config.json` and `cli-plugins` are never read or run on the host. `doctor host` checks sshd's
+    effective config unprivileged (`sshd -T` against a throwaway ed25519 host key, as `user=dev`), after first
+    flagging a stale or missing drop-in file
   - `devbox sync omp` - copies `~/.omp/agent/config.yml` into the devbox over `Host devbox`; only the preset,
     never the per-machine OMP state. Refuses (without `--allow-unguarded`) a file lacking a top-level `bash:`
     block, since the copy replaces the devbox's whole file and would drop its seeded guardrail. The flag is not
@@ -256,7 +281,9 @@ the host's root Docker daemon.
     each forge host's plain key and one `.pub` per identity's ssh tag selecting through it, `Host <workstation>`
     on the default identity's `id_<slug>.pub` and the workstation refusing `devbox.pub` (every `ssh -A devbox`
     leaves that key approved for anything in the devbox; asked with `ssh -v` and no agent, so the server answers
-    before any signature and 1Password never prompts), `~/.gitconfig`'s org includes probed with a `hasconfig:`
+    before any signature and 1Password never prompts; its remedy is ordered - authorize `id_<default>.pub` and
+    point `Host <workstation>` at it until `ssh <workstation> true` passes, only then remove `devbox.pub`, so the
+    account is never locked out), `~/.gitconfig`'s org includes probed with a `hasconfig:`
     remote per pattern (email, signing key, `core.sshCommand`), no
     clone left on a stale SSH-alias remote, the registry itself (`devbox-identities check`), every gitconfig
     signing via `op-ssh-sign` with the right `signing_*.pub` (the base `[user]` name/email being the default
@@ -267,7 +294,8 @@ the host's root Docker daemon.
     `~/.local/bin/devbox-identities` still a symlink onto the libexec reader (the only hop that makes
     `devbox-identities` resolve by name), `~/.config/devbox/git` still unwritable and no login shell writing a
     git identity into it, no agent token in the macOS keychain (a system `credential.helper` running ahead of
-    ours), every identity's PAT accepted by `gh`, every App pem valid, and every configured connection
+    ours), every identity's own PAT (`devbox-gh-token --identity <slug>`, with `GH_HOST` for a host off
+    `github.com`) accepted by `gh`, every App pem valid, and every configured connection
     authenticating - including `Host <workstation>`, whose hostname the repo names nowhere: it reads
     `DEVBOX_HOST` from the environment or `.push.env` - the same per-laptop value `devbox deploy` resolves,
     deliberately one name and one file rather than two - and skips that one check when it is unset. Unsets

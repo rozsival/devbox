@@ -35,7 +35,10 @@ file names follow from them:
 | `devbox.pub`         | Devbox Laptop               | `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS` - never the workstation                                              |
 
 Never authorize `devbox.pub` on the workstation: 1Password approves a key per application, so every
-`ssh -A devbox` leaves it approved for anything inside the devbox to sign with.
+`ssh -A devbox` leaves it approved for anything inside the devbox to sign with. `Host <workstation>` on the
+default identity's key narrows this, not closes it - a key used through `ssh -A devbox` can sign from the
+devbox too until 1Password locks; `devbox-docker-firewall` is what keeps the devbox off the workstation's
+sshd. `devbox.pub` is never registered on GitHub.
 
 Auth/signing are separate files: GitHub registers each separately, per account - signing with auth key
 verifies locally, shows _Unverified_ on GitHub.
@@ -159,7 +162,9 @@ Same reason, credentials: an IDE terminal hands its shell an askpass program (`G
 launcher clears it along with `SSH_ASKPASS`, `GITHUB_TOKEN`, the enterprise token variables and
 `SSH_AUTH_SOCK` (the session's own `ssh` still finds 1Password via `IdentityAgent`); the agent gitconfig
 refuses prompts (`credential.interactive = false`, empty `core.askPass`), and a failing credential helper
-answers `quit=1`. `GH_TOKEN` passes through - the `gh` shim treats an explicit one as deliberate.
+answers `quit=1`. A failed App lookup or mint is never cached and never falls back to the PAT: git stops, and
+so does the `gh` shim (`devbox-git-credential token` exits 1). `GH_TOKEN` passes through - the `gh` shim
+treats an explicit one as deliberate.
 
 ## Phase 5 - what the override needs
 
@@ -176,38 +181,39 @@ answers `quit=1`. `GH_TOKEN` passes through - the `gh` shim treats an explicit o
   an agent's `pr`/`issue`/`run`/... on that repo, so its PRs carry the bot author. Without them, that
   identity's repos push, and its PRs open, with the PAT - as you.
 
-Check: `./bin/devbox doctor laptop` validates every identity's token against GitHub, each `app.pem` as a key;
+Check: `./bin/devbox doctor laptop` validates every identity's own token (`devbox-gh-token --identity <slug>`,
+with `GH_HOST` set for an identity off `github.com`) against its host, each `app.pem` as a key;
 `devbox-git-credential explain <owner>/<repo>` prints `app:<slug>:<installation>` or `pat:<slug>` for a
 repo.
 
 ## When `devbox doctor laptop` warns
 
-| Warning                                                                       | Meaning and fix                                                                                                                        |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `private key(s) on disk`                                                      | Import to 1Password if missing, delete file (phase 1)                                                                                  |
-| `<name>.pub … is not held by the 1Password agent`                             | Wrong export, or item disabled; re-export via `ssh-add -L`                                                                             |
-| `1Password SSH agent not reachable`                                           | Agent off (1Password → Developer → SSH agent) or locked                                                                                |
-| `identities.conf: …`                                                          | Registry does not validate (`devbox-identities check`); fix the named block, phase 1/5                                                 |
-| `~/.ssh/config does not parse: … line N`                                      | Option-name typo; ssh clients (herdr included) die before the agent, 1Password never prompts                                           |
-| `Host …: IdentityFile is …`                                                   | Names a private key path or wrong `.pub` (phase 2)                                                                                     |
-| `~/.ssh/config still has the alias Host <slug>.<host>`                        | Aliases are gone; delete the block - the tag selects the key now (phase 2)                                                             |
-| `Host devbox: ForwardAgent yes`                                               | Remove it; forward via `ssh -A devbox` when needed                                                                                     |
-| `user.signingkey is …`                                                        | Points at literal or auth key; use `signing_*.pub`                                                                                     |
-| `user.email is …` / `user.name is …`                                          | Base `[user]` in `~/.gitconfig` isn't the default identity's; every repo no include claims commits as it - fix it                      |
-| `includeIf gitdir:… is not configured`                                        | Add the tree's `includeIf "gitdir:…"` (phase 3)                                                                                        |
-| `… still rewrites remote URLs (url.*.insteadof)`                              | Old alias-era file; replace with `devbox-identities render user-gitconfig <slug>` (phase 3)                                            |
-| `a <pattern> remote gets '…'`                                                 | Missing or wrong `includeIf "hasconfig:remote.*.url:<pattern>"`; add it with `devbox-identities render org-gitconfig <slug>` (phase 3) |
-| `clones still on an SSH alias`                                                | Run the printed `git remote set-url` commands (`devbox-identities alias-remotes` lists them again)                                     |
-| `omp`/`claude resolves to …, not the launcher`                                | `./bin/devbox agent install`; add its `export PATH=…/devbox-agent/launchers:$PATH` line after whatever puts `~/.local/bin` first       |
-| `… is not a symlink to …/<agent>-launcher`                                    | A release binary replaced a launcher symlink; `./bin/devbox agent install`, then `omp update`/`claude update` again                    |
-| `differ from a fresh render of the templates`                                 | `./bin/devbox agent install` (templates or `identities.conf` changed since last install)                                               |
-| `the keychain holds an agent token`                                           | Homebrew's `osxkeychain` preempted the helper; erase via `git credential-osxkeychain erase`, reinstall                                 |
-| `no <slug> token` / `token is rejected`                                       | Fill/re-issue `GH_TOKEN_<SLUG>` in `secrets.env` (phase 5)                                                                             |
-| `ssh devbox failed` / `ssh <workstation> failed`                              | 1Password locked, or that host's key (`devbox.pub` / the default `id_<slug>.pub`) unapproved for this app                              |
-| `<workstation> accepts devbox.pub`                                            | Delete that key from the account's `~/.ssh/authorized_keys` on the workstation; it takes the default `id_<slug>.pub` (phase 1)         |
-| `[<slug>] and [<slug>] both reach <login>`                                    | Two identities' `id_<slug>.pub` files hold the same key while their registry `pubkey`s differ; re-export the wrong one (phase 1)       |
-| `… is not a symlink onto …/bin/devbox` / `bash completion … missing or stale` | `./bin/devbox install` from the checkout you want `devbox` to run                                                                      |
-| `a login shell does not find devbox` / `… does not load bash-completion`      | Add the printed `PATH` line, or `brew install bash-completion@2` and source it from `~/.bashrc`                                        |
+| Warning                                                                       | Meaning and fix                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `private key(s) on disk`                                                      | Import to 1Password if missing, delete file (phase 1)                                                                                                                                                                             |
+| `<name>.pub … is not held by the 1Password agent`                             | Wrong export, or item disabled; re-export via `ssh-add -L`                                                                                                                                                                        |
+| `1Password SSH agent not reachable`                                           | Agent off (1Password → Developer → SSH agent) or locked                                                                                                                                                                           |
+| `identities.conf: …`                                                          | Registry does not validate (`devbox-identities check`); fix the named block, phase 1/5                                                                                                                                            |
+| `~/.ssh/config does not parse: … line N`                                      | Option-name typo; ssh clients (herdr included) die before the agent, 1Password never prompts                                                                                                                                      |
+| `Host …: IdentityFile is …`                                                   | Names a private key path or wrong `.pub` (phase 2)                                                                                                                                                                                |
+| `~/.ssh/config still has the alias Host <slug>.<host>`                        | Aliases are gone; delete the block - the tag selects the key now (phase 2)                                                                                                                                                        |
+| `Host devbox: ForwardAgent yes`                                               | Remove it; forward via `ssh -A devbox` when needed                                                                                                                                                                                |
+| `user.signingkey is …`                                                        | Points at literal or auth key; use `signing_*.pub`                                                                                                                                                                                |
+| `user.email is …` / `user.name is …`                                          | Base `[user]` in `~/.gitconfig` isn't the default identity's; every repo no include claims commits as it - fix it                                                                                                                 |
+| `includeIf gitdir:… is not configured`                                        | Add the tree's `includeIf "gitdir:…"` (phase 3)                                                                                                                                                                                   |
+| `… still rewrites remote URLs (url.*.insteadof)`                              | Old alias-era file; replace with `devbox-identities render user-gitconfig <slug>` (phase 3)                                                                                                                                       |
+| `a <pattern> remote gets '…'`                                                 | Missing or wrong `includeIf "hasconfig:remote.*.url:<pattern>"`; add it with `devbox-identities render org-gitconfig <slug>` (phase 3)                                                                                            |
+| `clones still on an SSH alias`                                                | Run the printed `git remote set-url` commands (`devbox-identities alias-remotes` lists them again)                                                                                                                                |
+| `omp`/`claude resolves to …, not the launcher`                                | `./bin/devbox agent install`; add its `export PATH=…/devbox-agent/launchers:$PATH` line after whatever puts `~/.local/bin` first                                                                                                  |
+| `… is not a symlink to …/<agent>-launcher`                                    | A release binary replaced a launcher symlink; `./bin/devbox agent install`, then `omp update`/`claude update` again                                                                                                               |
+| `differ from a fresh render of the templates`                                 | `./bin/devbox agent install` (templates or `identities.conf` changed since last install)                                                                                                                                          |
+| `the keychain holds an agent token`                                           | Homebrew's `osxkeychain` preempted the helper; erase via `git credential-osxkeychain erase`, reinstall                                                                                                                            |
+| `no <slug> token` / `token is rejected`                                       | Fill/re-issue `GH_TOKEN_<SLUG>` in `secrets.env` (phase 5)                                                                                                                                                                        |
+| `ssh devbox failed` / `ssh <workstation> failed`                              | 1Password locked, or that host's key (`devbox.pub` / the default `id_<slug>.pub`) unapproved for this app                                                                                                                         |
+| `<workstation> accepts devbox.pub`                                            | In order: authorize `~/.ssh/id_<default>.pub` on the workstation and point `Host <workstation>` at it (phase 1) until `ssh <workstation> true` passes; only then delete `devbox.pub` from that account's `~/.ssh/authorized_keys` |
+| `[<slug>] and [<slug>] both reach <login>`                                    | Two identities' `id_<slug>.pub` files hold the same key while their registry `pubkey`s differ; re-export the wrong one (phase 1)                                                                                                  |
+| `… is not a symlink onto …/bin/devbox` / `bash completion … missing or stale` | `./bin/devbox install` from the checkout you want `devbox` to run                                                                                                                                                                 |
+| `a login shell does not find devbox` / `… does not load bash-completion`      | Add the printed `PATH` line, or `brew install bash-completion@2` and source it from `~/.bashrc`                                                                                                                                   |
 
 herdr's saved-machine connections are background ssh over that agent - a machine flapping between
 `connecting`/`offline` while 1Password is locked is that, not a devbox fault.

@@ -2,8 +2,10 @@
 
 > `ubuntu:26.04` plus a pinned toolchain: every external binary has an explicit `ARG <TOOL>_VERSION` in the
 > `Dockerfile` and is verified — upstream's checksum file, else GitHub's recorded asset digest, else a signed package
-> repository. This page covers the pinned versions, where each tool
-> lives, the agents (OMP, Claude Code, Moshi), skills and browser automation, and how to add a tool.
+> repository. The one download pinned by tag only is nvm's installer (fetched over TLS; upstream publishes no checksum
+> file or asset digest for it), and nvm then checks Node against nodejs.org's `SHASUMS256.txt`. This page covers the
+> pinned versions, where each tool lives, the agents (OMP, Claude Code, Moshi), skills and browser automation, and how
+> to add a tool.
 
 **Related:** [Installation](installation.md) · [Docker](docker.md) · [Secrets](secrets.md) ·
 [Git Identities](git.md) · [Security Model](security.md) · [CLI Reference](cli.md)
@@ -75,8 +77,10 @@ which is why the launcher survives an update. See [Git Identities](git.md#update
 
 `bootstrap` installs the binary when `~/.local/bin/omp` is absent — straight from the latest GitHub release, not through
 `omp.sh/install.sh`, which downloads the same asset and installs it unchecked. The release API's `digest` (the SHA-256
-GitHub records for the asset) is checked first, and the file is renamed into place only then. A failed download or
-check skips OMP and leaves a checklist item; it never stops the rest of `bootstrap`.
+GitHub records for the asset) is checked first, and the file is renamed into place only then. It first sweeps any
+`~/.local/bin/.omp.??????` temp file an interrupted run left behind, and aborts only a stalled download (under 1 KiB/s
+for 30 s), never a slow one. A failed download or check skips OMP and leaves a checklist item; it never stops the rest
+of `bootstrap`.
 
 `~/.omp/agent/config.yml` seeds from `home/.omp/agent/config.yml` only if absent — by `bootstrap` on the devbox, by
 `./bin/devbox agent install` on the laptop. That file is the one preset the laptop and the devbox share: model roles,
@@ -271,7 +275,8 @@ checksum file (`sha256sum -c`); else, for a GitHub release asset, the SHA-256 Gi
 
 > [!CAUTION]
 > Never invent a hash: every value checked against comes from upstream or GitHub at build time, or is a fingerprint the
-> vendor publishes.
+> vendor publishes. The one exception is nvm's installer, pinned by tag over TLS only: upstream publishes no checksum
+> file or asset digest for it, and nvm then checks Node against nodejs.org's `SHASUMS256.txt`. Don't widen it.
 
 ### 3. Add a doctor probe
 
@@ -309,13 +314,14 @@ unmounted; nesting is impossible: rootless docker needs setuid helpers `newuidma
 No — the image rebuilds from scratch; `/home/dev` is a host bind mount, untouched. Only things installed _into the
 image_ disappear.
 
-### Why are `omp` and `moshi-hook` not pinned in the image?
+### Why are `omp`, Claude Code and `moshi-hook` not pinned in the image?
 
-So updates work without a rebuild: `bootstrap` installs both into `~/.local/bin` only if absent, never overwriting an
+So updates work without a rebuild: `bootstrap` installs each into `~/.local/bin` only if absent, never overwriting an
 install already there — a build-time pin would be shadowed on `PATH` and falsified by self-update anyway.
-`ARG <TOOL>_VERSION`'s only two exceptions, and both still verified: `moshi-hook` against upstream's `checksums.txt`,
+`ARG <TOOL>_VERSION`'s only three exceptions, and all still verified: `moshi-hook` against upstream's `checksums.txt`,
 OMP against GitHub's digest for its release asset — each fetched directly, since OMP's installer never checks and
-`moshi-hook`'s skips the check whenever it can't run it.
+`moshi-hook`'s skips the check whenever it can't run it — and Claude Code by its own installer, against its manifest's
+checksum.
 
 ### A different Node version for one project?
 
@@ -345,6 +351,7 @@ plus `snapshot`. Headed mode needs the omitted GTK packages and a virtual displa
 
 ### Do the skills survive a rebuild?
 
-Yes — `~/.agents/skills` is on the bind mount. Only Chrome's shared libraries live in the image, rebuilt with it. To move
-a skill, bump its pin in `container/skills.sh` and re-run `./bin/devbox skills`; `npx skills update` would pull each
-repository's default branch instead, past the pins.
+Yes — `~/.agents/skills` is on the bind mount. Only Chrome's shared libraries live in the image, rebuilt with it.
+`npx skills update` keeps each skill at the ref recorded in `~/.agents/.skill-lock.json` (verified with skills 1.5.26
+and 1.7.1), so it changes nothing here; to move a skill, bump its pin in `container/skills.sh` and re-run
+`./bin/devbox skills`.

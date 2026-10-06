@@ -53,10 +53,10 @@ Everything lives on the `/home/dev` bind mount, so it survives container/image r
 `~/.config/devbox/secrets.env` is plain `KEY=value` pairs at mode 600, installed from
 `home/.config/devbox/secrets.env.example` if absent, never overwritten. `~/.bashrc.d/devbox.sh` sources it inside
 `set -a`/`set +a`, **outside** the interactive guard, because agents arrive as `ssh devbox <cmd>` (non-interactive);
-`container/bootstrap.sh` prepends the `~/.bashrc.d` loader ahead of Ubuntu's `~/.bashrc` so that path reads it too. It
-then unsets every `GH_TOKEN_<SLUG>` again: only `devbox-gh-token` needs them, and it reads them from the file by name,
-so a dev server, a test runner or a package's install script never inherits every account's PAT. Model keys stay
-exported — OMP reads them from its environment.
+`container/bootstrap.sh` prepends the `~/.bashrc.d` loader ahead of Ubuntu's `~/.bashrc` so that path reads it too.
+`~/.bashrc.d/devbox.sh` then unsets every `GH_TOKEN_<SLUG>` right after sourcing: only `devbox-gh-token` needs them,
+and it reads them from the file by name, so a dev server, a test runner or a package's install script never inherits
+every account's PAT. Model keys stay exported — OMP reads them from its environment.
 
 ```dotenv
 GH_TOKEN_PERSONAL=github_pat_...
@@ -114,7 +114,9 @@ shell keeps it from ever acting with your PAT.
 The variable follows the identity's host: `GH_TOKEN` for `github.com` (and GHE.com), `GH_ENTERPRISE_TOKEN` for a GitHub
 Enterprise Server `host` — the only one gh reads for such a host. Exported as `GH_TOKEN`, an Enterprise token would go
 to `github.com` with every request gh sends there. `devbox-identities get <slug> gh_env` names it; an explicit
-`GH_ENTERPRISE_TOKEN` passes through like an explicit `GH_TOKEN`.
+`GH_ENTERPRISE_TOKEN` passes through like an explicit `GH_TOKEN`. For an identity whose `host` is not `github.com` the
+shim also exports `GH_HOST=<host>` with the token (unless `GH_HOST` is already set): gh refuses a host it holds no login
+for unless `GH_HOST` names it, and these sessions hold no login by design.
 
 An agent's directory comes late: the session opens in `$HOME`, then works a project as cwd. A token resolved once at
 startup would pin the default identity for the whole session, including a second identity's tree; resolving per
@@ -122,14 +124,19 @@ invocation makes the account follow the tree.
 
 Resolution order inside `devbox-gh-token`, first hit wins:
 
-| Order | Source                                                                                                     |
-| ----- | ---------------------------------------------------------------------------------------------------------- |
-| 1     | an explicit `GH_TOKEN` in the environment — a deliberate one-off, and what a pre-split `secrets.env` holds |
-| 2     | the identity's variable in the environment, from a shell that sourced `secrets.env`                        |
-| 3     | the same variable read **directly out of `secrets.env`**                                                   |
+| Order | Source                                                                                                                                              |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | an explicit `GH_TOKEN` in the environment — a deliberate one-off, and what a pre-split `secrets.env` holds — except for `--identity <slug>` (below) |
+| 2     | the identity's variable in the environment, set for one command (`~/.bashrc.d/devbox.sh` unsets the ones it sources)                                |
+| 3     | the same variable read **directly out of `secrets.env`**                                                                                            |
 
 Step 3 is why `gh` needs no reconnect after adding a token, and why the resolver's error is honest: the file is the only
-place it looks.
+place it looks. A `secrets.env` that references an unset variable or has a syntax error does not silence it: the file is
+read with `nounset` off, and a read that fails anyway falls through to the same "not set" diagnostics.
+
+`devbox-gh-token --identity <slug>` returns that identity's token whatever the working directory and ignoring an
+inherited `GH_TOKEN` — for a caller that already knows whose token it needs, like the per-identity checks of `bootstrap`
+and `devbox doctor laptop`, which export `GH_HOST` with it for an identity off `github.com`.
 
 Three consequences:
 
@@ -157,8 +164,8 @@ installed on, and every `gh` outside an agent session — a devbox pane stays yo
 repository bypasses the App with `GH_TOKEN=$(devbox-gh-token) gh ...`.
 
 > [!CAUTION]
-> A failed App lookup (broken `app.pem`, API outage) makes `gh` exit 1 rather than fall back to the PAT and act as
-> someone else — the helper's rule.
+> A failed App lookup or mint (broken `app.pem`, API outage) makes `gh` exit 1 rather than fall back to the PAT and act
+> as someone else — the helper's rule; the failure is never cached, so the next command tries again.
 
 The App needs the permissions those commands use — `pull_requests`/`issues` **write** to post, `checks` and `statuses`
 **read** for `gh pr checks` — and, like the PAT, `workflows` **write** before its git pushes may change
