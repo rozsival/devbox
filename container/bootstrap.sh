@@ -21,16 +21,51 @@ register_action() { ACTIONS+=("$1"); }
 
 # -- 1. Agents: OMP and Claude Code -------------------------------------------
 # Deliberately not in the image: both install to ~/.local/bin on the bind
-# mount (OMP's installer default PI_INSTALL_DIR; Claude's native installer
-# keeps ~/.local/bin/claude as a symlink into ~/.local/share/claude/versions),
-# so `omp update` and Claude's own auto-update work without an image rebuild -
-# which is also why neither has an ARG pin. Checked by path, not `command -v`:
-# the launchers installed in §13 answer to both names on the PATH set above.
+# mount (Claude's native installer keeps ~/.local/bin/claude as a symlink into
+# ~/.local/share/claude/versions), so `omp update` and Claude's own auto-update
+# work without an image rebuild - which is also why neither has an ARG pin.
+# Checked by path, not `command -v`: the launchers installed in §13 answer to
+# both names on the PATH set above.
+#
+# OMP is fetched directly instead of `curl https://omp.sh/install.sh | sh`:
+# upstream's installer downloads the release binary and installs it unchecked.
+# GitHub records a SHA-256 for every release asset (the release API's
+# `digest`), and both the binary URL and that digest come from one read of the
+# `latest` release, so they always describe the same build. Claude's installer
+# verifies its download against its own manifest, so it runs as published.
 if [[ -x "${HOME_DIR}/.local/bin/omp" ]]; then
   log_info "OMP already installed: ${HOME_DIR}/.local/bin/omp"
 else
   log_info 'Installing OMP...'
-  curl -fsSL https://omp.sh/install.sh | sh
+  case "$(uname -m)" in
+  x86_64 | amd64) omp_asset='omp-linux-x64' ;;
+  aarch64 | arm64) omp_asset='omp-linux-arm64' ;;
+  *) omp_asset='' ;;
+  esac
+  # The binary downloads beside its final name and is renamed into place once
+  # verified: never a half-written or unchecked `omp` on the PATH, and no
+  # ~280 MB in /tmp, which is a RAM-backed tmpfs here (and noexec).
+  install -d -m 755 "${HOME_DIR}/.local/bin"
+  omp_tmp="$(mktemp -d)"
+  omp_new=''
+  if [[ -z "${omp_asset}" ]]; then
+    log_warn "Unsupported architecture $(uname -m); skipping OMP."
+  elif curl -fsSL --max-time 30 -o "${omp_tmp}/release.json" https://api.github.com/repos/can1357/oh-my-pi/releases/latest &&
+    omp_url="$(jq -r --arg a "${omp_asset}" '.assets[] | select(.name == $a) | .browser_download_url' "${omp_tmp}/release.json")" &&
+    omp_sum="$(jq -r --arg a "${omp_asset}" '.assets[] | select(.name == $a) | .digest // "" | select(startswith("sha256:")) | ltrimstr("sha256:")' "${omp_tmp}/release.json")" &&
+    [[ -n "${omp_url}" && -n "${omp_sum}" ]] &&
+    omp_new="$(mktemp "${HOME_DIR}/.local/bin/.omp.XXXXXX")" &&
+    curl -fsSL --max-time 300 -o "${omp_new}" "${omp_url}" &&
+    printf '%s  %s\n' "${omp_sum}" "${omp_new}" | sha256sum -c - >/dev/null 2>&1; then
+    chmod 0755 "${omp_new}"
+    mv -f "${omp_new}" "${HOME_DIR}/.local/bin/omp"
+    log_success "Installed OMP $(jq -r '.tag_name' "${omp_tmp}/release.json")."
+  else
+    log_warn 'OMP download or digest verification failed; skipping.'
+    register_action 'Install OMP: re-run ./bin/devbox bootstrap (the release download or its digest check failed)'
+  fi
+  [[ -z "${omp_new}" ]] || rm -f "${omp_new}"
+  rm -rf "${omp_tmp}"
 fi
 # Non-fatal: a box without Claude Code still runs OMP, and everything below
 # (identities, the agent override) must not depend on a download.

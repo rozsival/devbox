@@ -94,8 +94,10 @@ the host's root Docker daemon.
   recreate, and both it and the hook daemon are best-effort because neither an unreachable project daemon
   nor a missing hook daemon may cost SSH access. `moshi-hook serve` is backgrounded rather than supervised
   because there is no systemd here: it becomes a child of `sshd` and is reaped by tini
-- `container/bootstrap.sh` - idempotent user setup, sixteen individually-guarded sections: 1 the agents (OMP, plus
-  Claude Code via its native installer - non-fatal, and its one-time `/login` registered as a
+- `container/bootstrap.sh` - idempotent user setup, sixteen individually-guarded sections: 1 the agents (OMP
+  straight from its latest GitHub release, checked against GitHub's asset digest before it is renamed into
+  place - upstream's `omp.sh` installer checks nothing - plus Claude Code via its native installer, which
+  verifies its own download; both non-fatal, and Claude's one-time `/login` registered as a
   manual step until `~/.claude/.credentials.json` exists); 2 the
   identity registry (installs `devbox-identities` in `~/.local/libexec` and symlinks it into
   `~/.local/bin`, since `devbox.sh` puts only the latter on the PATH and every checklist tells people to

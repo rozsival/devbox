@@ -73,6 +73,11 @@ omp update          # updates ~/.local/bin/omp in place; no image rebuild
 `omp` on the `PATH` is the agent launcher, not the binary; `omp update` passes through to the real install it shadows,
 which is why the launcher survives an update. See [Git Identities](git.md#updates-omp-update-claude-update).
 
+`bootstrap` installs the binary when `~/.local/bin/omp` is absent — straight from the latest GitHub release, not through
+`omp.sh/install.sh`, which downloads the same asset and installs it unchecked. The release API's `digest` (the SHA-256
+GitHub records for the asset) is checked first, and the file is renamed into place only then. A failed download or
+check skips OMP and leaves a checklist item; it never stops the rest of `bootstrap`.
+
 `~/.omp/agent/config.yml` seeds from `home/.omp/agent/config.yml` only if absent — by `bootstrap` on the devbox, by
 `./bin/devbox agent install` on the laptop — with `secrets: { enabled: true }` obfuscating an API key in the environment
 (`~/.config/devbox/secrets.env` or a project `.env`) before it reaches a provider, and a `bash.patterns` guardrail:
@@ -111,8 +116,9 @@ claude --version
 claude update           # updates ~/.local/bin/claude; it also auto-updates in the background
 ```
 
-`bootstrap` installs it with the native installer (`curl -fsSL https://claude.ai/install.sh | bash`) when
-`~/.local/bin/claude` is absent; like OMP it carries no `ARG` pin, because it updates itself on the bind mount. `claude`
+`bootstrap` installs it with the native installer (`curl -fsSL https://claude.ai/install.sh | bash`), which verifies its
+download against its own manifest's checksum, when `~/.local/bin/claude` is absent; like OMP it carries no `ARG` pin,
+because it updates itself on the bind mount. `claude`
 on the `PATH` is `~/.local/libexec/devbox-agent/claude` → `claude-launcher`, so every session commits and pushes as the
 identity's bot, exactly like an `omp` session ([Git Identities](git.md#-agent-sessions)).
 
@@ -298,10 +304,11 @@ image_ disappear.
 
 ### Why are `omp` and `moshi-hook` not pinned in the image?
 
-So updates work without a rebuild: `bootstrap` installs both into `~/.local/bin` only if `command -v` fails, never
-overwriting an install already there — a build-time pin would be shadowed on `PATH` and falsified by self-update anyway.
-`ARG <TOOL>_VERSION`'s only two exceptions. `moshi-hook` still gets checksum-verified: `bootstrap` fetches upstream's
-`latest` tarball plus `checksums.txt`, runs `sha256sum -c` — upstream's installer skips verification without one.
+So updates work without a rebuild: `bootstrap` installs both into `~/.local/bin` only if absent, never overwriting an
+install already there — a build-time pin would be shadowed on `PATH` and falsified by self-update anyway.
+`ARG <TOOL>_VERSION`'s only two exceptions, and both still verified: `moshi-hook` against upstream's `checksums.txt`,
+OMP against GitHub's digest for its release asset — each fetched directly, since OMP's installer never checks and
+`moshi-hook`'s skips the check whenever it can't run it.
 
 ### A different Node version for one project?
 
