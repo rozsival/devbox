@@ -34,8 +34,10 @@ ports:
 
 > [!IMPORTANT]
 > `BIND_ADDR` is **mandatory**. Empty, the first mapping would degrade to `:2223:2222` — `0.0.0.0`, every interface — so
-> compose itself refuses to start (`required variable BIND_ADDR is missing a value`), not just `./bin/devbox up`'s
-> preflight: a bare `docker compose up` skips the CLI.
+> compose itself refuses it (`required variable BIND_ADDR is missing a value`), not just `./bin/devbox up`'s preflight:
+> a bare `docker compose up` skips the CLI. Every compose command interpolates the file, so while it's empty all of
+> them fail — `down`, `logs` and `shell` included. `./bin/devbox env` fills it; `docker rm -f devbox` stops a box
+> already published on `0.0.0.0`.
 
 ### Why UFW cannot help
 
@@ -138,10 +140,12 @@ new boundary to audit each time. SSH forwarding needs no configuration and inher
 ### Does the container get its own IP on the Tailnet?
 
 No — it sits on Docker's default bridge (`docker0`); the Tailnet terminates on the host, DNATing in. Outbound internet
-works normally; outbound to the Tailnet does not — `devbox-docker-firewall` drops every new connection from `docker0`
-through `tailscale0` or to a Tailscale address, so a peer can reach the devbox but the devbox can't reach a peer. A port
-the host's root daemon publishes on the host's own Tailscale address still works, rewritten to its container on the
-host ([Docker](docker.md#2-the-boundary)).
+works normally; outbound over the Tailnet overlay does not — `devbox-docker-firewall` drops every new connection from
+`docker0` through `tailscale0` or to a Tailscale address, so a peer can reach the devbox but the devbox can't reach a
+peer's Tailscale address. That peer's LAN or public address stays reachable like the rest of the network, and
+`tailscaled`'s world-accessible LocalAPI socket can relay to it from a project container — both accepted limits
+([Security Model](security.md#-accepted-limits)). A port the host's root daemon publishes on the host's own Tailscale
+address still works, rewritten to its container on the host ([Docker](docker.md#2-the-boundary)).
 
 ### Is IPv6 published?
 
@@ -152,5 +156,12 @@ No — only the IPv4 Tailscale address from `tailscale ip -4` and `127.0.0.1`.
 No — the rootless daemon publishes on the devbox bridge gateway, not `0.0.0.0`; `devbox-docker-firewall` blocks `INPUT`
 outside loopback and that bridge (see [Why UFW cannot help](#why-ufw-cannot-help)), overriding even a port spec's
 default. So `ports: ['5432:5432']` reaches only the devbox and host — see [Docker](docker.md).
-Nor can they reach a Tailnet peer: as uid 1001 in the host's namespace, their traffic meets the same table's output
-rules.
+Nor can they reach a Tailnet peer over the overlay: as uid 1001 in the host's namespace, their traffic meets the same
+table's output rules.
+
+### Why did the devbox lose internet when I enabled an exit node?
+
+With a Tailscale exit node set on the workstation, its outbound traffic leaves through `tailscale0`, and
+`devbox-docker-firewall` drops every new connection from `docker0` or uid 1001 on that interface — the devbox and the
+project daemon (image pulls included) lose the internet. Clear the exit node on the workstation
+(`tailscale set --exit-node=`); the boundary has no exception for it.

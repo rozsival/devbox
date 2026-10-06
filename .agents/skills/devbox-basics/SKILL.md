@@ -31,7 +31,8 @@ Four facts:
 3. **The published port is the entire network boundary**: `${BIND_ADDR}:2223:2222` in `docker-compose.yml`
    plus `127.0.0.1:2223`. Docker's DNAT matches the bound address, so UFW can't restrict it - binding to the
    Tailscale IP keeps devbox off the public internet. An empty `BIND_ADDR` makes `./bin/devbox up` - and
-   compose itself, via `${BIND_ADDR:?}` - refuse to start rather than publish on `0.0.0.0`.
+   compose itself, via `${BIND_ADDR:?}` - refuse to start rather than publish on `0.0.0.0`; every compose
+   command, `down` included, fails until `./bin/devbox env` fills it.
 4. **No root, no root socket.** `USER dev`, PID 1 `dev`, `cap_drop: [ALL]`, `no-new-privileges`; the host's
    root Docker socket is never mounted. Project containers come from a _second_ daemon: a rootless
    `dockerd` owned by the dedicated host user `dev`, socket `/run/devbox/docker.sock`, provisioned once by
@@ -39,8 +40,12 @@ Four facts:
    publishes project ports on the devbox bridge gateway (`--ip` plus `--default-network-opt`, since `--ip`
    alone covers only the default bridge). `devbox-docker-firewall` - nftables matching the daemon's socket
    cgroup - holds the line regardless: even an explicit `0.0.0.0:` port never reaches the Tailnet or the
-   LAN, and neither the devbox nor its project containers reach the host's own services, sshd included, or
-   any other Tailnet machine - peers reach the devbox, never the reverse (`docs/docker.md`).
+   LAN, and neither the devbox nor its project containers reach the host's own services (sshd included;
+   uid 1001 gets no host address, loopback included, but systemd-resolved's DNS stub) or a Tailnet peer
+   over the overlay (`tailscale0`, Tailscale's ranges). Accepted limits (`docs/security.md`): peers stay
+   reachable at LAN or public addresses; a project container can relay to them through `tailscaled`'s
+   world-accessible LocalAPI socket, or drive dev's user manager through `/run/user/1001`. A Tailscale exit
+   node on the workstation cuts the devbox's internet (`docs/docker.md`).
 
 ## The four ways in
 
@@ -110,7 +115,8 @@ key**, **no Google user credential** (`gcloud` not installed). Three layers:
   GCP keys are per-project too, via `GOOGLE_APPLICATION_CREDENTIALS`
 
 The container isolates the host filesystem, contains authority - not a confidentiality boundary. Outbound
-network is unrestricted; assume anything inside can leave.
+internet is unrestricted, and so is the LAN; the host's own services and the Tailnet overlay are not
+reachable. Assume anything inside can leave.
 
 ## Where to look things up
 

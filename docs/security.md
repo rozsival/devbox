@@ -9,15 +9,15 @@
 
 ## 🧱 Boundaries
 
-| Boundary                   | Enforced by                                                                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| No host filesystem access  | Only `${DEVBOX_DATA_DIR}` mounted, at `/home/dev` (see accepted limit 5)                                                                               |
-| No host root Docker daemon | `/var/run/docker.sock` not mounted; reachable daemon is rootless                                                                                       |
-| No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true`                                                                           |
-| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` — Tailnet address only                                                                                          |
-| No host services           | `devbox-docker-firewall`: the devbox bridge reaches only the project daemon's ports, its containers none of the host's addresses but loopback          |
-| No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`                                                                                   |
-| No private keys at rest    | Devbox holds no SSH private key; `AllowAgentForwarding yes` only lets `ssh -A devbox` borrow the laptop's forwarded 1Password agent for one connection |
+| Boundary                   | Enforced by                                                                                                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No host filesystem access  | Only `${DEVBOX_DATA_DIR}` mounted, at `/home/dev` (see accepted limit 5)                                                                                                          |
+| No host root Docker daemon | `/var/run/docker.sock` not mounted; reachable daemon is rootless                                                                                                                  |
+| No privilege escalation    | `user: ${HOST_UID}:${HOST_GID}`, `cap_drop: [ALL]`, `no-new-privileges:true`                                                                                                      |
+| No public network exposure | `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` — Tailnet address only                                                                                                                     |
+| No host services           | `devbox-docker-firewall`: the devbox bridge reaches only the project daemon's ports; uid 1001 — the daemon, its containers — no host address, loopback included, but the DNS stub |
+| No password auth           | `PubkeyAuthentication yes`, `PasswordAuthentication no`, `UsePAM no`                                                                                                              |
+| No private keys at rest    | Devbox holds no SSH private key; `AllowAgentForwarding yes` only lets `ssh -A devbox` borrow the laptop's forwarded 1Password agent for one connection                            |
 
 ## 👤 No root process at runtime
 
@@ -58,8 +58,9 @@ identity's `gh` token, each configured App's private key, every project's `.env`
 the rootless project Docker daemon ([Docker](docker.md)).
 
 **Cannot**: the host filesystem outside the data dir and world-readable paths, the host's **root** Docker daemon, the
-host's own services (its sshd included), any other machine on the Tailnet, the devbox container's own lifecycle, root
-inside the container, any unpublished port, and any 1Password vault.
+host's own services (its sshd included), other Tailnet machines over the overlay (accepted limits 1 and 8 name the
+routes that remain), the devbox container's own lifecycle, root inside the container, any unpublished port, and any
+1Password vault.
 
 The consequence: an agent with shell access can push through the same App token or PAT `git`/`gh` already resolve, and
 read each configured App's private key, every identity's PAT, and every project's `.env` and GCP key directly. Your own
@@ -73,20 +74,25 @@ GitHub push authority stays out of reach — no private key to steal — unless 
 
 These are known and deliberate, not gaps to be closed later:
 
-1. **No egress filtering beyond the Tailnet.** Outbound network is unrestricted except to Tailnet peers — the box needs
-   internet access. An agent reading a poisoned issue or README can send whatever it holds anywhere on the internet: IAM
-   and token scoping limit what it can _reach_, not _send_. The container is a containment boundary for authority,
-   **not** confidentiality — assume anything inside can leave.
+1. **No egress filtering beyond the Tailnet overlay.** Outbound internet is unrestricted — the box needs it — and so is
+   the LAN: the boundary cuts only the overlay (`tailscale0` and Tailscale's address ranges), so a Tailnet peer stays
+   reachable at its LAN or public address like any other machine. An agent reading a poisoned issue or README can send
+   whatever it holds anywhere on the internet: IAM and token scoping limit what it can _reach_, not _send_. The
+   container is a containment boundary for authority, **not** confidentiality — assume anything inside can leave. A
+   Tailscale exit node on the workstation removes the internet too: its traffic leaves through `tailscale0`, which the
+   boundary drops for the devbox and the project daemon.
 2. **A forwarded agent is open to the whole devbox while it lasts.** `ssh -A devbox` exposes the 1Password agent
    socket for the connection's lifetime, and the socket belongs to `dev`: every process in the container can use it, not
    just the shell you forwarded it into. Only agent git is fenced (HTTPS, through the `omp`/`claude` launchers, which
-   also start each session without `SSH_AUTH_SOCK` — a default, since the socket stays in `/tmp` for anything that
-   looks). And
-   1Password approves per key and per application, not per use — a key your terminal app is already approved for (by
-   this connection, or by anything since 1Password last locked) signs without a prompt. What a key can reach is
-   therefore the limit: `devbox.pub` opens only the devbox, and the workstation's sshd and every other Tailnet machine
-   are out of the devbox's network reach (`devbox-docker-firewall`) — leaving your GitHub push authority for the
-   connection's lifetime. Plain `herdr`
+   also start each session without `SSH_AUTH_SOCK` — a default, since the socket stays findable under `~/.ssh/agent/`
+   (OpenSSH ≥ 10.1)). That directory is on the bind mount, so any project container that bind-mounts `/home/dev`, and
+   `dev` on the host, reach the socket as well. And 1Password approves per key and per application, not per use — a key
+   your terminal app is already approved for (by this connection, or by anything since 1Password last locked) signs
+   without a prompt. What a key can reach is therefore the limit: `devbox.pub` opens only the devbox and is never
+   registered on GitHub, and `Host <workstation>` uses the default identity's key rather than `devbox.pub`. That
+   narrows, not closes: a key used through `ssh -A devbox` stays approved for the terminal app until 1Password locks,
+   so it can sign from the devbox too — what keeps the devbox off the workstation's sshd is `devbox-docker-firewall`.
+   What a forwarded agent still reaches is your GitHub push authority, for the connection's lifetime. Plain `herdr`
    panes, `./bin/devbox shell` and a bare `ssh devbox` never forward one.
 3. **No isolation between projects.** One container, one `dev` user, one bind mount: an agent in project A can read
    project B's `.env` and GCP key. Cloning something less trusted is where per-project containers or separate users stop
@@ -98,14 +104,21 @@ These are known and deliberate, not gaps to be closed later:
    through that socket, including one bind-mounting a host path — but only as unprivileged `dev`: world-readable host
    files to read, only `dev`-owned files to write, never host root, the root daemon, or your home directory (`750`,
    untraversable by `dev`). The price of `docker compose up` inside the box — why the daemon gets its own dedicated
-   account. The daemon's own configuration stays out of reach: dev's systemd user manager reads its units and
-   `environment.d` from root-owned `/etc/devbox-docker`, not from the bind mount.
+   account. dev's systemd user manager reads its units and `environment.d` from root-owned `/etc/devbox-docker`, which
+   closes the path the devbox writes directly — files in the bind mount. It doesn't close the manager: a project
+   container can bind-mount `/run/user/1001` (its bus, `systemd/private`, `systemd/user.control`,
+   `systemd/transient`) and change the daemon's environment or start units as `dev` in the host's network namespace.
+   What bounds such code is the boundary's uid-1001 rules: no host address — loopback included — but systemd-resolved's
+   stub, no Tailnet overlay, and its listening sockets answer only on loopback and `docker0`. Not applied: running
+   the daemon from a root-owned system unit with no user manager.
 6. **A project port is one firewall rule away from the Tailnet.** Rootless Docker binds every published port on
    `0.0.0.0`, with no way to change that — `devbox-docker-firewall`, an nftables table dropping input to that daemon's
-   sockets outside loopback and the devbox bridge, confines them, and keeps the host's own services and the rest of the
-   Tailnet away from the devbox and its project containers. `./bin/devbox doctor` fails if it is inactive or stale;
-   removed, every project port reaches the Tailnet and LAN, and the devbox reaches the host's sshd and every Tailnet
-   peer. See [Docker](docker.md).
+   sockets outside loopback and the devbox bridge, confines them, and keeps the host's own services and the Tailnet
+   overlay away from the devbox and its project containers. `./bin/devbox doctor` fails if it is inactive or stale;
+   removed (`sudo systemctl disable --now devbox-docker-firewall && sudo nft delete table inet devbox` — `stop` alone
+   leaves the table loaded), every project port reaches the Tailnet and LAN, and the devbox reaches the host's sshd and
+   every Tailnet peer. A container the host's _root_ daemon puts on the default bridge shares the devbox's boundary —
+   give such containers their own network. See [Docker](docker.md).
 7. **On the laptop, an agent is only as contained as your OS user.** The launchers, the `gh` shim and the SSH fence
    choose which credential an agent session uses _by default_ — clearing what your shell carries (an IDE's askpass,
    `GITHUB_TOKEN`, `SSH_AUTH_SOCK`) and refusing every credential prompt; they cannot stop a process running as you from
@@ -114,6 +127,12 @@ These are known and deliberate, not gaps to be closed later:
    scoped PATs and App keys exists there. Keep autonomous or bypass-permission work against orgs you own on the devbox;
    on the laptop, a `gh auth logout` (your own `gh` on fine-grained PATs too) and 1Password set to approve every SSH
    request remove what a bypass could reach.
+8. **`tailscaled`'s LocalAPI relays to the Tailnet.** `/run/tailscale/tailscaled.sock` is world-accessible (`0666`),
+   and its `dial` endpoint has `tailscaled`, as root, open a connection to a Tailnet peer for any local caller. The
+   project daemon can bind-mount any host path `dev` reaches, so a project container can relay to a peer — its sshd
+   included — through that socket. The boundary stops direct connections from the devbox and its containers, not this
+   relay. Not applied, being the host's decision: restricting `/run/tailscale` through a `tailscaled` drop-in, or hiding
+   it from dev's user manager.
 
 ### Command allowlists are a guardrail, not a control
 
@@ -196,9 +215,10 @@ agent, not just by you at a prompt. Install the App on repos that matter instead
 
 ### How do I revoke access from a lost laptop?
 
-The SSH keys are 1Password items, not files, so the laptop carries no key — but remove the _Devbox Laptop_ item from
-GitHub or `DEVBOX_EXTRA_AUTHORIZED_KEYS` anyway, restart the container (`authorized_keys` rebuilds on every start), and
-drop the default identity's key from the workstation's own `~/.ssh/authorized_keys`. What the laptop **does** hold in
-plaintext, if `./bin/devbox agent install` ran there, is the agent's own credentials: one `GH_TOKEN_<SLUG>` per
-identity in `~/.config/devbox/secrets.env`, and each configured identity's App pem under its own `app` directory.
-Revoke every identity's PAT, rotate every App private key — same list as a container compromise above.
+The SSH keys are 1Password items, not files, so the laptop carries no key — but remove the _Devbox Laptop_ key from
+`DEVBOX_EXTRA_AUTHORIZED_KEYS` anyway (`devbox.pub` is never registered on GitHub), restart the container
+(`authorized_keys` rebuilds on every start), and drop the default identity's key from the workstation's own
+`~/.ssh/authorized_keys`. What the laptop **does** hold in plaintext, if `./bin/devbox agent install` ran there, is the
+agent's own credentials: one `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env`, and each configured
+identity's App pem under its own `app` directory. Revoke every identity's PAT, rotate every App private key — same list
+as a container compromise above.
