@@ -541,6 +541,40 @@ DROPIN
 }
 
 step_daemon() {
+  # The manager's own configuration directories: root-owned, empty but for the
+  # wants link that starts the daemon at boot. Root makes that link - `systemctl
+  # --user enable` cannot, since the manager runs as dev. The link and the
+  # drop-in come before linger, so the manager that linger starts on a first
+  # provisioning already reads ${MANAGER_DIR}, never the bind mount. ${UNIT} is
+  # only written further down (reloading it needs that running manager), so at
+  # that first start the link may dangle - systemd merely warns - and the unit
+  # is written and loaded before anything restarts the manager or starts the
+  # daemon, so a restarted manager finds it current.
+  if [[ -L "${WANTS_LINK}" && "$(readlink "${WANTS_LINK}")" == "${UNIT}" ]]; then
+    log_success "${WANTS_LINK} present"
+  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
+    fail "${WANTS_LINK} missing - the daemon would not start at boot"
+  else
+    log_info "Linking ${WANTS_LINK}..."
+    install -d -m 755 "${MANAGER_DIR}" "${MANAGER_CONFIG}" "${MANAGER_CONFIG}/systemd" \
+      "${MANAGER_CONFIG}/systemd/user" "$(dirname "${WANTS_LINK}")" "${MANAGER_DATA}"
+    ln -sfn "${UNIT}" "${WANTS_LINK}"
+  fi
+
+  local manager_changed='false'
+  if [[ "$(cat "${MANAGER_DROPIN}" 2>/dev/null)" == "$(manager_dropin)" ]]; then
+    log_success "${MANAGER_DROPIN} current"
+  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
+    fail "${MANAGER_DROPIN} missing or stale - dev's user manager reads its configuration from the bind mount"
+  else
+    log_info "Writing ${MANAGER_DROPIN}..."
+    install -d -m 755 "$(dirname "${MANAGER_DROPIN}")"
+    manager_dropin >"${MANAGER_DROPIN}"
+    chmod 644 "${MANAGER_DROPIN}"
+    systemctl daemon-reload
+    manager_changed='true'
+  fi
+
   if loginctl show-user "${DEV_USER}" -p Linger --value 2>/dev/null | grep -qx yes; then
     log_success "linger enabled for ${DEV_USER}"
   elif [[ "${CHECK_ONLY}" == 'true' ]]; then
@@ -556,6 +590,9 @@ step_daemon() {
       waited=$((waited + 1))
     done
     [[ -d "/run/user/${DEV_UID}" ]] || log_error "/run/user/${DEV_UID} never appeared"
+    # Linger queues the manager's start without waiting for it; the unit's
+    # reload below talks to that manager, so wait until it is up.
+    systemctl start "user@${DEV_UID}.service"
   fi
 
   # Prerequisites only (newuidmap, subordinate ids, kernel support). The tool's
@@ -629,38 +666,12 @@ UNIT_BODY
     unit_changed='true'
   fi
 
-  # The manager's own configuration directories: root-owned, empty but for the
-  # wants link that starts the daemon at boot. Root makes that link - `systemctl
-  # --user enable` cannot, since the manager runs as dev - and it is written
-  # before the drop-in below, so a restarted manager finds the unit current.
-  if [[ -L "${WANTS_LINK}" && "$(readlink "${WANTS_LINK}")" == "${UNIT}" ]]; then
-    log_success "${WANTS_LINK} present"
-  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    fail "${WANTS_LINK} missing - the daemon would not start at boot"
-  else
-    log_info "Linking ${WANTS_LINK}..."
-    install -d -m 755 "${MANAGER_DIR}" "${MANAGER_CONFIG}" "${MANAGER_CONFIG}/systemd" \
-      "${MANAGER_CONFIG}/systemd/user" "$(dirname "${WANTS_LINK}")" "${MANAGER_DATA}"
-    ln -sfn "${UNIT}" "${WANTS_LINK}"
-  fi
-
-  local manager_changed='false'
-  if [[ "$(cat "${MANAGER_DROPIN}" 2>/dev/null)" == "$(manager_dropin)" ]]; then
-    log_success "${MANAGER_DROPIN} current"
-  elif [[ "${CHECK_ONLY}" == 'true' ]]; then
-    fail "${MANAGER_DROPIN} missing or stale - dev's user manager reads its configuration from the bind mount"
-  else
-    log_info "Writing ${MANAGER_DROPIN}..."
-    install -d -m 755 "$(dirname "${MANAGER_DROPIN}")"
-    manager_dropin >"${MANAGER_DROPIN}"
-    chmod 644 "${MANAGER_DROPIN}"
-    systemctl daemon-reload
-    manager_changed='true'
-  fi
-
+  # Captured, then matched: `grep -q` exits at the first match, and a producer
+  # still writing then dies of SIGPIPE, which pipefail reports as a mismatch.
+  local manager_env
+  manager_env="$(systemctl --user --machine="${DEV_USER}@.host" show-environment 2>/dev/null || true)"
   if [[ "${CHECK_ONLY}" == 'true' ]]; then
-    if systemctl --user --machine="${DEV_USER}@.host" show-environment 2>/dev/null |
-      grep -qx "XDG_CONFIG_HOME=${MANAGER_CONFIG}"; then
+    if grep -qx "XDG_CONFIG_HOME=${MANAGER_CONFIG}" <<<"${manager_env}"; then
       log_success "dev's user manager reads ${MANAGER_DIR}"
     else
       fail "dev's user manager still reads its configuration from ${DEV_HOME} - it predates the drop-in"
@@ -681,10 +692,17 @@ UNIT_BODY
   as_dev rm -f "${DEV_HOME}/.config/systemd/user/docker.service" \
     "${DEV_HOME}/.config/systemd/user/default.target.wants/docker.service" ||
     log_warn "could not remove the old docker.service files under ${DEV_HOME}/.config/systemd/user"
-  if [[ "${manager_changed}" == 'true' ]]; then
-    # Restarts the daemon, and every project container with it (those with a
-    # restart policy come back); PartOf= also reloads the step_netfilter table.
-    log_info "Restarting user@${DEV_UID}.service so dev's user manager reads ${MANAGER_DIR} - project containers restart with the daemon..."
+  # A changed drop-in, or a manager whose environment lacks it - one that
+  # started before the drop-in existed, left running by a run interrupted
+  # between writing it and this restart - means the manager still reads the
+  # bind mount.
+  if [[ "${manager_changed}" == 'true' ]] ||
+    ! grep -qx "XDG_CONFIG_HOME=${MANAGER_CONFIG}" <<<"${manager_env}"; then
+    # Restarts the daemon, and every project container with it; PartOf= also
+    # reloads the step_netfilter table. Ubuntu's user@.service stops with
+    # TimeoutStopSec=5, so a container slower to stop is SIGKILLed, and one
+    # without a restart policy stays down until its `docker compose up -d`.
+    log_info "Restarting user@${DEV_UID}.service so dev's user manager reads ${MANAGER_DIR} - project containers restart with the daemon (those without a restart policy stay down)..."
     systemctl restart "user@${DEV_UID}.service"
   elif [[ "${unit_changed}" == 'true' ]]; then
     # `start` leaves an already-running daemon alone, so a rewritten unit would
@@ -694,8 +712,12 @@ UNIT_BODY
   fi
   log_info 'Starting the daemon...'
   systemctl --user --machine="${DEV_USER}@.host" start docker
-  systemctl --user --machine="${DEV_USER}@.host" show-environment | grep -qx "XDG_CONFIG_HOME=${MANAGER_CONFIG}" ||
-    log_error "dev's user manager does not read ${MANAGER_DIR} - check: systemctl cat user@${DEV_UID}.service"
+  manager_env="$(systemctl --user --machine="${DEV_USER}@.host" show-environment 2>/dev/null || true)"
+  if ! grep -qx "XDG_CONFIG_HOME=${MANAGER_CONFIG}" <<<"${manager_env}"; then
+    local seen
+    seen="$(grep '^XDG_CONFIG_HOME=' <<<"${manager_env}" || true)"
+    log_error "dev's user manager does not read ${MANAGER_DIR} (${seen:-no XDG_CONFIG_HOME set}) - 'systemctl cat user@${DEV_UID}.service' must list ${MANAGER_DROPIN} with no later drop-in overriding it; then: sudo systemctl restart user@${DEV_UID}.service"
+  fi
   local waited=0
   until [[ -S "${SOCKET}" ]] || ((waited >= 100)); do
     sleep 0.2

@@ -254,17 +254,22 @@ doctor_host() {
   # directories the drop-in names, never from the bind mount. The file is
   # world-readable, the manager's live environment is not, so its start time
   # stands in - a manager started before the drop-in was written still reads
-  # /home/dev.
-  local manager_pid manager_age dropin_age
+  # /home/dev. Both in unix seconds: systemd's own record of the start, against
+  # the file's mtime. MainPID first, because a stopped unit keeps the timestamp
+  # of its last run.
+  local manager_pid manager_started dropin_written
   manager_pid="$(systemctl show "user@${DEV_UID}.service" -p MainPID --value 2>/dev/null || true)"
   if [[ "$(cat "${MANAGER_DROPIN}" 2>/dev/null)" != "$(manager_dropin)" ]]; then
     fail "${MANAGER_DROPIN} is missing or stale - the project daemon's user manager reads its configuration from the bind mount:"' sudo ./bin/devbox docker setup'
   elif [[ -z "${manager_pid}" || "${manager_pid}" == 0 ]]; then
     fail "user@${DEV_UID}.service is not running, so neither is the project daemon:"' sudo ./bin/devbox docker setup'
   else
-    manager_age="$(ps -o etimes= -p "${manager_pid}" | tr -d ' ')"
-    dropin_age=$(($(date +%s) - $(stat -c %Y "${MANAGER_DROPIN}")))
-    if ((manager_age > dropin_age)); then
+    manager_started="$(systemctl show "user@${DEV_UID}.service" -p ExecMainStartTimestamp --timestamp=unix --value 2>/dev/null || true)"
+    manager_started="${manager_started#@}"
+    dropin_written="$(stat -c %Y "${MANAGER_DROPIN}")"
+    if [[ -z "${manager_started}" || "${manager_started}" == 0 ]]; then
+      fail "user@${DEV_UID}.service reports no start time, so the project daemon is not running:"' sudo ./bin/devbox docker setup'
+    elif ((manager_started < dropin_written)); then
       fail "user@${DEV_UID}.service predates ${MANAGER_DROPIN}, so it still reads ${DEV_HOME}:"' sudo ./bin/devbox docker setup'
     else
       log_success "project daemon's user manager reads root-owned ${MANAGER_DIR}, not the bind mount"
