@@ -51,7 +51,16 @@
 # would tie this file to one machine's home directory.
 [credential]
 	helper =
+	# Helpers that would ask for input fail instead, and so does git itself.
+	interactive = false
 @URL_REWRITES@
+
+# No askpass program either. When a helper comes back empty git asks one - in
+# an IDE terminal that is the IDE's (GIT_ASKPASS, which the launcher also
+# clears), answering with your own login. The empty value also keeps git from
+# falling back to SSH_ASKPASS.
+[core]
+	askPass =
 
 [init]
 	defaultBranch = main

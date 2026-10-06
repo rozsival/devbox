@@ -146,10 +146,18 @@ process tree rewrites the agent's own identity. The real caller here was `~/.ext
 `~/.bash_profile`), whose `git config --global user.name/email` lines ran in every login bash a session
 started - five agent commits ended up authored by the laptop owner. Remedies, both applied:
 `~/.config/devbox/git/` is mode 500 with 444 files, so such a call now fails with `could not lock config
-file`, and the launcher unsets `GIT_AUTHOR_*`/`GIT_COMMITTER_*` (they outrank every gitconfig) and refuses
-to start without a readable agent gitconfig. `devbox doctor laptop` checks the mode, the `cmp` against the
-templates, and the `~/.extra` pattern; `./bin/devbox agent install` repairs a drifted copy. Commits already
-authored wrongly need `git commit --amend --reset-author` (or `rebase -x`) plus a force-push.
+file`, and the launcher unsets `GIT_AUTHOR_*`/`GIT_COMMITTER_*` and `GIT_CONFIG_COUNT`/`GIT_CONFIG_PARAMETERS`
+(they outrank every gitconfig) and refuses to start without a readable agent gitconfig. `devbox doctor laptop`
+checks the mode, the `cmp` against the templates, and the `~/.extra` pattern; `./bin/devbox agent install`
+repairs a drifted copy. Commits already authored wrongly need `git commit --amend --reset-author` (or
+`rebase -x`) plus a force-push.
+
+Same reason, credentials: an IDE terminal hands its shell an askpass program (`GIT_ASKPASS`, VS Code's
+`VSCODE_GIT_*`) that answers git with your own GitHub login the moment a helper comes back empty. The
+launcher clears it along with `SSH_ASKPASS`, `GITHUB_TOKEN`, the enterprise token variables and
+`SSH_AUTH_SOCK` (the session's own `ssh` still finds 1Password via `IdentityAgent`); the agent gitconfig
+refuses prompts (`credential.interactive = false`, empty `core.askPass`), and a failing credential helper
+answers `quit=1`. `GH_TOKEN` passes through - the `gh` shim treats an explicit one as deliberate.
 
 ## Phase 5 - what the override needs
 

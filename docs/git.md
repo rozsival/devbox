@@ -201,6 +201,14 @@ drift apart:
 Nothing outside that process tree sees any of it — a clone opened in a pane or IDE keeps its SSH remote, forwarded
 agent, signed commits.
 
+It also clears what the shell that started it may carry for you: an IDE terminal's askpass (`GIT_ASKPASS`,
+`SSH_ASKPASS`, VS Code's `VSCODE_GIT_*` — it answers git's credential prompts with your own GitHub login), your
+`GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN`, `SSH_AUTH_SOCK` (a forwarded agent on the devbox;
+on the laptop the session's own `ssh` still reaches 1Password through `IdentityAgent`), and `GIT_CONFIG_COUNT`/
+`GIT_CONFIG_PARAMETERS`, which outrank every config file. `GH_TOKEN` stays: the `gh` shim honours an explicit one as a
+deliberate choice. Clearing is a default, not a boundary — a forwarded agent's socket is still in `/tmp` for anything
+that looks ([accepted limit 2](security.md#-accepted-limits)).
+
 `GIT_CONFIG_GLOBAL` beats `includeIf` via `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*`, which ignores `includeIf gitdir:` and
 can't follow the repo tree like `agent.gitconfig`'s `includeIf`. Pointing `GIT_CONFIG_GLOBAL` at a file that itself
 `includeIf`s a second makes the rule work under an env override.
@@ -260,6 +268,9 @@ checks, on either side, that the symlinks are still symlinks.
   then one `[credential "https://<host>"] helper = !devbox-git-credential, useHttpPath = true` per forge host (`!` runs
   it as a command on the launcher's PATH; a bare name would mean `git credential-<name>`). A host no identity's `host`
   field names gets no helper and fails outright (`GIT_TERMINAL_PROMPT=0`: immediate, not hung).
+- **No prompts**: `credential.interactive = false` and an empty `core.askPass`. When the helper has no answer git fails
+  instead of asking an askpass program — in an IDE terminal, one that answers with your own login — and never falls back
+  to `SSH_ASKPASS`.
 - **`includeIf gitdir:<dir>/`** — one per non-default identity that sets its own `agent_name`/`agent_email`, pulling in
   `agent-<slug>.gitconfig`, resetting `user.name`/`user.email` to that identity's bot author — the same bot whose App
   installation token, if `app` is configured, pushes it. An identity that leaves `agent_name`/`agent_email` unset simply
@@ -286,6 +297,9 @@ with two Apps on the same host stay apart:
    candidate identity; any other status → hard failure, never a silent PAT downgrade.
 2. Otherwise, the fine-grained PAT of the identity the working directory belongs to — `devbox-gh-token`, the same rule
    `gh` and git's `includeIf` use.
+
+Any failure past the host check also prints `quit=1`: git otherwise reads a failed helper as "no answer" and asks the
+next source, an askpass program. A failure therefore ends the operation, with the helper's one-line reason.
 
 `store` and `erase` are accepted and ignored. Two subcommands inspect it:
 

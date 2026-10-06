@@ -79,7 +79,9 @@ These are known and deliberate, not gaps to be closed later:
    leave.
 2. **A forwarded agent is open to the whole devbox while it lasts.** `ssh -A devbox` exposes the 1Password agent
    socket for the connection's lifetime, and the socket belongs to `dev`: every process in the container can use it, not
-   just the shell you forwarded it into. Only agent git is fenced (HTTPS, through the `omp`/`claude` launchers). And
+   just the shell you forwarded it into. Only agent git is fenced (HTTPS, through the `omp`/`claude` launchers, which
+   also start each session without `SSH_AUTH_SOCK` — a default, since the socket stays in `/tmp` for anything that
+   looks). And
    1Password approves per key and per application, not per use — a key your terminal app is already approved for (by
    this connection, or by anything since 1Password last locked) signs without a prompt. What a key can reach is
    therefore the limit: `devbox.pub` opens only the devbox, and the workstation's sshd is out of the devbox's network
@@ -102,8 +104,9 @@ These are known and deliberate, not gaps to be closed later:
    devbox and its project containers. `./bin/devbox doctor` fails if it is inactive or stale; removed, every project
    port reaches the Tailnet and LAN, and the host's sshd the devbox. See [Docker](docker.md).
 7. **On the laptop, an agent is only as contained as your OS user.** The launchers, the `gh` shim and the SSH fence
-   choose which credential an agent session uses _by default_; they cannot stop a process running as you from calling
-   the real `gh` with your OAuth login, reading the keychain, or asking the 1Password agent for a key (1Password's
+   choose which credential an agent session uses _by default_ — clearing what your shell carries (an IDE's askpass,
+   `GITHUB_TOKEN`, `SSH_AUTH_SOCK`) and refusing every credential prompt; they cannot stop a process running as you from
+   calling the real `gh` with your OAuth login, reading the keychain, or asking the 1Password agent for a key (1Password's
    approval prompt is then the only gate). On the devbox the same bypass gains nothing — no credential broader than the
    scoped PATs and App keys exists there. Keep autonomous or bypass-permission work against orgs you own on the devbox;
    on the laptop, a `gh auth logout` (your own `gh` on fine-grained PATs too) and 1Password set to approve every SSH

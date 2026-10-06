@@ -139,7 +139,11 @@ the host's root Docker daemon.
   `home/.local/libexec/devbox-agent/` holds `agent-launch`, the one body both launchers source (`omp-launcher`,
   `claude-launcher` are three lines each): it exports `GIT_CONFIG_GLOBAL`, the SSH fence,
   `GIT_TERMINAL_PROMPT=0` and a login-less `GH_CONFIG_DIR` for its own process tree only - on the laptop,
-  bare `gh` would otherwise fall back to your OAuth login. Each launcher is reached as `omp`/`claude` only
+  bare `gh` would otherwise fall back to your OAuth login - and clears what the calling shell carries for
+  you: an IDE terminal's askpass (`GIT_ASKPASS`, `SSH_ASKPASS`, `VSCODE_GIT_*` - it answers git with your own
+  GitHub login), `GITHUB_TOKEN` and the two enterprise token variables, `SSH_AUTH_SOCK`, and the
+  `GIT_AUTHOR_*`/`GIT_CONFIG_COUNT`/`GIT_CONFIG_PARAMETERS` overrides that outrank every gitconfig
+  (`GH_TOKEN` stays: the shim honours an explicit one as deliberate). Each launcher is reached as `omp`/`claude` only
   through a symlink and never as a file named after its tool, because `omp update` resolves its install
   target by looking `omp` up on the PATH and takes a plain file there over in place - it once wrote the
   release binary onto the launcher, dropping agent sessions back on the user's gitconfig and SSH keys; the
@@ -156,14 +160,16 @@ the host's root Docker daemon.
   `api graphql` inside a checkout
   - takes that repository's App installation token from `devbox-git-credential token` instead, so agent PRs
     carry the bot author their commits do; account-wide commands and every non-agent `gh` keep the PAT, and a
-    failed App lookup is an error, never a PAT fallback. The helper caches App answers per repository on tmpfs
+    failed App lookup is an error, never a PAT fallback (a failing `get` also answers git `quit=1`, so git
+    asks no askpass program next). The helper caches App answers per repository on tmpfs
     (`devbox-agent-<uid>/`, never under `$HOME`) because a mint is two API round trips. Nothing exports
     `GH_TOKEN`; `gh auth
   login` is rejected by design (`docs/secrets.md`). `home/.config/devbox/git/agent.gitconfig.tpl` is the
     template `devbox-identities render agent-gitconfig` fills in with the registry's hosts and URL
     rewrites - edit it here, never the rendered `~/.config/devbox/git/agent.gitconfig` or the one
     `agent-<slug>.gitconfig` per identity claiming a `dir` that it produces. Sets the bot author,
-    unsigned commits, and the HTTPS credential-helper rewrite for agent git (`docs/git.md`); both installers
+    unsigned commits, the HTTPS credential-helper rewrite and no prompts (`credential.interactive = false`, an
+    empty `core.askPass`) for agent git (`docs/git.md`); both installers
     leave that directory at mode 500 with 444 files, because `GIT_CONFIG_GLOBAL` points into it and a `git
   config --global` inside a session therefore rewrites the agent's own identity - `~/.extra` did exactly
     that from every login bash, putting the user's name and email on five agent commits, and git's lock file
