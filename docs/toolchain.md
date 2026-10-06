@@ -77,8 +77,10 @@ which is why the launcher survives an update. See [Git Identities](git.md#update
 
 `bootstrap` installs the binary when `~/.local/bin/omp` is absent — straight from the latest GitHub release, not through
 `omp.sh/install.sh`, which downloads the same asset and installs it unchecked. The release API's `digest` (the SHA-256
-GitHub records for the asset) is checked first, and the file is renamed into place only then. It first sweeps any
-`~/.local/bin/.omp.??????` temp file an interrupted run left behind, and aborts only a stalled download (under 1 KiB/s
+GitHub records for the asset) is checked first, and the file is renamed into place only then. Every `bootstrap`, with
+OMP installed or not, first deletes any `~/.local/bin/.omp.??????` temp file older than 5 minutes: a killed run leaves
+its temp file behind, while a live download writes at least every ~40 s (10 s connect timeout plus the 30 s stall
+window), so a concurrent `bootstrap`'s download is never swept. The download aborts only when stalled (under 1 KiB/s
 for 30 s), never a slow one. A failed download or check skips OMP and leaves a checklist item; it never stops the rest
 of `bootstrap`.
 

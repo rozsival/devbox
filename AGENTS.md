@@ -98,8 +98,10 @@ the host's root Docker daemon.
   because there is no systemd here: it becomes a child of `sshd` and is reaped by tini
 - `container/bootstrap.sh` - idempotent user setup, sixteen individually-guarded sections: 1 the agents (OMP
   straight from its latest GitHub release, checked against GitHub's asset digest before it is renamed into
-  place - upstream's `omp.sh` installer checks nothing - after sweeping leftover `~/.local/bin/.omp.??????`
-  temp files, with a download that aborts only when stalled, never on a total time cap; plus Claude Code via
+  place - upstream's `omp.sh` installer checks nothing - with a download that aborts only when stalled, never on
+  a total time cap; every run, installed or not, first deletes `~/.local/bin/.omp.??????` temp files older than 5
+  minutes, which only a killed run leaves (a live download writes at least every ~40 s), so a concurrent
+  bootstrap's download survives; plus Claude Code via
   its native installer, which verifies its own download; both non-fatal, and Claude's one-time `/login`
   registered as a manual step until `~/.claude/.credentials.json` exists); 2 the
   identity registry (installs `devbox-identities` in `~/.local/libexec` and symlinks it into

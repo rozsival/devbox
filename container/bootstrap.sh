@@ -33,6 +33,16 @@ register_action() { ACTIONS+=("$1"); }
 # `digest`), and both the binary URL and that digest come from one read of the
 # `latest` release, so they always describe the same build. Claude's installer
 # verifies its download against its own manifest, so it runs as published.
+install -d -m 755 "${HOME_DIR}/.local/bin"
+# A container stop SIGKILLs an in-flight bootstrap, so no cleanup runs and its
+# temp file (possibly the full asset) stays on the bind mount - also beside an
+# installed omp, hence swept before that check. A live download writes at
+# least every ~40 s (10 s connect timeout + 30 s speed window), so only a dead
+# run's file is ever 5 minutes stale; a concurrent bootstrap's is left alone.
+# The name matches the mktemp template below exactly. Best-effort: a concurrent
+# run may rename or delete a file mid-scan, which must not stop bootstrap.
+find "${HOME_DIR}/.local/bin" -maxdepth 1 -ignore_readdir_race -type f -name '.omp.??????' -mmin +5 -delete ||
+  log_warn 'Could not sweep stale OMP downloads from ~/.local/bin.'
 if [[ -x "${HOME_DIR}/.local/bin/omp" ]]; then
   log_info "OMP already installed: ${HOME_DIR}/.local/bin/omp"
 else
@@ -45,11 +55,6 @@ else
   # The binary downloads beside its final name and is renamed into place once
   # verified: never a half-written or unchecked `omp` on the PATH, and no
   # ~280 MB in /tmp, which is a RAM-backed tmpfs here (and noexec).
-  install -d -m 755 "${HOME_DIR}/.local/bin"
-  # A container stop SIGKILLs an in-flight bootstrap, so no cleanup runs, and
-  # each leftover can be the full asset on the bind mount. The glob matches
-  # the mktemp template below exactly.
-  rm -f "${HOME_DIR}/.local/bin"/.omp.??????
   # The asset download aborts only when it stalls, not after a fixed time: on
   # a slow link a total cap fails every run, re-runs included.
   omp_tmp="$(mktemp -d)"
