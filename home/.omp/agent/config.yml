@@ -12,8 +12,8 @@ modelRoles:
   task: anthropic/claude-opus-5-5:medium
   advisor: anthropic/claude-fable-5-1:high
   vision: anthropic/claude-sonnet-5-5:medium
-  commit: anthropic/claude-haiku-4-5:low
-  tiny: anthropic/claude-haiku-4-5:low
+  commit: anthropic/claude-haiku-5-5:low
+  tiny: anthropic/claude-haiku-5-5:low
 symbolPreset: unicode
 theme:
   dark: titanium
