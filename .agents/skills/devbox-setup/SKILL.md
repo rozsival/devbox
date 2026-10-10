@@ -181,7 +181,7 @@ sessions (`omp`/`claude` launchers) skip this, pushing HTTPS with a token minted
 
 ```bash
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # agent skills + agent-browser + Chrome
-./bin/devbox sync omp                                    # laptop ~/.omp/agent/config.yml → devbox
+./bin/devbox sync omp                                    # repo OMP preset → laptop and devbox
 ```
 
 `skills` installs `agent-browser`, `skill-creator`, `find-skills` into `~/.agents/skills` (OMP's skills

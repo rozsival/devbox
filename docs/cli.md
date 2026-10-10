@@ -32,7 +32,7 @@ ssh -N -L 5173:localhost:5173 devbox # reach a dev server
 ssh devbox 'cd projects/app && docker compose up -d && devbox-ports'  # project containers on localhost
 ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 ssh <workstation> 'cd ~/devbox && ./bin/devbox sessions'   # who is connected (a recreate kills them)
-./bin/devbox sync omp                # push this laptop's OMP preset into the devbox
+./bin/devbox sync omp                # apply the repo's OMP preset to this laptop and the devbox
 ./bin/devbox install                 # devbox on the PATH, with bash completion (deploy does the workstation)
 ./bin/devbox agent install           # laptop-side: same agent git override as the devbox
 ./bin/devbox doctor laptop           # laptop-side acceptance test: keys, configs, override, tokens
@@ -187,7 +187,7 @@ Run these on the macOS laptop, from the repo checkout. `deploy`, `sync omp` and 
 | Command                               | What it does                                                                                                               |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `deploy [HOST] [--up] [--force\|-f]`  | Sync this repo to the workstation, optionally bringing the container up — see [`devbox deploy`](#devbox-deploy)            |
-| `sync omp [HOST] [--allow-unguarded]` | Copy the laptop's OMP preset into the devbox — see [`devbox sync omp`](#devbox-sync-omp)                                   |
+| `sync omp [HOST] [--allow-unguarded]` | Apply the repo's OMP preset to this laptop and the devbox — see [`devbox sync omp`](#devbox-sync-omp)                      |
 | `sync identities [HOST]`              | Copy the laptop's identity registry into the devbox and apply it — see [`devbox sync identities`](#devbox-sync-identities) |
 | `agent install`                       | Install the agent git override on this laptop — see [`devbox agent install`](#devbox-agent-install)                        |
 
@@ -231,10 +231,10 @@ DEVBOX_REMOTE_PATH=~/devbox-test ./bin/devbox deploy <workstation>
 ### `devbox sync`
 
 `sync omp` and `sync identities` talk to the _container's_ sshd (`Host devbox`, port 2223), not the workstation's, so
-the file lands inside bind-mounted `/home/dev`. Neither is part of a deploy — these files are personal state, not repo
-content. Both resolve the host the same way: the `HOST` argument, then `DEVBOX_SSH_HOST` from the environment or
-`.push.env` (the same gitignored file `deploy` reads), then `devbox`. Before overwriting, each backs up the remote copy
-as `<file>.bak`, keeping one.
+the file lands inside bind-mounted `/home/dev`. Neither is part of a deploy: a redeploy updates the workstation's
+checkout, never the live files in `/home/dev`. Both resolve the host the same way: the `HOST` argument, then
+`DEVBOX_SSH_HOST` from the environment or `.push.env` (the same gitignored file `deploy` reads), then `devbox`. Before
+overwriting, each backs up the remote copy as `<file>.bak`, keeping one.
 
 #### `devbox sync omp`
 
@@ -245,16 +245,18 @@ Usage: ./bin/devbox sync omp [HOST] [--allow-unguarded]
 
 Environment:
   DEVBOX_SSH_HOST   default SSH host; may also be set in .push.env
-  OMP_CONFIG        source file (default: ~/.omp/agent/config.yml)
+  OMP_CONFIG        source file (default: home/.omp/agent/config.yml in this checkout)
 ```
 
-Copies this laptop's OMP preset into the devbox, keeping one `config.yml.bak` there. Only the preset travels, never the
-per-machine OMP state (`agent.db`, `history.db`, sessions, memories, `models.yml`). Restart any running OMP session on
-the devbox to pick the new preset up.
+Applies the repo's OMP preset to both machines: first this laptop's `~/.omp/agent/config.yml` (created if absent, else
+the replaced copy kept as `config.yml.bak` when it differed — OMP may have written a change there that never reached the
+preset), then the devbox's, keeping one `config.yml.bak` there too. Only the preset travels, never the per-machine OMP
+state (`agent.db`, `history.db`, sessions, memories, `models.yml`). Restart any running OMP session on either machine to
+pick the new preset up.
 
 > [!IMPORTANT]
-> Refuses a file without a top-level `bash:` block unless `--allow-unguarded`: the copy replaces the devbox's whole
-> `config.yml`, and with it the `bash.patterns` guardrail bootstrap seeded ([Toolchain](toolchain.md#-omp)). The flag is
+> Refuses a preset without a top-level `bash:` block unless `--allow-unguarded`: the copy replaces each machine's whole
+> `config.yml`, and with it the `bash.patterns` guardrail the installers seeded ([Toolchain](toolchain.md#-omp)). The flag is
 > named for the guardrail rather than `--force` because `--force` elsewhere only ever means "past the live-session
 > prompt".
 
@@ -278,7 +280,7 @@ landed. If the copy lands but bootstrap fails, the error says so and points at `
 workstation.
 
 ```bash
-./bin/devbox sync omp                    # laptop OMP preset → devbox:~/.omp/agent/config.yml
+./bin/devbox sync omp                    # home/.omp/agent/config.yml → laptop and devbox:~/.omp/agent/config.yml
 ./bin/devbox sync identities             # laptop → devbox:~/.config/devbox/identities.conf
 ./bin/devbox sync identities devbox-2    # a different ~/.ssh/config host
 ```

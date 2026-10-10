@@ -94,26 +94,27 @@ theme and feature flags, `secrets: { enabled: true }` obfuscating an API key in 
 | `deny`   | Reaching past the agent's scoped tokens: `gh auth token\|login\|…`, an absolute-path `gh`, `env -u`, unsetting or reassigning `GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND`, `GH_CONFIG_DIR`, `GIT_TERMINAL_PROMPT`, keychain reads, `gh secret`/`variable`/`repo delete`. History rewrites: `--no-verify`, force push. |
 | `prompt` | `env -i` (this repo's smoke tests use it), `op`, `gcloud`, `terraform apply`                                                                                                                                                                                                                                     |
 
-Your edits are never overwritten; an existing file without a `bash:` block is reported by both installers so you can
+The installers never overwrite your edits; an existing file without a `bash:` block is reported by both so you can
 copy the block in. A project's own `bash.patterns` replaces this list entirely — arrays don't merge across settings
 layers. What it does and does not stop: [Security Model](security.md#-accepted-limits).
 
 Local workstation-served models are opt-in: copy your model-serving repo's `harnesses/omp.yml` into
 `~/.omp/agent/models.yml`, pointing the provider `baseUrl` at the workstation's Tailscale address.
 
-A setting changed in OMP on the laptop lands in the laptop's live file only: copy it over `home/.omp/agent/config.yml`
-(`make fmt`), commit, and push the live file so devbox panes match:
+`home/.omp/agent/config.yml` is the one preset. Change it there, commit, and apply it to both machines:
 
 ```bash
-./bin/devbox sync omp              # laptop → devbox:~/.omp/agent/config.yml
+./bin/devbox sync omp              # repo preset → laptop and devbox:~/.omp/agent/config.yml
 ./bin/devbox sync omp devbox-2     # a different ~/.ssh/config host
 ```
 
-Only `config.yml` moves; `agent.db`, `history.db`, `sessions/`, `memories/` and `models.yml` stay per-machine,
-untouched. The prior file is kept as `config.yml.bak`; a running session needs a restart for the new preset.
+A setting changed in OMP on the laptop lands in the laptop's live file only: copy it over `home/.omp/agent/config.yml`
+(`make fmt`) and commit first, or `sync omp` replaces it. Only `config.yml` moves; `agent.db`, `history.db`,
+`sessions/`, `memories/` and `models.yml` stay per-machine, untouched. Each machine keeps the replaced file as
+`config.yml.bak`; a running session needs a restart for the new preset.
 
 > [!WARNING]
-> A preset without a top-level `bash:` block is refused — it would silently replace the devbox's seeded guardrail —
+> A preset without a top-level `bash:` block is refused — it would silently replace each machine's seeded guardrail —
 > unless you pass `--allow-unguarded`.
 
 ## 🧠 Claude Code

@@ -140,11 +140,11 @@ commands:
     commands:
       - name: omp
         help: |-
-          Copy the laptop's OMP preset into the devbox
+          Apply the repo's OMP preset to this laptop and the devbox
 
-          Copies ~/.omp/agent/config.yml, keeping one config.yml.bak there. Refuses a
-          file without a top-level 'bash:' block: the devbox's seeded guardrail would
-          be silently replaced.
+          Copies home/.omp/agent/config.yml over ~/.omp/agent/config.yml on both
+          machines, keeping one config.yml.bak on each. Refuses a preset without a
+          top-level 'bash:' block: the seeded guardrail would be silently replaced.
         filters: [laptop]
         dependencies: &sync_deps
           rsync: brew install rsync
@@ -162,7 +162,7 @@ commands:
             name: devbox_ssh_host
             help: Default devbox SSH host; may also be set in .push.env
           - name: omp_config
-            help: Source file (default ~/.omp/agent/config.yml)
+            help: Source file (default home/.omp/agent/config.yml in this checkout)
 
       - name: identities
         help: |-

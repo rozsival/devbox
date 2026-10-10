@@ -185,7 +185,7 @@ Extras outside `bootstrap`, keeping first starts fast, offline-safe:
 
 ```bash
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # 3 global agent skills + agent-browser + Chrome
-./bin/devbox sync omp                                    # laptop OMP preset → devbox
+./bin/devbox sync omp                                    # repo OMP preset → laptop and devbox
 ssh -t devbox claude                                     # once: /login for Claude Code on the devbox
 ```
 

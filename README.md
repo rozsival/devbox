@@ -57,7 +57,7 @@ ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'  # once: pr
 ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
 herdr machine add devbox --label "Devbox"                             # once the ~/.ssh/config blocks exist
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'                # optional: agent skills + browser automation
-./bin/devbox sync omp                                                 # optional: this laptop's OMP preset → devbox
+./bin/devbox sync omp                                                 # optional: repo OMP preset → laptop and devbox
 ssh -t devbox claude                                                  # once, if you use Claude Code: /login
 ./bin/devbox agent install                                            # laptop: the same agent git override
 ./bin/devbox doctor laptop                                            # laptop: acceptance test

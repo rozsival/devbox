@@ -43,7 +43,7 @@ devbox_usage() {
   printf "%s\n" "Laptop Commands:"
   printf "  %s   Sync this repo to the workstation, optionally bringing the container up\n" "deploy         "
   printf "  %s   Copy laptop configuration into the devbox container\n" "sync           "
-  printf "  %s   Copy the laptop's OMP preset into the devbox\n" "sync omp       "
+  printf "  %s   Apply the repo's OMP preset to this laptop and the devbox\n" "sync omp       "
   printf "  %s   Copy the laptop's identity registry into the devbox and apply it\n" "sync identities"
   printf "  %s   The agent git override on this laptop\n" "agent          "
   printf "  %s   Install the agent git override on this laptop\n" "agent install  "
@@ -410,7 +410,7 @@ devbox_sync_usage() {
   echo
 
   printf "%s\n" "Commands:"
-  printf "  %s   Copy the laptop's OMP preset into the devbox\n" "omp       "
+  printf "  %s   Apply the repo's OMP preset to this laptop and the devbox\n" "omp       "
   printf "  %s   Copy the laptop's identity registry into the devbox and apply it\n" "identities"
   echo
 
@@ -428,9 +428,9 @@ devbox_sync_usage() {
 devbox_sync_omp_usage() {
   if [[ -n $long_usage ]]; then
     printf "devbox sync omp\n\n"
-    printf "  Copy the laptop's OMP preset into the devbox\n  \n  Copies ~/.omp/agent/config.yml, keeping one config.yml.bak there. Refuses a\n  file without a top-level 'bash:' block: the devbox's seeded guardrail would\n  be silently replaced.\n\n"
+    printf "  Apply the repo's OMP preset to this laptop and the devbox\n  \n  Copies home/.omp/agent/config.yml over ~/.omp/agent/config.yml on both\n  machines, keeping one config.yml.bak on each. Refuses a preset without a\n  top-level 'bash:' block: the seeded guardrail would be silently replaced.\n\n"
   else
-    printf "devbox sync omp - Copy the laptop's OMP preset into the devbox\n\n"
+    printf "devbox sync omp - Apply the repo's OMP preset to this laptop and the devbox\n\n"
   fi
 
   printf "%s\n" "Usage:"
@@ -463,7 +463,7 @@ devbox_sync_omp_usage() {
     echo
 
     printf "  %s\n" "OMP_CONFIG"
-    printf "    Source file (default ~/.omp/agent/config.yml)\n"
+    printf "    Source file (default home/.omp/agent/config.yml in this checkout)\n"
     echo
 
   fi
@@ -3008,21 +3008,37 @@ devbox_deploy_command() {
 
 devbox_sync_omp_command() {
 
-  src="${OMP_CONFIG:-${HOME}/.omp/agent/config.yml}"
+  src="${OMP_CONFIG:-${TEMPLATE_DIR}/.omp/agent/config.yml}"
   [[ -f "${src}" ]] || log_error "No OMP config at ${src}"
-  # The devbox's config.yml carries the bash.patterns guardrail bootstrap seeded
-  # (home/.omp/agent/config.yml). This sync replaces the whole file, so a laptop
-  # preset without that block would remove it there without a trace. Only the
-  # preset travels: agent.db, history.db, sessions, memories and models.yml are
+  # Both config.yml files carry the bash.patterns guardrail their installers
+  # seeded (home/.omp/agent/config.yml). This sync replaces each whole file, so a
+  # preset without that block would remove it without a trace. Only the preset
+  # travels: agent.db, history.db, sessions, memories and models.yml are
   # per-machine state.
   if [[ -z "${args['--allow-unguarded']:-}" ]] && ! grep -qE '^bash:' "${src}"; then
-    log_error "${src} has no bash: block - syncing it would drop the devbox's OMP guardrail. Copy the block from home/.omp/agent/config.yml into it first, or pass --allow-unguarded."
+    log_error "${src} has no bash: block - syncing it would drop the OMP guardrail. Copy the block from home/.omp/agent/config.yml into it first, or pass --allow-unguarded."
+  fi
+
+  # The laptop first, so a failed devbox copy still leaves this machine current.
+  # OMP owns the live file and may hold a change made in it that never reached
+  # the preset: keep the replaced copy as config.yml.bak, like the devbox side.
+  live="${HOME}/.omp/agent/config.yml"
+  if [[ ! -e "${live}" ]]; then
+    install -d -m 755 "${live%/*}"
+    install -m 600 "${src}" "${live}"
+    log_success "OMP preset installed at ${live}."
+  elif [[ "$(readlink -f "${src}")" == "$(readlink -f "${live}")" ]] || cmp -s "${src}" "${live}"; then
+    log_info "${live} already matches."
+  else
+    cp -p "${live}" "${live}.bak"
+    cp "${src}" "${live}"
+    log_success "OMP preset applied to ${live} (previous copy: ${live}.bak)."
   fi
 
   host="$(devbox_ssh_host)"
   sync_to_devbox "${host}" "${src}" .omp/agent/config.yml
   log_success "OMP preset synced to ${host}."
-  log_info 'Restart any running OMP session there to pick it up.'
+  log_info 'Restart any running OMP session on either machine to pick it up.'
 
 }
 

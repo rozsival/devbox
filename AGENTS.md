@@ -265,10 +265,12 @@ the host's root Docker daemon.
     bind mount's `config.json` and `cli-plugins` are never read or run on the host. `doctor host` checks sshd's
     effective config unprivileged (`sshd -T` against a throwaway ed25519 host key, as `user=dev`), after first
     flagging a stale or missing drop-in file
-  - `devbox sync omp` - copies `~/.omp/agent/config.yml` into the devbox over `Host devbox`; only the preset,
-    never the per-machine OMP state. Refuses (without `--allow-unguarded`) a file lacking a top-level `bash:`
-    block, since the copy replaces the devbox's whole file and would drop its seeded guardrail. The flag is not
-    `--force` on purpose: `--force` only ever means "past the live-session prompt"
+  - `devbox sync omp` - applies the repo's preset, `home/.omp/agent/config.yml`, to both machines: the laptop's
+    `~/.omp/agent/config.yml` first (a differing one kept as `config.yml.bak`, since OMP may have written a
+    change there that never reached the preset), then the devbox's over `Host devbox` (one `.bak` kept there);
+    only the preset, never the per-machine OMP state. Refuses (without `--allow-unguarded`) a preset lacking a
+    top-level `bash:` block, since the copy replaces each whole file and would drop its seeded guardrail. The
+    flag is not `--force` on purpose: `--force` only ever means "past the live-session prompt"
   - `devbox sync identities` - copies `~/.config/devbox/identities.conf` into the devbox over `Host devbox`,
     keeping one `identities.conf.bak` remotely, then re-runs `bootstrap.sh` there so every identity-derived
     file catches up; validates locally with `devbox-identities check` first, the same reader that runs on both

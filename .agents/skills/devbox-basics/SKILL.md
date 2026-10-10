@@ -95,8 +95,9 @@ PRs carry the bot author too. Full mechanism: `docs/git.md`.
 
 `./bin/devbox skills` (workstation) installs `agent-browser`, `skill-creator`, `find-skills` into
 `~/.agents/skills` (OMP) with a symlink each in `~/.claude/skills` (Claude Code), plus its CLI and a Chrome
-build, so panes can drive a headless browser. `./bin/devbox sync omp` (laptop) copies `~/.omp/agent/config.yml`
-into the devbox so panes share the laptop's OMP preset. Neither runs during bootstrap; both are idempotent.
+build, so panes can drive a headless browser. `./bin/devbox sync omp` (laptop) applies the repo's OMP preset,
+`home/.omp/agent/config.yml`, to the laptop and the devbox so both share it. Neither runs during bootstrap; both are
+idempotent.
 Claude Code itself is installed by bootstrap and needs one `/login` in a pane (`docs/toolchain.md#-claude-code`).
 
 ## What credentials live in the box

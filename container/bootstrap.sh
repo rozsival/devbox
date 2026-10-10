@@ -516,7 +516,7 @@ chmod 500 "${git_config_dir}"
 # -- 14. OMP config -----------------------------------------------------------
 # Seeded once - `secrets.enabled` plus the bash approval guardrail (see the
 # template's comments and docs/security.md). OMP owns the file afterwards and
-# `devbox sync omp` may replace it with the laptop's, so an existing file is never
+# `devbox sync omp` may replace it with the repo preset, so an existing file is never
 # merged into; one without the guardrail is reported instead.
 omp_config_dir="${HOME_DIR}/.omp/agent"
 mkdir -p "${omp_config_dir}"
@@ -525,7 +525,7 @@ if [[ ! -f "${omp_config_dir}/config.yml" ]]; then
   install -m 644 "${TEMPLATE_DIR}/.omp/agent/config.yml" "${omp_config_dir}/config.yml"
 elif ! grep -qE '^bash:' "${omp_config_dir}/config.yml"; then
   # shellcheck disable=SC2088 # a literal ~ in the message, not a path
-  register_action "~/.omp/agent/config.yml has no bash: block - copy the guardrail patterns from home/.omp/agent/config.yml into it (on the laptop too, if 'devbox sync omp' brought it here)"
+  register_action "~/.omp/agent/config.yml has no bash: block - copy the guardrail patterns from home/.omp/agent/config.yml into it (and into the file 'devbox sync omp --allow-unguarded' copied, if that brought it here)"
 fi
 
 # -- 15. moshi-hook -----------------------------------------------------------
