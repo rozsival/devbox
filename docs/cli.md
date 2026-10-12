@@ -47,11 +47,11 @@ it), **laptop** commands only on macOS, and `install`, `doctor` and `completions
 wrong side exits with a one-line message naming the right one. Log prefixes `[INFO]`, `[OK]`, `[WARN]`, `[ERROR]` are
 the same on both.
 
-| Group       | Commands                                                                                                           | Side guard                                        |
-| ----------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| Workstation | `env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`, `logs`, `hook`, `keys`, `docker setup` | Linux host that runs the container, not inside it |
-| Laptop      | `deploy`, `sync omp`, `sync claude`, `sync identities`, `agent install`                                            | macOS only                                        |
-| Both        | `install`, `doctor`, `completions`                                                                                 | Either side                                       |
+| Group       | Commands                                                                                                                     | Side guard                                        |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Workstation | `env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`, `logs`, `hook`, `update`, `keys`, `docker setup` | Linux host that runs the container, not inside it |
+| Laptop      | `deploy`, `sync omp`, `sync claude`, `sync identities`, `agent install`                                                      | macOS only                                        |
+| Both        | `install`, `doctor`, `completions`                                                                                           | Either side                                       |
 
 `./bin/devbox --help` lists them, `./bin/devbox <command> --help` shows one command's flags, and `--version`/`-v` prints
 the version. `docker`, `sync` and `agent` are only groups: bare, they print their subcommands.
@@ -91,6 +91,7 @@ compose up` that changes nothing leaves the container running, so a no-op `up` n
 | `sessions`               | List the SSH sessions connected to the container: established sshd connections plus the last 10 `Accepted`/`Disconnected` lines, tracing a disconnect after the fact |
 | `logs [--follow\|-f]`    | Show the container logs (last 100 lines): `--tail 100` by default; `--follow`/`-f` follows                                                                           |
 | `hook [--update\|-u]`    | Restart the moshi-hook daemon in place, without touching SSH sessions — see [`devbox hook`](#devbox-hook)                                                            |
+| `update`                 | Update OMP, Claude Code and moshi-hook in the container, then restart the moshi-hook daemon — see [`devbox update`](#devbox-update)                                  |
 | `keys`                   | Print the installed identity public keys and the sshd host-key fingerprint — see [`devbox keys`](#devbox-keys)                                                       |
 | `docker setup [--check]` | Provision the rootless project Docker daemon (needs sudo) — see [`devbox docker setup`](#devbox-docker-setup)                                                        |
 
@@ -126,6 +127,14 @@ daemon is a child of the entrypoint; alternative is recreating the container, ki
 `moshi-hook pair` or a crash. `--update`/`-u` first runs `moshi-hook update` and `moshi-hook install --target
 omp,claude`; a failed update aborts before the running daemon is stopped. See
 [Toolchain](toolchain.md#-moshi-and-moshi-hook).
+
+### `devbox update`
+
+One command for the three self-updating tools on the bind mount, pane-safe like `hook`: `omp update`, `claude update`
+(both through the launchers' `update` passthrough, [Git Identities](git.md#updates-omp-update-claude-update)), then
+`hook --update`'s steps — `moshi-hook update`, `moshi-hook install --target omp,claude`, the daemon restart. A failed
+updater is reported and the others still run; the exit status counts the failures. A failed `moshi-hook update` skips
+the restart, leaving the old daemon serving. Running agent sessions keep their old binary until restarted.
 
 ### `devbox keys`
 

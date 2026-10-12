@@ -36,6 +36,7 @@ devbox_usage() {
   printf "  %s   List the SSH sessions connected to the container\n" "sessions       "
   printf "  %s   Show the container logs (last 100 lines)\n" "logs           "
   printf "  %s   Restart the moshi-hook daemon in place, without touching SSH sessions\n" "hook           "
+  printf "  %s   Update OMP, Claude Code and moshi-hook in the container, then restart the moshi-hook daemon\n" "update         "
   printf "  %s   Print the installed identity public keys and the sshd host-key fingerprint\n" "keys           "
   printf "  %s   The rootless project Docker daemon\n" "docker         "
   printf "  %s   Provision the rootless project Docker daemon (needs sudo)\n" "docker setup   "
@@ -274,6 +275,25 @@ devbox_hook_usage() {
     printf "  %s\n" "--update, -u"
     printf "    Upgrade moshi-hook and rewrite its OMP extension and Claude hooks first\n"
     echo
+
+    printf "  %s\n" "--help, -h"
+    printf "    Show this help\n"
+    echo
+
+  fi
+}
+
+devbox_update_usage() {
+  printf "devbox update - Update OMP, Claude Code and moshi-hook in the container, then restart the moshi-hook daemon\n\n"
+
+  printf "%s\n" "Usage:"
+  printf "  devbox update\n"
+  printf "  devbox update --help | -h\n"
+  echo
+
+  if [[ -n "$long_usage" ]]; then
+
+    printf "%s\n" "Options:"
 
     printf "  %s\n" "--help, -h"
     printf "    Show this help\n"
@@ -2754,6 +2774,62 @@ file_mode() {
   perl -e 'printf "%o\n", (stat $ARGV[0])[2] & 07777' "$1"
 }
 
+require_moshi_hook() {
+  compose exec -T "${SERVICE}" bash -lc 'command -v moshi-hook >/dev/null 2>&1' ||
+    log_error "moshi-hook is not installed - run './bin/devbox bootstrap'."
+}
+
+# Runs before the old daemon is touched, so a caller that stops on failure
+# leaves that daemon still serving instead of restarting into nothing. The OMP
+# extension and the Claude Code hooks are regenerated for the same reason
+# bootstrap §15 does it: the binary writes them, and stale ones are the
+# daemon's "agent hooks missing or stale" warning.
+moshi_hook_update() {
+  log_info 'Updating moshi-hook...'
+  compose exec -T "${SERVICE}" bash -lc 'moshi-hook update' || return 1
+  compose exec -T "${SERVICE}" bash -lc 'moshi-hook install --target omp,claude >/dev/null' ||
+    log_warn 'moshi-hook install --target omp,claude failed; agent events may be stale.'
+}
+
+# A detached `exec`, never a container recreate: the daemon has to be
+# restartable after `moshi-hook pair` without taking live SSH sessions down
+# with it.
+#
+# The pattern matches the *serve invocation*, not the command name. Two
+# reasons: the binary ships a `moshi` alias symlink, and the daemon found
+# running here was `moshi serve`, which `pgrep -x moshi-hook` cannot see -
+# so `hook` killed nothing and then failed on the lock that daemon held.
+# Matching comm `moshi` instead would be worse: it would also kill a user's
+# `moshi-hook pair`, `moshi <dir>` or `moshi diff` running in a pane, and
+# make `doctor` count one as the daemon.
+#
+# The wait is load-bearing. `pkill` returns as soon as the signal is queued,
+# while the lock and the gateway socket on 127.0.0.1:24543 are released only
+# once the old process actually exits - and `serve` refuses to start against
+# either, so starting too early produces a silent no-daemon.
+moshi_hook_restart() {
+  # shellcheck disable=SC2016 # the script body must expand inside the container
+  compose exec -T "${SERVICE}" bash -c '
+    pattern="(^|/)(moshi|moshi-hook) serve( |$)"
+    pkill -f "${pattern}" >/dev/null 2>&1 || exit 0
+    for _ in $(seq 50); do
+      pgrep -f "${pattern}" >/dev/null 2>&1 || exit 0
+      sleep 0.1
+    done
+    exit 1
+  ' || log_error 'The running moshi-hook did not exit; refusing to start a second one.'
+
+  compose exec -d "${SERVICE}" bash -lc 'exec moshi-hook serve'
+  sleep 1
+  if ! compose exec -T "${SERVICE}" pgrep -f '(^|/)(moshi|moshi-hook) serve( |$)' >/dev/null 2>&1; then
+    compose exec -T "${SERVICE}" bash -lc \
+      'tail -5 ~/.local/state/moshi/serve.err ~/.local/state/moshi/hook.log' 2>/dev/null || true
+    log_error 'moshi-hook did not stay up - see the output above.'
+  fi
+  compose exec -T "${SERVICE}" bash -lc 'moshi-hook status' || true
+  log_success 'moshi-hook daemon restarted.'
+}
+
 # The devbox's SSH host for `sync`: the argument, then DEVBOX_SSH_HOST (env or
 # .push.env), then `devbox`. This is the container's sshd (port 2223), not the
 # workstation's, so whatever is copied lands in /home/dev on the bind mount.
@@ -2904,57 +2980,48 @@ devbox_logs_command() {
 devbox_hook_command() {
 
   require_env_file
-  if ! compose exec -T "${SERVICE}" bash -lc 'command -v moshi-hook >/dev/null 2>&1'; then
-    log_error "moshi-hook is not installed - run './bin/devbox bootstrap'."
-  fi
-  # The update runs before the old daemon is touched, so a failed one aborts
-  # with that daemon still serving instead of restarting into nothing. The OMP
-  # extension and the Claude Code hooks are regenerated for the same reason
-  # bootstrap §15 does it: the binary writes them, and stale ones are the
-  # daemon's "agent hooks missing or stale" warning.
+  require_moshi_hook
   if [[ -n "${args[--update]:-}" ]]; then
-    log_info 'Updating moshi-hook...'
-    compose exec -T "${SERVICE}" bash -lc 'moshi-hook update' ||
+    moshi_hook_update ||
       log_error 'moshi-hook update failed; the running daemon was left untouched.'
-    compose exec -T "${SERVICE}" bash -lc 'moshi-hook install --target omp,claude >/dev/null' ||
-      log_warn 'moshi-hook install --target omp,claude failed; agent events may be stale.'
   fi
-  # A detached `exec`, never a container recreate: the daemon has to be
-  # restartable after `moshi-hook pair` without taking live SSH sessions down
-  # with it.
-  #
-  # The pattern matches the *serve invocation*, not the command name. Two
-  # reasons: the binary ships a `moshi` alias symlink, and the daemon found
-  # running here was `moshi serve`, which `pgrep -x moshi-hook` cannot see -
-  # so `hook` killed nothing and then failed on the lock that daemon held.
-  # Matching comm `moshi` instead would be worse: it would also kill a user's
-  # `moshi-hook pair`, `moshi <dir>` or `moshi diff` running in a pane, and
-  # make `doctor` count one as the daemon.
-  #
-  # The wait is load-bearing. `pkill` returns as soon as the signal is queued,
-  # while the lock and the gateway socket on 127.0.0.1:24543 are released only
-  # once the old process actually exits - and `serve` refuses to start against
-  # either, so starting too early produces a silent no-daemon.
-  # shellcheck disable=SC2016 # the script body must expand inside the container
-  compose exec -T "${SERVICE}" bash -c '
-    pattern="(^|/)(moshi|moshi-hook) serve( |$)"
-    pkill -f "${pattern}" >/dev/null 2>&1 || exit 0
-    for _ in $(seq 50); do
-      pgrep -f "${pattern}" >/dev/null 2>&1 || exit 0
-      sleep 0.1
-    done
-    exit 1
-  ' || log_error 'The running moshi-hook did not exit; refusing to start a second one.'
+  moshi_hook_restart
 
-  compose exec -d "${SERVICE}" bash -lc 'exec moshi-hook serve'
-  sleep 1
-  if ! compose exec -T "${SERVICE}" pgrep -f '(^|/)(moshi|moshi-hook) serve( |$)' >/dev/null 2>&1; then
-    compose exec -T "${SERVICE}" bash -lc \
-      'tail -5 ~/.local/state/moshi/serve.err ~/.local/state/moshi/hook.log' 2>/dev/null || true
-    log_error 'moshi-hook did not stay up - see the output above.'
+}
+
+devbox_update_command() {
+
+  require_env_file
+  require_moshi_hook
+  # One failed updater must not cost the others their run, so each failure is
+  # counted and the exit status comes last. `omp` and `claude` resolve to the
+  # launchers in a login shell; both pass `update` through to the real install
+  # (docs/git.md). OMP goes before moshi-hook because moshi-hook rewrites the OMP
+  # extension it installs, and moshi-hook goes last because the daemon restart is
+  # the one step that aborts.
+  failures=0
+
+  log_info 'Updating OMP...'
+  if ! compose exec -T "${SERVICE}" bash -lc 'omp update'; then
+    log_warn 'omp update failed.'
+    failures=$((failures + 1))
   fi
-  compose exec -T "${SERVICE}" bash -lc 'moshi-hook status' || true
-  log_success 'moshi-hook daemon restarted.'
+
+  log_info 'Updating Claude Code...'
+  if ! compose exec -T "${SERVICE}" bash -lc 'claude update'; then
+    log_warn 'claude update failed.'
+    failures=$((failures + 1))
+  fi
+
+  if moshi_hook_update; then
+    moshi_hook_restart
+  else
+    log_warn 'moshi-hook update failed; the running daemon was left untouched.'
+    failures=$((failures + 1))
+  fi
+
+  ((failures == 0)) || log_error "${failures} update(s) failed."
+  log_success 'OMP, Claude Code and moshi-hook are up to date.'
 
 }
 
@@ -3581,6 +3648,13 @@ parse_requirements() {
     action="hook"
     shift
     devbox_hook_parse_requirements "$@"
+    shift $#
+    ;;
+
+  update)
+    action="update"
+    shift
+    devbox_update_parse_requirements "$@"
     shift $#
     ;;
 
@@ -4279,6 +4353,66 @@ devbox_hook_parse_requirements() {
       args['--update']=1
       shift
       ;;
+
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        printf "invalid argument: %s\n" "$key" >&2
+        exit 1
+
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      printf "invalid argument: %s\n" "$key" >&2
+      exit 1
+
+      ;;
+
+    esac
+  done
+
+  filter_error=$(filter_host)
+  if [[ -n $filter_error ]]; then
+    echo "$filter_error" >&2
+    exit 1
+  fi
+
+}
+
+devbox_update_parse_requirements() {
+  local key
+
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case "$key" in
+    --help | -h)
+      long_usage=yes
+      devbox_update_usage
+      exit
+      ;;
+
+    *)
+      break
+      ;;
+
+    esac
+  done
+
+  action="update"
+
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case "$key" in
 
     --)
       shift
@@ -5590,6 +5724,11 @@ devbox_completion() {
       devbox_hook_completion "$completion_current" "$@"
       return
       ;;
+    update)
+      shift
+      devbox_update_completion "$completion_current" "$@"
+      return
+      ;;
     keys)
       shift
       devbox_keys_completion "$completion_current" "$@"
@@ -5643,7 +5782,7 @@ devbox_completion() {
       ;;
     esac
   done
-  completion_candidates "$completion_current" env up down rebuild bootstrap skills shell sessions logs hook keys docker deploy sync agent install doctor completions
+  completion_candidates "$completion_current" env up down rebuild bootstrap skills shell sessions logs hook update keys docker deploy sync agent install doctor completions
 
   if [[ $completion_current == -* ]]; then
     completion_flag_candidates --help "$completion_current" --help -h
@@ -5898,6 +6037,28 @@ devbox_hook_completion() {
   if [[ $completion_current == -* ]]; then
     completion_flag_candidates --help "$completion_current" --help -h
     completion_flag_candidates --update "$completion_current" --update -u
+  fi
+
+}
+
+devbox_update_completion() {
+  local completion_current="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      return
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
   fi
 
 }
@@ -6390,6 +6551,7 @@ run() {
   "sessions") devbox_sessions_command ;;
   "logs") devbox_logs_command ;;
   "hook") devbox_hook_command ;;
+  "update") devbox_update_command ;;
   "keys") devbox_keys_command ;;
   "docker") devbox_docker_command ;;
   "docker setup") devbox_docker_setup_command ;;

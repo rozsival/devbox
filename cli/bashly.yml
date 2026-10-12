@@ -72,6 +72,11 @@ commands:
         short: -u
         help: Upgrade moshi-hook and rewrite its OMP extension and Claude hooks first
 
+  - name: update
+    group: Workstation
+    help: Update OMP, Claude Code and moshi-hook in the container, then restart the moshi-hook daemon
+    filters: [host]
+
   - name: keys
     group: Workstation
     help: Print the installed identity public keys and the sshd host-key fingerprint

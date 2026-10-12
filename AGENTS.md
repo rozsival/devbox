@@ -209,7 +209,7 @@ the host's root Docker daemon.
   bodies, `cli/lib/` the shared functions, `cli/initialize.sh` the shared constants; `bin/devbox` is the
   generated, committed result. Commands by group:
   - **Workstation** (Linux host outside a container only): `env`, `up`, `down`, `rebuild`, `bootstrap`,
-    `skills`, `shell`, `sessions`, `logs`, `hook`, `keys`, `docker setup`
+    `skills`, `shell`, `sessions`, `logs`, `hook`, `update`, `keys`, `docker setup`
   - **Laptop** (macOS only): `deploy`, `sync omp`, `sync claude`, `sync identities`, `agent install`
   - **Both**: `install`, `doctor` (`host` or `laptop`, defaulting to the side the machine is), `completions
     [bash|zsh]` (the `[host]` of `deploy`/`sync` completes from `~/.ssh/config`)
@@ -224,7 +224,9 @@ the host's root Docker daemon.
   - `up`/`down`/`rebuild` refuse to drop live SSH sessions without `--force`; `hook` restarts the `moshi-hook`
     daemon with a detached `exec` precisely so it does not have to (`--update` runs `moshi-hook update` and
     rewrites the OMP extension and Claude hooks first, aborting before the old daemon is stopped if the update
-    fails); `keys` prints every identity's installed public keys (or "not set") plus the sshd host-key
+    fails); `update` runs `omp update` and `claude update` (through the launchers' `update` passthrough), then
+    `hook --update`'s steps, each updater's failure counted rather than fatal and a failed `moshi-hook update`
+    skipping the restart; `keys` prints every identity's installed public keys (or "not set") plus the sshd host-key
     fingerprint - nothing to paste anywhere, since they are already the laptop's own keys
   - `devbox docker setup` - needs `sudo`, idempotent, `--check` reports only: installs `uidmap` and
     `slirp4netns`, creates the `dev:devbox` host user with pinned uid/gid 1001 and denies it in the host's sshd

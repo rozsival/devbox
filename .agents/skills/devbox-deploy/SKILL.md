@@ -61,9 +61,10 @@ devbox works without it. `rebuild` = `docker compose build --no-cache && docker 
 A recreate kills every live SSH session instantly, no client-side reason - looks like `ssh devbox` closed
 itself. `up`/`down`/`rebuild` count sessions first: connected ones prompt on a terminal, refuse in a
 script - `--force` overrides, needing say-so. `./bin/devbox sessions` also shows sshd's recent
-`Accepted`/`Disconnected` lines. Only `bootstrap`, `skills`, `hook` are pane-safe: all `docker compose exec`
+`Accepted`/`Disconnected` lines. Only `bootstrap`, `skills`, `hook`, `update` are pane-safe: all `docker compose exec`
 into the container. `hook` restarts `moshi-hook` (after `moshi-hook pair`, or crashing) without
-costing anyone their session; `hook --update` upgrades it first, for a new release.
+costing anyone their session; `hook --update` upgrades it first, for a new release; `update` upgrades OMP and Claude
+Code too, then does the same.
 
 `container/` and `home/` are bind-mounted `:ro` _and_ `COPY`d into the image (`COPY container/` / `COPY
 home/` in the `Dockerfile`, as fallback): the mount makes new bytes visible immediately; editing also

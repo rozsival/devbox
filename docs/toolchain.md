@@ -72,6 +72,9 @@ omp --version
 omp update          # updates ~/.local/bin/omp in place; no image rebuild
 ```
 
+From the workstation, `./bin/devbox update` runs `omp update`, `claude update` and `hook --update` in one go
+([CLI](cli.md#devbox-update)).
+
 `omp` on the `PATH` is the agent launcher, not the binary; `omp update` passes through to the real install it shadows,
 which is why the launcher survives an update. See [Git Identities](git.md#updates-omp-update-claude-update).
 
@@ -216,7 +219,8 @@ No systemd means `moshi-hook service install` can't be used — `container/entry
 lifetime to the container's. Restart a crashed/hand-killed one with `./bin/devbox hook` (a detached
 `docker compose exec`: no recreate, no dropped SSH sessions); `./bin/devbox up` alone won't revive it unless compose
 recreates the container. A new release is `./bin/devbox hook --update`: `moshi-hook update`, the OMP extension and the
-Claude hooks rewritten, then the same restart — `update` alone leaves the old version serving.
+Claude hooks rewritten, then the same restart — `update` alone leaves the old version serving. `./bin/devbox update` does
+the same after updating OMP and Claude Code.
 
 A second daemon is harmless: `serve` exits with `another moshi-hook serve is already running (pid N, lock …)`, and a
 killed daemon's lock never blocks the next start, even across PID reuse.
