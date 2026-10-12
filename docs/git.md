@@ -97,19 +97,20 @@ a bad edit costs configuration, never SSH access.
 
 `devbox-identities` inspects the resolved registry and prints exactly what `bootstrap` installs:
 
-| Command                                           | Purpose                                                                                  |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `devbox-identities list`                          | Inspect the resolved registry                                                            |
-| `devbox-identities for <dir>`                     | Inspect the resolved registry — who owns a directory                                     |
-| `devbox-identities get <slug> <field>`            | Inspect the resolved registry — one field                                                |
-| `devbox-identities show <slug>`                   | Inspect the resolved registry — every resolved field for an identity                     |
-| `devbox-identities org-urls <slug>`               | Inspect the resolved registry — the three `hasconfig:` patterns for an identity's `orgs` |
-| `devbox-identities alias-remotes`                 | Inspect the resolved registry — old clones left on a `git@<slug>.<host>:` remote         |
-| `devbox-identities render ssh-config`             | Print exactly what `bootstrap` installs                                                  |
-| `devbox-identities render agent-gitconfig [slug]` | Print exactly what `bootstrap` installs                                                  |
-| `devbox-identities render user-gitconfig <slug>`  | Print exactly what `bootstrap` installs                                                  |
-| `devbox-identities render org-gitconfig <slug>`   | Print exactly what `bootstrap` installs                                                  |
-| `devbox-identities render allowed-signers`        | Print exactly what `bootstrap` installs                                                  |
+| Command                                           | Purpose                                                                                      |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `devbox-identities list`                          | Inspect the resolved registry                                                                |
+| `devbox-identities for <dir>`                     | Inspect the resolved registry — who owns a directory                                         |
+| `devbox-identities get <slug> <field>`            | Inspect the resolved registry — one field                                                    |
+| `devbox-identities show <slug>`                   | Inspect the resolved registry — every resolved field for an identity                         |
+| `devbox-identities org-urls <slug>`               | Inspect the resolved registry — the three `hasconfig:` patterns for an identity's `orgs`     |
+| `devbox-identities alias-remotes`                 | Inspect the resolved registry — old clones left on a `git@<slug>.<host>:` remote             |
+| `devbox-identities local-user-overrides`          | Inspect the resolved registry — clones whose own `.git/config` sets `user.name`/`user.email` |
+| `devbox-identities render ssh-config`             | Print exactly what `bootstrap` installs                                                      |
+| `devbox-identities render agent-gitconfig [slug]` | Print exactly what `bootstrap` installs                                                      |
+| `devbox-identities render user-gitconfig <slug>`  | Print exactly what `bootstrap` installs                                                      |
+| `devbox-identities render org-gitconfig <slug>`   | Print exactly what `bootstrap` installs                                                      |
+| `devbox-identities render allowed-signers`        | Print exactly what `bootstrap` installs                                                      |
 
 ---
 

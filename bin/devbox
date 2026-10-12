@@ -2083,26 +2083,26 @@ doctor_laptop() {
   # read once here and every later section gates its own identity-derived part
   # on ${identities_ok} rather than failing outright.
   log_info 'identity registry'
+  # The installed copy is ${identities_lib}; the doctor sources the checkout's,
+  # so it always runs the di_* functions it was written against - an older
+  # install would end it at the first function it lacks. An installed copy that
+  # is missing or differs is reported with the other templates below.
   identities_lib="${LIBEXEC_DIR}/devbox-identities"
   identities_file="${CONFIG_DIR}/identities.conf"
   identities_ok=0
   slugs=''
   default_slug=''
-  if [[ ! -r ${identities_lib} ]]; then
-    fail "${identities_lib} missing - run ./bin/devbox agent install"
+  # Sourced, not shelled out to, so every section below can call di_* directly
+  # and render a fresh agent gitconfig to compare against what is installed.
+  # shellcheck source=../home/.local/libexec/devbox-identities
+  . "${TEMPLATE_DIR}/.local/libexec/devbox-identities"
+  if ! di_check; then
+    fail "${identities_file} is not usable - the identity-derived checks below are skipped"
   else
-    # Sourced, not shelled out to, so every section below can call di_* directly
-    # and render a fresh agent gitconfig to compare against what is installed.
-    # shellcheck source=../home/.local/libexec/devbox-identities
-    . "${identities_lib}"
-    if ! di_check; then
-      fail "${identities_file} is not usable - the identity-derived checks below are skipped"
-    else
-      identities_ok=1
-      slugs="$(di_slugs)"
-      default_slug="$(di_default)"
-      log_success "${identities_file} valid: $(tr '\n' ' ' <<<"${slugs}") (default: ${default_slug})"
-    fi
+    identities_ok=1
+    slugs="$(di_slugs)"
+    default_slug="$(di_default)"
+    log_success "${identities_file} valid: $(tr '\n' ' ' <<<"${slugs}") (default: ${default_slug})"
   fi
 
   # -- 1. Private keys: none on disk, all in 1Password --------------------------
@@ -2284,6 +2284,10 @@ doctor_laptop() {
     stale_remotes="$(di_alias_remotes)"
     if [[ -n ${stale_remotes} ]]; then
       fail "clones still on an SSH alias (nothing resolves those now): $(awk '{printf "%sgit -C %s remote set-url %s %s", sep, $1, $2, $3; sep = "; "}' <<<"${stale_remotes}")"
+    fi
+    user_overrides="$(di_local_user_overrides)"
+    if [[ -n ${user_overrides} ]]; then
+      fail "clones setting their own user.name/email (outranks the agent author, so agent commits show as you): $(awk '{printf "%sgit -C %s config --local --remove-section user", sep, $0; sep = "; "}' <<<"${user_overrides}")"
     fi
     signing_keys_on_disk=0
     for slug in ${slugs}; do

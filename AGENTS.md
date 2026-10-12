@@ -297,7 +297,7 @@ the host's root Docker daemon.
     point `Host <workstation>` at it until `ssh <workstation> true` passes, only then remove `devbox.pub`, so the
     account is never locked out), `~/.gitconfig`'s org includes probed with a `hasconfig:`
     remote per pattern (email, signing key, `core.sshCommand`), no
-    clone left on a stale SSH-alias remote, the registry itself (`devbox-identities check`), every gitconfig
+    clone left on a stale SSH-alias remote or setting its own `user.name`/`user.email` (which outranks the agent author), the registry itself (`devbox-identities check`), every gitconfig
     signing via `op-ssh-sign` with the right `signing_*.pub` (the base `[user]` name/email being the default
     identity's), the agent override installed - the static files
     byte-identical to `home/`'s templates, the agent gitconfigs byte-identical to a fresh

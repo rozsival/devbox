@@ -25,6 +25,7 @@
 #   devbox-identities render org-gitconfig <slug>
 #   devbox-identities org-urls <slug>           # URL patterns its orgs match
 #   devbox-identities alias-remotes             # clones still on an old SSH alias
+#   devbox-identities local-user-overrides      # clones setting their own user.name/email
 #   devbox-identities render allowed-signers
 #
 # Deliberately bash 3.2 compatible (no associative arrays, no `${x^^}`): this file
@@ -569,6 +570,25 @@ di_alias_remotes() {
   done
 }
 
+# Clones whose own .git/config sets user.name or user.email. Repository config
+# outranks GIT_CONFIG_GLOBAL, so such a clone gives agent commits your name or
+# email in place of the bot author - GitHub attributes a commit by email, so the
+# commit is shown as yours whatever token pushed it. The includes in
+# ~/.gitconfig already give your own commits the identity of the tree and owner.
+# Prints one repository per line, up to two levels under an identity's tree.
+di_local_user_overrides() {
+  local slug dir gitdir repo
+  for slug in $(di_dir_slugs); do
+    dir="$(di_get "${slug}" dir)"
+    for gitdir in "${dir}"/*/.git "${dir}"/*/*/.git; do
+      [[ -e ${gitdir} ]] || continue
+      repo="${gitdir%/.git}"
+      git -C "${repo}" config --local --get-regexp '^user\.(name|email)$' >/dev/null 2>&1 || continue
+      printf '%s\n' "${repo}"
+    done
+  done
+}
+
 # So `git log --show-signature` verifies your own commits locally. Agent commits
 # are unsigned by design.
 di_render_allowed_signers() {
@@ -620,6 +640,7 @@ if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
     di_org_urls "$2"
     ;;
   alias-remotes) di_alias_remotes ;;
-  *) di_die 'usage: devbox-identities list|dir-slugs|default|get|show|for|check|file|org-urls|alias-remotes|render ...' ;;
+  local-user-overrides) di_local_user_overrides ;;
+  *) di_die 'usage: devbox-identities list|dir-slugs|default|get|show|for|check|file|org-urls|alias-remotes|local-user-overrides|render ...' ;;
   esac
 fi

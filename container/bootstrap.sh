@@ -293,6 +293,11 @@ if ${identities_ok}; then
   stale_remotes="$(di_alias_remotes | awk '{printf "%sgit -C %s remote set-url %s %s", sep, $1, $2, $3; sep = "; "}')"
   [[ -z ${stale_remotes} ]] ||
     register_action "Point clones still on an SSH alias at the plain host (aliases are gone; orgs select the key): ${stale_remotes}"
+  # A clone's own user.name/email outranks the agent author (and duplicates
+  # §7's includes for your own commits). Named, not removed - it is the user's.
+  user_overrides="$(di_local_user_overrides | awk '{printf "%sgit -C %s config --local --remove-section user", sep, $0; sep = "; "}')"
+  [[ -z ${user_overrides} ]] ||
+    register_action "Drop the [user] section from clones that set their own name or email (it overrides the agent author): ${user_overrides}"
 
   # -- 8. allowed_signers -----------------------------------------------------
   # So `git log --show-signature` verifies your own commits locally; agent
