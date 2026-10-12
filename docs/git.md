@@ -373,15 +373,16 @@ bootstraps from:
 
 ### What the installer writes
 
-| Destination                               | Installed                                                                                                                                                                                             |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `~/.local/libexec/devbox-agent`           | `agent-launch`, `omp-launcher`, `claude-launcher`, the `gh` shim, `devbox-git-credential`, `devbox-git-no-ssh`                                                                                        |
-| `~/.local/bin`                            | `devbox-gh-token`                                                                                                                                                                                     |
-| `~/.local/libexec`                        | `devbox-identities`                                                                                                                                                                                   |
-| `~/.local/libexec/devbox-agent/launchers` | `omp` and `claude` symlinks to their launchers (the pre-Claude `~/.local/bin/omp` symlink is removed once `omp` resolves through the new directory — until then that link is what keeps `omp` fenced) |
-| `~/.config/devbox/git/`                   | `agent*.gitconfig`, rendered from the registry; every file is regenerated each run and the directory is locked read-only afterwards                                                                   |
-| `~/.config/devbox/identities.conf`        | Never written — the installer names the `cp` command when it is absent (the example validates, so seeding it would author agent commits as `your-agent`)                                              |
-| `~/.config/devbox/secrets.env`            | Created from the example if absent and never overwritten either                                                                                                                                       |
+| Destination                                          | Installed                                                                                                                                                                                             |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `~/.local/libexec/devbox-agent`                      | `agent-launch`, `omp-launcher`, `claude-launcher`, the `gh` shim, `devbox-git-credential`, `devbox-git-no-ssh`                                                                                        |
+| `~/.local/bin`                                       | `devbox-gh-token`                                                                                                                                                                                     |
+| `~/.local/libexec`                                   | `devbox-identities`                                                                                                                                                                                   |
+| `~/.local/libexec/devbox-agent/launchers`            | `omp` and `claude` symlinks to their launchers (the pre-Claude `~/.local/bin/omp` symlink is removed once `omp` resolves through the new directory — until then that link is what keeps `omp` fenced) |
+| `~/.config/devbox/git/`                              | `agent*.gitconfig`, rendered from the registry; every file is regenerated each run and the directory is locked read-only afterwards                                                                   |
+| `~/.config/devbox/identities.conf`                   | Never written — the installer names the `cp` command when it is absent (the example validates, so seeding it would author agent commits as `your-agent`)                                              |
+| `~/.config/devbox/secrets.env`                       | Created from the example if absent and never overwritten either                                                                                                                                       |
+| `~/.omp/agent/config.yml`, `~/.claude/settings.json` | The agent guardrail presets: OMP's seeded only when absent, Claude Code's merged in with `jq` only when it holds no `permissions.deny` ([Toolchain](toolchain.md#-claude-code))                       |
 
 The installer reads or edits nothing of yours in either file. It does **not** touch `~/.ssh/config` or `~/.gitconfig` —
 on the laptop they are yours (below); `bootstrap` renders them on the devbox because nothing there is meant to be

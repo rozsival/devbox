@@ -156,6 +156,23 @@ reading them stays allowed; `env -i` prompts instead, since this repo's own smok
 > — and a project's own `bash.patterns` **replaces** the list (settings arrays never merge), so such a repository has to
 > carry the rules it wants itself.
 
+`home/.claude/settings.json` is the Claude Code counterpart: `permissions.deny` and `permissions.ask` rules, written
+`Bash(<pattern>)`, that mirror the OMP list with the same deny/prompt split (bare `op`/`gcloud` folded into `Bash(op *)`/`Bash(gcloud *)`). Seeded or merged by
+`bootstrap` and `./bin/devbox agent install` when `~/.claude/settings.json` has no `permissions.deny`, re-applied by
+`./bin/devbox sync claude`; merge, not copy, because other tools write that file ([Toolchain](toolchain.md#-claude-code)).
+Claude Code differs from OMP in four ways that matter here:
+
+- It splits compound commands (`&&`, `;`, `|`, subshells, `$(...)`) and applies `deny` and `ask` to every subcommand,
+  strips wrappers (`timeout`, `nice`, `command`, …) before matching, and matches past leading environment assignments.
+  `true && GH_CONFIG_DIR=/tmp/x true`, `command gh auth token` and `/opt/homebrew/bin/gh --version` are all denied.
+- `deny` holds even under `bypassPermissions`.
+- Permission arrays **merge** across settings scopes (user, project, local), so a repository's own
+  `.claude/settings.json` cannot drop these rules the way a project's `bash.patterns` replaces OMP's.
+- Nothing in the preset corresponds to OMP's `secrets.enabled` obfuscation.
+
+The limits are otherwise the same: rules match command text, so an interpreter one-liner or a script file walks past
+them — accepted limit 7 still applies on the laptop.
+
 ## 🚫 Deliberate boundaries
 
 | Boundary                          | Rationale                                                                                                                                                                                                                                                                                                                   |

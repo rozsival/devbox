@@ -89,6 +89,8 @@ All four land as `dev` in `/home/dev`. Details: [Connecting](connecting.md).
 | `home/.config/devbox/identities.conf.example` | Identity registry template — you copy it to `~/.config/devbox/identities.conf`; nothing seeds it            |
 | `home/.local/libexec/devbox-identities`       | The one reader of `identities.conf`: sourceable library and CLI                                             |
 | `home/.config/devbox/git/agent.gitconfig.tpl` | Template `devbox-identities` renders into the agent gitconfig                                               |
+| `home/.omp/agent/config.yml`                  | OMP preset (model roles, feature flags, `bash.patterns` guardrail), seeded by bootstrap and `sync omp`      |
+| `home/.claude/settings.json`                  | Claude Code preset (`model`, `permissions` guardrail), merged in by bootstrap and `sync claude`             |
 | `docs/`                                       | This documentation                                                                                          |
 | `.agents/skills/`                             | Agent skills: `devbox-basics`, `devbox-setup`, `devbox-laptop`, `devbox-deploy`, `devbox-cli`               |
 | `.claude/skills/`                             | Symlinks to `.agents/skills/` — the one skills directory Claude Code reads                                  |

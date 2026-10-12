@@ -147,6 +147,15 @@ starts, and `dot doctor` flags any difference between the live file and this tem
 a boundary: on the laptop an agent runs as you and can
 still reach your `gh` login or 1Password by other means - `docs/security.md`, accepted limit 7.
 
+It also merges the Claude Code counterpart, `home/.claude/settings.json` (`model` plus `permissions.deny`/`ask` rules
+mirroring the OMP guardrail, written `Bash(<pattern>)`), into `~/.claude/settings.json` when that file is missing or
+has no `permissions.deny` - a merge (`jq`, needed on the laptop), because `moshi-hook` and IDE integrations write
+`hooks`/`statusLine` there too, with one `settings.json.bak` kept when it changed an existing file. A file that already
+has `permissions.deny` is left alone; invalid JSON is listed as a manual step. `./bin/devbox sync claude` re-applies
+the preset to the laptop and the devbox on purpose. Claude Code applies deny/ask to every subcommand of a compound
+command and merges permission arrays across settings scopes, so a repository's own `.claude/settings.json` cannot drop
+these rules; it is the same guardrail, not a boundary - `docs/security.md`.
+
 A session's git config is the file `GIT_CONFIG_GLOBAL` names, so any `git config --global …` in its
 process tree rewrites the agent's own identity. The real caller here was `~/.extra` (sourced by
 `~/.bash_profile`), whose `git config --global user.name/email` lines ran in every login bash a session

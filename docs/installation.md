@@ -13,7 +13,7 @@
 | Where       | Requirement                                                                         |
 | ----------- | ----------------------------------------------------------------------------------- |
 | Workstation | Ubuntu 26.04, Docker with compose v2, Tailscale ≥ 1.98 up, `rsync`, a known UID/GID |
-| Laptop      | `rsync`, an SSH client, and a [herdr](https://herdr.dev) client                     |
+| Laptop      | `rsync`, `jq`, an SSH client, and a [herdr](https://herdr.dev) client               |
 |             | bash ≥ 4.2 (`brew install bash`) — macOS's 3.2 can't run `./bin/devbox`             |
 
 `./bin/devbox` is bashly-generated and refuses older bash; Homebrew's bash, first on the `PATH`, is the one
@@ -137,7 +137,8 @@ same on the workstation, so from then on `devbox <TAB>` works in any new shell o
 [`devbox install`](cli.md#-devbox-install).
 
 `.push.env` (gitignored) holds `DEVBOX_HOST`, the default for `deploy`'s `<workstation>` argument, and optionally
-`DEVBOX_SSH_HOST`, the `~/.ssh/config` host `sync omp` and `sync identities` use for the container (default `devbox`).
+`DEVBOX_SSH_HOST`, the `~/.ssh/config` host `sync omp`, `sync claude` and `sync identities` use for the container (default
+`devbox`).
 
 `env` creates `.env` from `.env.example`: `BIND_ADDR` from `tailscale ip -4`, `HOST_UID`/`HOST_GID` from `dev` (else
 current user). Edit `~/devbox/.env`, at minimum `DEVBOX_EXTRA_AUTHORIZED_KEYS` with `devbox.pub`.
@@ -186,6 +187,7 @@ Extras outside `bootstrap`, keeping first starts fast, offline-safe:
 ```bash
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # 3 global agent skills + agent-browser + Chrome
 ./bin/devbox sync omp                                    # repo OMP preset → laptop and devbox
+./bin/devbox sync claude                                 # repo Claude Code preset → laptop and devbox
 ssh -t devbox claude                                     # once: /login for Claude Code on the devbox
 ```
 
@@ -217,6 +219,8 @@ Agents run on the laptop too — OMP and Claude Code, same launchers, same mecha
 - `~/.config/devbox/git/agent*.gitconfig` (directory left read-only)
 - the identity registry reader (`devbox-identities`)
 - `~/.config/devbox/secrets.env` from template if missing
+- the agent presets: `~/.omp/agent/config.yml` from template if missing, and the Claude Code preset merged into
+  `~/.claude/settings.json` when that has no `permissions.deny` (needs `jq`; see [Toolchain](toolchain.md#-claude-code))
 
 `identities.conf` is never created for you — it prints the `cp` command instead, so placeholder values can never become
 your agent's author. Idempotent: regenerates generated files, keeps `secrets.env` and `identities.conf`, touches nothing

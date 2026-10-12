@@ -149,6 +149,24 @@ elif ! grep -qE '^bash:' "${omp_config}"; then
   omp_guard_missing=1
 fi
 
+# The same guardrail for Claude Code, as permission rules. Its settings.json
+# exists before this runs (moshi-hook and IDE integrations write hooks into
+# it), so "absent" means no permissions.deny: the preset is merged in then
+# (cli/lib/claude_settings.sh), and a file holding deny rules of its own is
+# left alone - `devbox sync claude` re-applies the preset deliberately.
+claude_settings="${HOME}/.claude/settings.json"
+claude_settings_state=''
+if [[ ! -e ${claude_settings} ]] || jq -e '.permissions.deny == null' "${claude_settings}" >/dev/null 2>&1; then
+  claude_settings_state="$(claude_settings_apply "${TEMPLATE_DIR}/.claude/settings.json" "${claude_settings}")" ||
+    claude_settings_state=invalid
+elif ! jq -e '.' "${claude_settings}" >/dev/null 2>&1; then
+  claude_settings_state=invalid
+fi
+case ${claude_settings_state} in
+created) log_success "Claude Code preset installed at ${claude_settings}." ;;
+updated) log_success "Claude Code preset merged into ${claude_settings} (previous copy: ${claude_settings}.bak)." ;;
+esac
+
 # -- Report ---------------------------------------------------------------------
 log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
 path_fix=${legacy_kept}
@@ -181,6 +199,9 @@ if ((path_fix)); then
 fi
 if ((omp_guard_missing)); then
   echo "  - ${omp_config} has no bash: block - copy the guardrail patterns from ${TEMPLATE_DIR}/.omp/agent/config.yml into it (an existing OMP config is never overwritten)"
+fi
+if [[ ${claude_settings_state} == invalid ]]; then
+  echo "  - ${claude_settings} is not valid JSON - fix it, then re-run ./bin/devbox agent install to merge in the Claude Code guardrail"
 fi
 if ((identities_seeded)); then
   echo "  - Create ${identities_file}: cp ${TEMPLATE_DIR}/.config/devbox/identities.conf.example ${identities_file} and fill in one [slug] block per account (name, email, the laptop's public keys, optionally a GitHub App directory), then re-run ./bin/devbox agent install"

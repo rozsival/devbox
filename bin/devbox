@@ -44,6 +44,7 @@ devbox_usage() {
   printf "  %s   Sync this repo to the workstation, optionally bringing the container up\n" "deploy         "
   printf "  %s   Copy laptop configuration into the devbox container\n" "sync           "
   printf "  %s   Apply the repo's OMP preset to this laptop and the devbox\n" "sync omp       "
+  printf "  %s   Apply the repo's Claude Code preset to this laptop and the devbox\n" "sync claude    "
   printf "  %s   Copy the laptop's identity registry into the devbox and apply it\n" "sync identities"
   printf "  %s   The agent git override on this laptop\n" "agent          "
   printf "  %s   Install the agent git override on this laptop\n" "agent install  "
@@ -411,6 +412,7 @@ devbox_sync_usage() {
 
   printf "%s\n" "Commands:"
   printf "  %s   Apply the repo's OMP preset to this laptop and the devbox\n" "omp       "
+  printf "  %s   Apply the repo's Claude Code preset to this laptop and the devbox\n" "claude    "
   printf "  %s   Copy the laptop's identity registry into the devbox and apply it\n" "identities"
   echo
 
@@ -464,6 +466,46 @@ devbox_sync_omp_usage() {
 
     printf "  %s\n" "OMP_CONFIG"
     printf "    Source file (default home/.omp/agent/config.yml in this checkout)\n"
+    echo
+
+  fi
+}
+
+devbox_sync_claude_usage() {
+  if [[ -n $long_usage ]]; then
+    printf "devbox sync claude\n\n"
+    printf "  Apply the repo's Claude Code preset to this laptop and the devbox\n  \n  Merges home/.claude/settings.json into ~/.claude/settings.json on both\n  machines, keeping one settings.json.bak on each. Merged, not copied:\n  keys the preset does not set (moshi-hook's hooks, the status line)\n  stay; the ones it sets, the permission rules whole, take its value.\n\n"
+  else
+    printf "devbox sync claude - Apply the repo's Claude Code preset to this laptop and the devbox\n\n"
+  fi
+
+  printf "%s\n" "Usage:"
+  printf "  devbox sync claude [HOST]\n"
+  printf "  devbox sync claude --help | -h\n"
+  echo
+
+  if [[ -n "$long_usage" ]]; then
+
+    printf "%s\n" "Options:"
+
+    printf "  %s\n" "--help, -h"
+    printf "    Show this help\n"
+    echo
+
+    printf "%s\n" "Arguments:"
+
+    printf "  %s\n" "HOST"
+    printf "    Devbox SSH host (default DEVBOX_SSH_HOST, from the environment or .push.env,\n    then 'devbox')\n"
+    echo
+
+    printf "%s\n" "Environment Variables:"
+
+    printf "  %s\n" "DEVBOX_SSH_HOST"
+    printf "    Default devbox SSH host; may also be set in .push.env\n"
+    echo
+
+    printf "  %s\n" "CLAUDE_SETTINGS"
+    printf "    Source file (default home/.claude/settings.json in this checkout)\n"
     echo
 
   fi
@@ -535,7 +577,7 @@ devbox_agent_usage() {
 devbox_agent_install_usage() {
   if [[ -n $long_usage ]]; then
     printf "devbox agent install\n\n"
-    printf "  Install the agent git override on this laptop\n  \n  From home/: the omp and claude launchers, the gh shim, the credential\n  helper, the SSH fence and the read-only rendered agent gitconfigs.\n  Idempotent; prints the manual steps that remain.\n\n"
+    printf "  Install the agent git override on this laptop\n  \n  From home/: the omp and claude launchers, the gh shim, the credential\n  helper, the SSH fence and the read-only rendered agent gitconfigs; the\n  OMP and Claude Code presets where no guardrail exists yet.\n  Idempotent; prints the manual steps that remain.\n\n"
   else
     printf "devbox agent install - Install the agent git override on this laptop\n\n"
   fi
@@ -675,6 +717,51 @@ normalize_input() {
 
     shift
   done
+}
+
+# The Claude Code preset, home/.claude/settings.json, is merged into a live
+# ~/.claude/settings.json, never copied over it the way `sync omp` copies
+# config.yml: that file has other writers - moshi-hook and IDE integrations add
+# `hooks` and `statusLine`, Claude itself `/model` and `/permissions` - and a
+# copy would drop them. jq's `*` keeps every key the preset does not set and
+# takes the preset's value for every key it does; arrays (the permission rules)
+# are replaced whole, so a rule removed from the preset disappears too.
+
+# $1 preset, $2 live file (absent counts as {}), $3 output file.
+claude_settings_merge() {
+  local preset="$1" live="$2" out="$3"
+  if [[ -f ${live} ]]; then
+    jq -s '.[0] * .[1]' "${live}" "${preset}" >"${out}"
+  else
+    jq '.' "${preset}" >"${out}"
+  fi
+}
+
+# Applies the preset to a file on this machine. Prints `unchanged` when the live
+# file already holds every preset value, else `updated` (previous copy kept as
+# <file>.bak) or `created`; fails without touching the file when either side is
+# not valid JSON.
+# $1 preset, $2 live file.
+claude_settings_apply() {
+  local preset="$1" live="$2" merged
+  install -d -m 755 "${live%/*}"
+  merged="$(mktemp "${live}.XXXXXX")"
+  if ! claude_settings_merge "${preset}" "${live}" "${merged}"; then
+    rm -f "${merged}"
+    return 1
+  fi
+  chmod 644 "${merged}"
+  if [[ ! -f ${live} ]]; then
+    mv -f "${merged}" "${live}"
+    echo created
+  elif jq -en --slurpfile a "${live}" --slurpfile b "${merged}" '$a == $b' >/dev/null; then
+    rm -f "${merged}"
+    echo unchanged
+  else
+    cp -p "${live}" "${live}.bak"
+    mv -f "${merged}" "${live}"
+    echo updated
+  fi
 }
 
 # Completion candidates for the [host] arguments of deploy and sync: every
@@ -3046,6 +3133,46 @@ devbox_sync_omp_command() {
 
 }
 
+devbox_sync_claude_command() {
+
+  src="${CLAUDE_SETTINGS:-${TEMPLATE_DIR}/.claude/settings.json}"
+  [[ -f "${src}" ]] || log_error "No Claude Code preset at ${src}"
+  jq -e 'type == "object"' "${src}" >/dev/null 2>&1 || log_error "${src} is not a JSON object"
+
+  # The laptop first, so a failed devbox copy still leaves this machine current.
+  # Merged, not copied (cli/lib/claude_settings.sh): the hooks moshi-hook and the
+  # IDE integrations wrote stay.
+  live="${HOME}/.claude/settings.json"
+  case "$(claude_settings_apply "${src}" "${live}")" in
+  created) log_success "Claude Code preset installed at ${live}." ;;
+  unchanged) log_info "${live} already holds the preset." ;;
+  updated) log_success "Claude Code preset merged into ${live} (previous copy: ${live}.bak)." ;;
+  *) log_error "${live} is not valid JSON - fix it, then re-run." ;;
+  esac
+
+  # The devbox's file is merged here too, so the container needs nothing but
+  # ssh: fetch it, merge, and let sync_to_devbox keep the .bak and copy it back.
+  host="$(devbox_ssh_host)"
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "${tmp}"' EXIT
+  log_info "Fetching ~/.claude/settings.json from ${host}..."
+  ssh "${host}" 'if [ -f ~/.claude/settings.json ]; then cat ~/.claude/settings.json; fi' >"${tmp}/remote.json" ||
+    log_error "Could not read ~/.claude/settings.json on ${host}"
+  [[ -s "${tmp}/remote.json" ]] || rm -f "${tmp}/remote.json"
+  claude_settings_merge "${src}" "${tmp}/remote.json" "${tmp}/settings.json" ||
+    log_error "${host}:~/.claude/settings.json is not valid JSON - fix it there, then re-run."
+  if [[ -f "${tmp}/remote.json" ]] &&
+    jq -en --slurpfile a "${tmp}/remote.json" --slurpfile b "${tmp}/settings.json" '$a == $b' >/dev/null; then
+    log_info "${host}:~/.claude/settings.json already holds the preset."
+  else
+    chmod 644 "${tmp}/settings.json"
+    sync_to_devbox "${host}" "${tmp}/settings.json" .claude/settings.json
+    log_success "Claude Code preset merged into ${host}:~/.claude/settings.json."
+  fi
+  log_info 'Restart any running Claude Code session on either machine to pick it up.'
+
+}
+
 devbox_sync_identities_command() {
 
   src="${DEVBOX_IDENTITIES:-${HOME}/.config/devbox/identities.conf}"
@@ -3225,6 +3352,24 @@ devbox_agent_install_command() {
     omp_guard_missing=1
   fi
 
+  # The same guardrail for Claude Code, as permission rules. Its settings.json
+  # exists before this runs (moshi-hook and IDE integrations write hooks into
+  # it), so "absent" means no permissions.deny: the preset is merged in then
+  # (cli/lib/claude_settings.sh), and a file holding deny rules of its own is
+  # left alone - `devbox sync claude` re-applies the preset deliberately.
+  claude_settings="${HOME}/.claude/settings.json"
+  claude_settings_state=''
+  if [[ ! -e ${claude_settings} ]] || jq -e '.permissions.deny == null' "${claude_settings}" >/dev/null 2>&1; then
+    claude_settings_state="$(claude_settings_apply "${TEMPLATE_DIR}/.claude/settings.json" "${claude_settings}")" ||
+      claude_settings_state=invalid
+  elif ! jq -e '.' "${claude_settings}" >/dev/null 2>&1; then
+    claude_settings_state=invalid
+  fi
+  case ${claude_settings_state} in
+  created) log_success "Claude Code preset installed at ${claude_settings}." ;;
+  updated) log_success "Claude Code preset merged into ${claude_settings} (previous copy: ${claude_settings}.bak)." ;;
+  esac
+
   # -- Report ---------------------------------------------------------------------
   log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
   path_fix=${legacy_kept}
@@ -3257,6 +3402,9 @@ devbox_agent_install_command() {
   fi
   if ((omp_guard_missing)); then
     echo "  - ${omp_config} has no bash: block - copy the guardrail patterns from ${TEMPLATE_DIR}/.omp/agent/config.yml into it (an existing OMP config is never overwritten)"
+  fi
+  if [[ ${claude_settings_state} == invalid ]]; then
+    echo "  - ${claude_settings} is not valid JSON - fix it, then re-run ./bin/devbox agent install to merge in the Claude Code guardrail"
   fi
   if ((identities_seeded)); then
     echo "  - Create ${identities_file}: cp ${TEMPLATE_DIR}/.config/devbox/identities.conf.example ${identities_file} and fill in one [slug] block per account (name, email, the laptop's public keys, optionally a GitHub App directory), then re-run ./bin/devbox agent install"
@@ -4506,6 +4654,13 @@ devbox_sync_parse_requirements() {
     shift $#
     ;;
 
+  claude)
+    action="claude"
+    shift
+    devbox_sync_claude_parse_requirements "$@"
+    shift $#
+    ;;
+
   identities)
     action="identities"
     shift
@@ -4605,6 +4760,99 @@ devbox_sync_omp_parse_requirements() {
       args['--allow-unguarded']=1
       shift
       ;;
+
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        if [[ -z ${args['host']+x} ]]; then
+          args['host']=$1
+          shift
+        else
+          printf "invalid argument: %s\n" "$key" >&2
+          exit 1
+        fi
+
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      if [[ -z ${args['host']+x} ]]; then
+        args['host']=$1
+        shift
+      else
+        printf "invalid argument: %s\n" "$key" >&2
+        exit 1
+      fi
+
+      ;;
+
+    esac
+  done
+
+  filter_error=$(filter_laptop)
+  if [[ -n $filter_error ]]; then
+    echo "$filter_error" >&2
+    exit 1
+  fi
+
+}
+
+devbox_sync_claude_parse_requirements() {
+  local key
+
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case "$key" in
+    --help | -h)
+      long_usage=yes
+      devbox_sync_claude_usage
+      exit
+      ;;
+
+    *)
+      break
+      ;;
+
+    esac
+  done
+
+  missing_deps=
+
+  if ! command -v jq >/dev/null 2>&1; then
+    printf "missing dependency: jq\n" >&2
+    printf "%s\n\n" "brew install jq" >&2
+    missing_deps=1
+  fi
+
+  if ! command -v rsync >/dev/null 2>&1; then
+    printf "missing dependency: rsync\n" >&2
+    printf "%s\n\n" "brew install rsync" >&2
+    missing_deps=1
+  fi
+
+  if ! command -v ssh >/dev/null 2>&1; then
+    printf "missing dependency: ssh\n" >&2
+    missing_deps=1
+  fi
+
+  if [[ -n $missing_deps ]]; then
+    exit 1
+  fi
+
+  action="sync claude"
+
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case "$key" in
 
     --)
       shift
@@ -4832,6 +5080,18 @@ devbox_agent_install_parse_requirements() {
 
     esac
   done
+
+  missing_deps=
+
+  if ! command -v jq >/dev/null 2>&1; then
+    printf "missing dependency: jq\n" >&2
+    printf "%s\n\n" "brew install jq" >&2
+    missing_deps=1
+  fi
+
+  if [[ -n $missing_deps ]]; then
+    exit 1
+  fi
 
   action="agent install"
 
@@ -5781,6 +6041,11 @@ devbox_sync_completion() {
       devbox_sync_omp_completion "$completion_current" "$@"
       return
       ;;
+    claude)
+      shift
+      devbox_sync_claude_completion "$completion_current" "$@"
+      return
+      ;;
     identities)
       shift
       devbox_sync_identities_completion "$completion_current" "$@"
@@ -5795,7 +6060,7 @@ devbox_sync_completion() {
       ;;
     esac
   done
-  completion_candidates "$completion_current" omp identities
+  completion_candidates "$completion_current" omp claude identities
 
   if [[ $completion_current == -* ]]; then
     completion_flag_candidates --help "$completion_current" --help -h
@@ -5833,6 +6098,44 @@ devbox_sync_omp_completion() {
   if [[ $completion_current == -* ]]; then
     completion_flag_candidates --help "$completion_current" --help -h
     completion_flag_candidates --allow-unguarded "$completion_current" --allow-unguarded
+  fi
+
+  if [[ $completion_current != -* ]]; then
+    case "$completion_arg_index" in
+    0)
+      if completion_output="$({ completion_ssh_hosts; } 2>/dev/null)"; then
+        completion_dynamic_candidates "$completion_current" "$completion_output"
+      fi
+      ;;
+    esac
+  fi
+
+}
+
+devbox_sync_claude_completion() {
+  local completion_current="$1"
+  local completion_arg_index=0
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      if [[ $completion_arg_index -ge 1 ]]; then
+        return
+      fi
+      completion_arg_index=$((completion_arg_index + 1))
+      shift
+
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
   fi
 
   if [[ $completion_current != -* ]]; then
@@ -6093,6 +6396,7 @@ run() {
   "deploy") devbox_deploy_command ;;
   "sync") devbox_sync_command ;;
   "sync omp") devbox_sync_omp_command ;;
+  "sync claude") devbox_sync_claude_command ;;
   "sync identities") devbox_sync_identities_command ;;
   "agent") devbox_agent_command ;;
   "agent install") devbox_agent_install_command ;;

@@ -33,6 +33,7 @@ ssh devbox 'cd projects/app && docker compose up -d && devbox-ports'  # project 
 ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 ssh <workstation> 'cd ~/devbox && ./bin/devbox sessions'   # who is connected (a recreate kills them)
 ./bin/devbox sync omp                # apply the repo's OMP preset to this laptop and the devbox
+./bin/devbox sync claude             # merge the repo's Claude Code preset into this laptop's and the devbox's settings
 ./bin/devbox install                 # devbox on the PATH, with bash completion (deploy does the workstation)
 ./bin/devbox agent install           # laptop-side: same agent git override as the devbox
 ./bin/devbox doctor laptop           # laptop-side acceptance test: keys, configs, override, tokens
@@ -49,7 +50,7 @@ the same on both.
 | Group       | Commands                                                                                                           | Side guard                                        |
 | ----------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
 | Workstation | `env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`, `logs`, `hook`, `keys`, `docker setup` | Linux host that runs the container, not inside it |
-| Laptop      | `deploy`, `sync omp`, `sync identities`, `agent install`                                                           | macOS only                                        |
+| Laptop      | `deploy`, `sync omp`, `sync claude`, `sync identities`, `agent install`                                            | macOS only                                        |
 | Both        | `install`, `doctor`, `completions`                                                                                 | Either side                                       |
 
 `./bin/devbox --help` lists them, `./bin/devbox <command> --help` shows one command's flags, and `--version`/`-v` prints
@@ -181,15 +182,16 @@ Finish with `./bin/devbox rebuild` as your own user.
 
 ## 💻 Laptop commands
 
-Run these on the macOS laptop, from the repo checkout. `deploy`, `sync omp` and `sync identities` need `rsync` and
-`ssh`; a missing `rsync` fails up front with a `brew install rsync` remedy.
+Run these on the macOS laptop, from the repo checkout. `deploy`, `sync omp`, `sync claude` and `sync identities` need
+`rsync` and `ssh` (`sync claude` also `jq`); a missing `rsync` fails up front with a `brew install rsync` remedy.
 
-| Command                               | What it does                                                                                                               |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `deploy [HOST] [--up] [--force\|-f]`  | Sync this repo to the workstation, optionally bringing the container up — see [`devbox deploy`](#devbox-deploy)            |
-| `sync omp [HOST] [--allow-unguarded]` | Apply the repo's OMP preset to this laptop and the devbox — see [`devbox sync omp`](#devbox-sync-omp)                      |
-| `sync identities [HOST]`              | Copy the laptop's identity registry into the devbox and apply it — see [`devbox sync identities`](#devbox-sync-identities) |
-| `agent install`                       | Install the agent git override on this laptop — see [`devbox agent install`](#devbox-agent-install)                        |
+| Command                               | What it does                                                                                                                       |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy [HOST] [--up] [--force\|-f]`  | Sync this repo to the workstation, optionally bringing the container up — see [`devbox deploy`](#devbox-deploy)                    |
+| `sync omp [HOST] [--allow-unguarded]` | Apply the repo's OMP preset to this laptop and the devbox — see [`devbox sync omp`](#devbox-sync-omp)                              |
+| `sync claude [HOST]`                  | Merge the repo's Claude Code preset into this laptop's and the devbox's settings — see [`devbox sync claude`](#devbox-sync-claude) |
+| `sync identities [HOST]`              | Copy the laptop's identity registry into the devbox and apply it — see [`devbox sync identities`](#devbox-sync-identities)         |
+| `agent install`                       | Install the agent git override on this laptop — see [`devbox agent install`](#devbox-agent-install)                                |
 
 ### `devbox deploy`
 
@@ -230,11 +232,11 @@ DEVBOX_REMOTE_PATH=~/devbox-test ./bin/devbox deploy <workstation>
 
 ### `devbox sync`
 
-`sync omp` and `sync identities` talk to the _container's_ sshd (`Host devbox`, port 2223), not the workstation's, so
-the file lands inside bind-mounted `/home/dev`. Neither is part of a deploy: a redeploy updates the workstation's
-checkout, never the live files in `/home/dev`. Both resolve the host the same way: the `HOST` argument, then
-`DEVBOX_SSH_HOST` from the environment or `.push.env` (the same gitignored file `deploy` reads), then `devbox`. Before
-overwriting, each backs up the remote copy as `<file>.bak`, keeping one.
+`sync omp`, `sync claude` and `sync identities` talk to the _container's_ sshd (`Host devbox`, port 2223), not the
+workstation's, so the file lands inside bind-mounted `/home/dev`. None is part of a deploy: a redeploy updates the
+workstation's checkout, never the live files in `/home/dev`. All resolve the host the same way: the `HOST` argument,
+then `DEVBOX_SSH_HOST` from the environment or `.push.env` (the same gitignored file `deploy` reads), then `devbox`.
+Before overwriting, each backs up the remote copy as `<file>.bak`, keeping one.
 
 #### `devbox sync omp`
 
@@ -260,6 +262,30 @@ pick the new preset up.
 > named for the guardrail rather than `--force` because `--force` elsewhere only ever means "past the live-session
 > prompt".
 
+#### `devbox sync claude`
+
+```
+Usage: ./bin/devbox sync claude [HOST]
+
+  HOST    devbox SSH host from ~/.ssh/config (default: $DEVBOX_SSH_HOST, then 'devbox')
+
+Environment:
+  DEVBOX_SSH_HOST   default SSH host; may also be set in .push.env
+  CLAUDE_SETTINGS   source file (default: home/.claude/settings.json in this checkout)
+```
+
+Applies the repo's Claude Code preset to both machines by _merging_ it, not copying it: `jq -s '.[0] * .[1]'` of the live
+`~/.claude/settings.json` and the preset, so every key the preset does not set stays (the `hooks` `moshi-hook` and IDE
+integrations write, `statusLine`), and the ones it sets (`model`, `permissions.deny`, `permissions.ask`) take its value,
+the rule lists replaced whole. A top-level key removed from the preset entirely stays in the live files. This laptop's
+file goes first (created if absent, else the previous copy kept as `settings.json.bak` when it changed); the devbox's is
+then fetched over `ssh`, merged locally and copied back, keeping one `settings.json.bak` there too, and left untouched
+when it already holds the preset. Needs `jq`, `rsync` and `ssh`. Restart any running Claude Code session on either
+machine to pick the new preset up.
+
+There is no `--allow-unguarded`: a merge cannot drop the live rules unless the preset sets an empty array. See
+[Toolchain](toolchain.md#-claude-code) for the rules and [Security](security.md) for how they differ from OMP's.
+
 #### `devbox sync identities`
 
 ```
@@ -281,6 +307,7 @@ workstation.
 
 ```bash
 ./bin/devbox sync omp                    # home/.omp/agent/config.yml → laptop and devbox:~/.omp/agent/config.yml
+./bin/devbox sync claude                 # home/.claude/settings.json merged into laptop and devbox:~/.claude/settings.json
 ./bin/devbox sync identities             # laptop → devbox:~/.config/devbox/identities.conf
 ./bin/devbox sync identities devbox-2    # a different ~/.ssh/config host
 ```
@@ -309,7 +336,9 @@ of yours is touched.
 
 `~/.config/devbox/secrets.env` and `~/.omp/agent/config.yml` (the OMP guardrail, [Toolchain](toolchain.md#-omp)) are
 created from their templates if absent, then left alone — an existing OMP config without a `bash:` block becomes a
-manual step.
+manual step. `~/.claude/settings.json` (the Claude Code guardrail, [Toolchain](toolchain.md#-claude-code)) is _merged_
+with the preset when it is missing or holds no `permissions.deny` (needs `jq`; a changed existing file is kept as
+`settings.json.bak`), left alone when it already has one, and an invalid JSON file becomes a manual step.
 
 Reports whether `omp` and `claude` resolve to their launchers — printing the `PATH` line for your shell rc as a manual
 step until they do — plus the remaining manual steps per registry identity: a `GH_TOKEN_<SLUG>` line in `secrets.env`,
@@ -517,6 +546,15 @@ copy are removed; intentional, the remote is a mirror.
 `--force` means exactly one thing across the CLI: go past the live-session prompt (`up`, `down`, `rebuild`, `deploy
 --up`). Skipping the OMP guardrail check is a different decision and gets its own name.
 
+### Why does `sync claude` merge instead of copy like `sync omp`?
+
+`~/.claude/settings.json` has other writers: `moshi-hook` and IDE integrations add `hooks` and `statusLine`, Claude
+itself writes `model` (`/model`) and permission rules (`/permissions`). A copy would drop all of them, so the preset is
+merged in (`jq -s '.[0] * .[1]'`): keys it does not set stay, keys it sets take its value, and the rule lists are
+replaced whole, so a rule removed from the preset disappears too. Unlike that file, OMP's `config.yml` is not shared
+with other writers, so `sync omp` copies it. A merge also cannot drop the live rules unless the preset itself sets an
+empty array, so `sync claude` needs no `--allow-unguarded`. See [Toolchain](toolchain.md#-claude-code).
+
 ### `up` vs `rebuild` — which do I need?
 
 `up` after a compose, `.env`, `container/` or `home/` change — rebuilds changed layers. `rebuild` for a cache-free
@@ -526,7 +564,8 @@ image, e.g. after bumping a pinned version.
 
 Only the three generated ones — `~/.bashrc.d/devbox.sh`, `~/.bash_profile` and `~/.ssh/config` — rewritten from
 templates every run. `~/.gitconfig`, `secrets.env`, `identities.conf` and the OMP config: created if absent, then left
-alone; derived identity-registry values re-apply via `git config --global` each run.
+alone; the Claude Code settings are merged with the preset only while they hold no `permissions.deny`; derived
+identity-registry values re-apply via `git config --global` each run.
 
 ### `doctor` says `BIND_ADDR is X but Tailscale reports Y`.
 

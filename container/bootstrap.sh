@@ -518,7 +518,7 @@ fi
 rm -f "${secrets_dir}"/agent.gitconfig "${secrets_dir}"/agent-*.gitconfig
 chmod 500 "${git_config_dir}"
 
-# -- 14. OMP config -----------------------------------------------------------
+# -- 14. Agent configs (OMP, Claude Code) -------------------------------------
 # Seeded once - `secrets.enabled` plus the bash approval guardrail (see the
 # template's comments and docs/security.md). OMP owns the file afterwards and
 # `devbox sync omp` may replace it with the repo preset, so an existing file is never
@@ -531,6 +531,33 @@ if [[ ! -f "${omp_config_dir}/config.yml" ]]; then
 elif ! grep -qE '^bash:' "${omp_config_dir}/config.yml"; then
   # shellcheck disable=SC2088 # a literal ~ in the message, not a path
   register_action "~/.omp/agent/config.yml has no bash: block - copy the guardrail patterns from home/.omp/agent/config.yml into it (and into the file 'devbox sync omp --allow-unguarded' copied, if that brought it here)"
+fi
+
+# The same guardrail for Claude Code, as permission rules. Here before §15 on
+# purpose: moshi-hook merges its hooks into this file, so on a box that ran
+# bootstrap before the preset existed it is never absent - "absent" therefore
+# means no permissions.deny, and the preset is merged in (jq `*`: every key it
+# does not set stays, see cli/lib/claude_settings.sh). A file holding deny
+# rules of its own is left alone; `devbox sync claude` re-applies the preset.
+claude_settings="${HOME_DIR}/.claude/settings.json"
+mkdir -p "${claude_settings%/*}"
+if [[ ! -f "${claude_settings}" ]]; then
+  log_info 'Seeding ~/.claude/settings.json...'
+  install -m 644 "${TEMPLATE_DIR}/.claude/settings.json" "${claude_settings}"
+elif ! jq -e '.' "${claude_settings}" >/dev/null 2>&1; then
+  # shellcheck disable=SC2088 # a literal ~ in the message, not a path
+  register_action "~/.claude/settings.json is not valid JSON - fix it, then re-run ./bin/devbox bootstrap to merge in the Claude Code guardrail"
+elif jq -e '.permissions.deny == null' "${claude_settings}" >/dev/null; then
+  log_info 'Merging the Claude Code preset into ~/.claude/settings.json...'
+  claude_tmp="$(mktemp "${claude_settings}.XXXXXX")"
+  if jq -s '.[0] * .[1]' "${claude_settings}" "${TEMPLATE_DIR}/.claude/settings.json" >"${claude_tmp}"; then
+    chmod 644 "${claude_tmp}"
+    cp -p "${claude_settings}" "${claude_settings}.bak"
+    mv -f "${claude_tmp}" "${claude_settings}"
+  else
+    rm -f "${claude_tmp}"
+    log_warn 'Merging the Claude Code preset failed; ~/.claude/settings.json is unchanged.'
+  fi
 fi
 
 # -- 15. moshi-hook -----------------------------------------------------------

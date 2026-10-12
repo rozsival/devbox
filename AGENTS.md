@@ -127,9 +127,15 @@ the host's root Docker daemon.
   fence, the *rendered* `agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir` -
   every one of them, inherited authors included, since git applies every matching `includeIf` and a nested
   tree would otherwise keep the outer author; the includes are emitted shortest `dir` first so the longest
-  match is read last and wins); 14 OMP config (seeded if absent with the preset the laptop shares - model roles,
-  feature flags, `secrets` and the `bash.patterns` guardrail - an existing file lacking a `bash:` block reported,
-  never merged into); 15 `moshi-hook` plus its OMP
+  match is read last and wins); 14 agent configs: OMP's `~/.omp/agent/config.yml` (seeded if absent with the
+  preset the laptop shares - model roles, feature flags, `secrets` and the `bash.patterns` guardrail - an
+  existing file lacking a `bash:` block reported, never merged into) and Claude Code's
+  `~/.claude/settings.json` (the `home/.claude/settings.json` preset: `model` plus the `permissions.deny`/`ask`
+  rules mirroring that guardrail, *merged* in with `jq` - never copied, since `moshi-hook` and IDE
+  integrations write the same file - when the file is missing or has no `permissions.deny`, the old file kept
+  as `settings.json.bak`; invalid JSON registered as a manual action; a file already holding
+  `permissions.deny` left alone), placed before §15 because `moshi-hook` merges its hooks into that same file;
+  15 `moshi-hook` plus its OMP
   extension and Claude Code hooks (`--target omp,claude`); 16 the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels), `AllowAgentForwarding yes` (the `ssh -A devbox` escape hatch only - the
@@ -143,7 +149,9 @@ the host's root Docker daemon.
   because `--with-deps` needs root. Global npm installs pass `--prefix "$HOME/.local"` per call so the bins
   stay on the bind mount; never export `NPM_CONFIG_PREFIX` - nvm then refuses to activate its default Node
 - `home/` - templates installed into `/home/dev` by bootstrap (and onto the laptop by `devbox agent install`);
-  generated files, not user-edited. `home/.config/devbox/identities.conf.example` is the template for
+  generated files, not user-edited. `home/.omp/agent/config.yml` and `home/.claude/settings.json` are the two
+  agent presets, applied to both machines by `devbox sync omp` / `devbox sync claude`.
+  `home/.config/devbox/identities.conf.example` is the template for
   `~/.config/devbox/identities.conf` - the one file naming who this box is, per account and per directory
   tree. Neither installer copies it: it validates, so seeding it would hand git and every agent session the
   placeholder identity instead of failing loudly. `home/.local/libexec/devbox-identities` is its one
@@ -202,7 +210,7 @@ the host's root Docker daemon.
   generated, committed result. Commands by group:
   - **Workstation** (Linux host outside a container only): `env`, `up`, `down`, `rebuild`, `bootstrap`,
     `skills`, `shell`, `sessions`, `logs`, `hook`, `keys`, `docker setup`
-  - **Laptop** (macOS only): `deploy`, `sync omp`, `sync identities`, `agent install`
+  - **Laptop** (macOS only): `deploy`, `sync omp`, `sync claude`, `sync identities`, `agent install`
   - **Both**: `install`, `doctor` (`host` or `laptop`, defaulting to the side the machine is), `completions
     [bash|zsh]` (the `[host]` of `deploy`/`sync` completes from `~/.ssh/config`)
 
@@ -271,6 +279,16 @@ the host's root Docker daemon.
     only the preset, never the per-machine OMP state. Refuses (without `--allow-unguarded`) a preset lacking a
     top-level `bash:` block, since the copy replaces each whole file and would drop its seeded guardrail. The
     flag is not `--force` on purpose: `--force` only ever means "past the live-session prompt"
+  - `devbox sync claude` - applies the Claude Code preset, `home/.claude/settings.json`, to both machines, but
+    *merges* it (`jq -s '.[0] * .[1]'`, `cli/lib/claude_settings.sh`) instead of copying: `~/.claude/settings.json`
+    has other writers (`moshi-hook` and IDE integrations add `hooks`/`statusLine`, Claude itself `model` and
+    `permissions`), so every key the preset does not set stays, the ones it sets take its value, and the rule
+    arrays are replaced whole (a rule dropped from the preset disappears; a top-level key dropped from it
+    entirely stays in live files). The laptop's file first (one `settings.json.bak` when it changed), then the
+    devbox's: fetched over `ssh` (`Host devbox`), merged locally, copied back through `sync_to_devbox` with one
+    `.bak` there, skipped when it already holds the preset. Needs `jq`, `rsync`, `ssh`; `CLAUDE_SETTINGS`
+    overrides the source file. No `--allow-unguarded`: a merge cannot drop the live rules unless the preset sets
+    an empty array. Host resolved as for `sync omp`
   - `devbox sync identities` - copies `~/.config/devbox/identities.conf` into the devbox over `Host devbox`,
     keeping one `identities.conf.bak` remotely, then re-runs `bootstrap.sh` there so every identity-derived
     file catches up; validates locally with `devbox-identities check` first, the same reader that runs on both
@@ -285,7 +303,10 @@ the host's root Docker daemon.
     keeps `omp` fenced), and prints the `cp` command for `~/.config/devbox/identities.conf` rather than
     seeding it; regenerates every generated file, reads/edits nothing of the user's own `identities.conf` or
     shell rc; seeds `~/.omp/agent/config.yml` (the same shared preset) only when absent, reporting an
-    existing one without a `bash:` block; reports whether `omp` and `claude` resolve to their launchers -
+    existing one without a `bash:` block, and merges the Claude Code preset into `~/.claude/settings.json` when
+    that file is missing or has no `permissions.deny` (`settings.json.bak` kept when it changed an existing file;
+    invalid JSON listed as a manual step; one already holding `permissions.deny` left alone; needs `jq`); reports
+    whether `omp` and `claude` resolve to their launchers -
     printing the one `PATH` line for the user's shell rc until they do - and the remaining manual steps (PATs,
     App credentials)
   - `devbox doctor laptop` - read-only counterpart of `devbox doctor host`: no private key on disk, one

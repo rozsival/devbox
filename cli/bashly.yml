@@ -164,6 +164,25 @@ commands:
           - name: omp_config
             help: Source file (default home/.omp/agent/config.yml in this checkout)
 
+      - name: claude
+        help: |-
+          Apply the repo's Claude Code preset to this laptop and the devbox
+
+          Merges home/.claude/settings.json into ~/.claude/settings.json on both
+          machines, keeping one settings.json.bak on each. Merged, not copied:
+          keys the preset does not set (moshi-hook's hooks, the status line)
+          stay; the ones it sets, the permission rules whole, take its value.
+        filters: [laptop]
+        dependencies:
+          jq: brew install jq
+          rsync: brew install rsync
+          ssh:
+        args: *ssh_host
+        environment_variables:
+          - *devbox_ssh_host
+          - name: claude_settings
+            help: Source file (default home/.claude/settings.json in this checkout)
+
       - name: identities
         help: |-
           Copy the laptop's identity registry into the devbox and apply it
@@ -189,9 +208,12 @@ commands:
           Install the agent git override on this laptop
 
           From home/: the omp and claude launchers, the gh shim, the credential
-          helper, the SSH fence and the read-only rendered agent gitconfigs.
+          helper, the SSH fence and the read-only rendered agent gitconfigs; the
+          OMP and Claude Code presets where no guardrail exists yet.
           Idempotent; prints the manual steps that remain.
         filters: [laptop]
+        dependencies:
+          jq: brew install jq
 
   # -- Both ---------------------------------------------------------------------
   - name: install

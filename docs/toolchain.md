@@ -134,7 +134,45 @@ identity's bot, exactly like an `omp` session ([Git Identities](git.md#-agent-se
 One manual step: log in once, from a pane — run `claude` and follow `/login` (open the printed URL in a laptop browser,
 paste the code back). The credentials land in `~/.claude/.credentials.json` on the bind mount and survive rebuilds
 ([Secrets](secrets.md#-claude-code-login)); `bootstrap` lists the login as outstanding until that file exists.
-Everything else under `~/.claude` — settings, sessions, memory — is Claude's own state, never synced from the laptop.
+Everything else under `~/.claude` — sessions, memory, credentials — is Claude's own state, never synced from the
+laptop. The one exception is `settings.json`, below.
+
+### Claude Code preset
+
+`home/.claude/settings.json` is the Claude Code counterpart of the OMP preset: `model` (`opus`) and `permissions.deny`
+/ `permissions.ask` rules that mirror the OMP `bash.patterns` guardrail, with the same deny/prompt split
+as [the table above](#-omp), written as `Bash(<pattern>)`. OMP's `op *` plus bare `op` and `gcloud *` plus bare
+`gcloud` are one rule each, because Claude's `Bash(op *)` also matches bare `op`.
+
+Unlike OMP's `config.yml`, `~/.claude/settings.json` has other writers — `moshi-hook` and IDE integrations add `hooks`
+and `statusLine`, Claude itself writes `model` (`/model`) and rules (`/permissions`) — so the preset is _merged_, never
+copied: `jq -s '.[0] * .[1]'` of the live file and the preset (`cli/lib/claude_settings.sh`). Every key the preset does
+not set stays; the keys it sets take its value; arrays, the rule lists, are replaced whole, so a rule removed from the
+preset disappears from the live files. A top-level key removed from the preset entirely stays in them.
+
+It is seeded when absent, where absent means the file is missing _or_ holds no `permissions.deny` — `moshi-hook` writes
+its hooks into the same file, so on a box that ran `bootstrap` before the preset existed it is rarely missing:
+
+- `bootstrap` (section 14, before `moshi-hook`'s section 15) seeds or merges it on the devbox; invalid JSON becomes a
+  manual action in the checklist.
+- `./bin/devbox agent install` does the same on the laptop, keeping the previous file as `settings.json.bak` when it
+  changed an existing one; invalid JSON is listed as a manual step. It needs `jq`.
+- A file that already has `permissions.deny` is left alone by both, so your own rules are never touched implicitly.
+
+To re-apply the preset deliberately after changing it, commit it and run, from the laptop:
+
+```bash
+./bin/devbox sync claude              # preset merged into laptop and devbox:~/.claude/settings.json
+./bin/devbox sync claude devbox-2     # a different ~/.ssh/config host
+```
+
+It merges this laptop's file first, then fetches the devbox's over `ssh` (`Host devbox`), merges it locally and copies it
+back, keeping one `settings.json.bak` on each machine when the file changed and skipping the copy when the devbox
+already holds the preset. The source defaults to `home/.claude/settings.json`; `CLAUDE_SETTINGS` overrides it. A running
+Claude Code session needs a restart to pick the new rules up. There is no `--allow-unguarded` here: a merge cannot drop
+the live rules unless the preset sets an empty array. Details: [CLI Reference](cli.md#devbox-sync-claude).
+
+What differs from OMP's guardrail, and what it does and does not stop: [Security Model](security.md#command-allowlists-are-a-guardrail-not-a-control).
 
 > [!NOTE]
 > An `ANTHROPIC_API_KEY` in `secrets.env` (there for OMP) never reaches Claude: `claude-launcher` unsets it, so Claude

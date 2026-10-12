@@ -217,8 +217,7 @@ covers only where those secrets live — `~/.config/devbox/secrets.env` and each
 devbox, `~/.bashrc.d/devbox.sh` sources the file under `set -a` into every shell, which is how OMP sees model keys,
 then unsets the `GH_TOKEN_<SLUG>` variables; the laptop installs no such rc line. On both, `devbox-gh-token` and the
 credential helper read the `GH_TOKEN_<SLUG>` lines straight from the file, by name; model keys on the laptop are unused.
-Neither copy travels: `devbox sync` carries `identities.conf` and the
-OMP preset, not secrets.
+Neither copy travels: `devbox sync` carries `identities.conf` and the OMP and Claude Code presets, not secrets.
 
 ---
 
@@ -386,7 +385,8 @@ global value concurrent agents would race. See [Why not `gh auth login`](#why-no
 ### Does OMP see my keys in plaintext?
 
 `~/.omp/agent/config.yml` sets `secrets: { enabled: true }`, obfuscating environment secrets before they reach a
-provider.
+provider. The Claude Code preset (`~/.claude/settings.json`) sets no such obfuscation; `claude-launcher` instead keeps
+`ANTHROPIC_API_KEY` out of Claude's environment ([above](#-claude-code-login)).
 
 ### How do I rotate a leaked key?
 
