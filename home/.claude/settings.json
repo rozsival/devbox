@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "model": "opus",
+  "permissions": {
+    "deny": [
+      "Bash(gh auth status*--show-token*)",
+      "Bash(gh auth status* -t*)",
+      "Bash(gh auth token*)",
+      "Bash(gh auth login*)",
+      "Bash(gh auth logout*)",
+      "Bash(gh auth refresh*)",
+      "Bash(gh auth setup-git*)",
+      "Bash(gh auth switch*)",
+      "Bash(*/bin/gh *)",
+      "Bash(*/bin/gh)",
+      "Bash(*env -u *)",
+      "Bash(*env --unset*)",
+      "Bash(*unset *GIT_CONFIG_GLOBAL*)",
+      "Bash(*unset *GIT_SSH_COMMAND*)",
+      "Bash(*unset *GH_CONFIG_DIR*)",
+      "Bash(*unset *GIT_TERMINAL_PROMPT*)",
+      "Bash(*GIT_CONFIG_GLOBAL=*)",
+      "Bash(*GIT_SSH_COMMAND=*)",
+      "Bash(*GH_CONFIG_DIR=*)",
+      "Bash(*GIT_TERMINAL_PROMPT=*)",
+      "Bash(*security find-generic-password*)",
+      "Bash(*security find-internet-password*)",
+      "Bash(*security dump-keychain*)",
+      "Bash(*git credential-osxkeychain*)",
+      "Bash(gh repo delete*)",
+      "Bash(gh secret *)",
+      "Bash(gh variable *)",
+      "Bash(gh api -X DELETE *)",
+      "Bash(gh api --method DELETE *)",
+      "Bash(*terraform destroy*)",
+      "Bash(* --no-verify*)",
+      "Bash(git push --force *)",
+      "Bash(git push * --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push * -f *)",
+      "Bash(*docker system prune*)",
+      "Bash(*docker volume rm*)"
+    ],
+    "ask": [
+      "Bash(*env -i *)",
+      "Bash(op *)",
+      "Bash(gh workflow run *)",
+      "Bash(gcloud *)",
+      "Bash(*terraform apply*)",
+      "Bash(*terraform import*)"
+    ]
+  }
+}
