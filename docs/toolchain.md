@@ -16,17 +16,17 @@
 
 | Tool             | Version   | Installed as                                                           |
 | ---------------- | --------- | ---------------------------------------------------------------------- |
-| `herdr`          | `0.9.3`   | `/usr/local/bin/herdr`                                                 |
+| `herdr`          | `0.9.4`   | `/usr/local/bin/herdr`                                                 |
 | `node`           | `24.21.0` | nvm in `/opt/nvm`, symlinked into `/usr/local/bin`                     |
-| `pnpm`           | `12.9.1`  | `npm install -g`, symlinked into `/usr/local/bin`                      |
+| `pnpm`           | `12.11.2` | `npm install -g`, symlinked into `/usr/local/bin`                      |
 | `gh`             | `2.102.0` | pinned `.deb`                                                          |
-| `lazygit`        | `0.66.0`  | `/usr/local/bin/lazygit` (alias `lg`)                                  |
+| `lazygit`        | `0.66.1`  | `/usr/local/bin/lazygit` (alias `lg`)                                  |
 | `wt` (worktrunk) | `0.80.0`  | `/usr/local/bin/wt` + `git-wt`                                         |
-| `terraform`      | `1.16.5`  | `/usr/local/bin/terraform`                                             |
+| `terraform`      | `1.16.6`  | `/usr/local/bin/terraform`                                             |
 | `nvm`            | `0.40.8`  | `/opt/nvm`                                                             |
-| Docker CLI       | `29.8.2`  | `docker-ce-cli` from Docker's signed apt repository, `/usr/bin/docker` |
+| Docker CLI       | `29.9.0`  | `docker-ce-cli` from Docker's signed apt repository, `/usr/bin/docker` |
 | Compose plugin   | `5.6.0`   | `/usr/local/lib/docker/cli-plugins/docker-compose`                     |
-| Buildx plugin    | `0.37.2`  | `/usr/local/lib/docker/cli-plugins/docker-buildx`                      |
+| Buildx plugin    | `0.38.0`  | `/usr/local/lib/docker/cli-plugins/docker-buildx`                      |
 
 Also from the Ubuntu archive: `git`, `git-lfs`, `starship`, `ripgrep`, `fd` (symlinked from `fdfind`), `jq`, `curl`,
 `rsync`, `build-essential`, `python3`, `openssh-server`/`-client`, `nano`, `less`, `procps`, `iproute2`, `socat` (backs
@@ -285,10 +285,10 @@ move their skill with them), or export any of them for one run.
 
 ```bash
 node -v      # v24.21.0
-pnpm -v      # 12.9.1
+pnpm -v      # 12.11.2
 ```
 
-pnpm installs via `npm install -g pnpm@12.9.1`, not `corepack prepare`: pnpm 12's JS wrapper loads a native binary from
+pnpm installs via `npm install -g pnpm@12.11.2`, not `corepack prepare`: pnpm 12's JS wrapper loads a native binary from
 its own `node_modules`, but corepack's cache held only the wrapper — every shimmed call re-downloaded it. `corepack`
 stays enabled for `yarn`, with `COREPACK_HOME` set so repos declaring `packageManager` still work.
 
