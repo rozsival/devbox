@@ -124,17 +124,18 @@ Optional, idempotent, kept separate from `bootstrap` — first run downloads ~18
 
 Stops and restarts `moshi-hook` via detached `docker compose exec`, prints `moshi-hook status`. Non-destructive: the
 daemon is a child of the entrypoint; alternative is recreating the container, killing every SSH session. Needed after
-`moshi-hook pair` or a crash. `--update`/`-u` first runs `moshi-hook update` and `moshi-hook install --target
-omp,claude`; a failed update aborts before the running daemon is stopped. See
+`moshi-hook pair` or a crash. `--update`/`-u` first runs `moshi-hook update` and `moshi-hook install` (every agent whose
+config directory exists; it creates none); a failed update aborts before the running daemon is stopped. See
 [Toolchain](toolchain.md#-moshi-and-moshi-hook).
 
 ### `devbox update`
 
 One command for the three self-updating tools on the bind mount, pane-safe like `hook`: `omp update`, `claude update`
 (both through the launchers' `update` passthrough, [Git Identities](git.md#updates-omp-update-claude-update)), then
-`hook --update`'s steps — `moshi-hook update`, `moshi-hook install --target omp,claude`, the daemon restart. A failed
-updater is reported and the others still run; the exit status counts the failures. A failed `moshi-hook update` skips
-the restart, leaving the old daemon serving. Running agent sessions keep their old binary until restarted.
+`moshi-hook update`, `moshi-hook install` (hooks for every agent it finds, after the agents updated their configs) and
+the daemon restart. A failed updater is reported and the others still run; the exit status counts the failures.
+`moshi-hook install` runs even after a failed `moshi-hook update`, which only skips the restart, leaving the old daemon
+serving. Running agent sessions keep their old binary until restarted.
 
 ### `devbox keys`
 

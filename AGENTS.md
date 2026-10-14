@@ -135,8 +135,8 @@ the host's root Docker daemon.
   integrations write the same file - when the file is missing or has no `permissions.deny`, the old file kept
   as `settings.json.bak`; invalid JSON registered as a manual action; a file already holding
   `permissions.deny` left alone), placed before §15 because `moshi-hook` merges its hooks into that same file;
-  15 `moshi-hook` plus its OMP
-  extension and Claude Code hooks (`--target omp,claude`); 16 the printed manual checklist
+  15 `moshi-hook` plus its hooks for every agent whose config directory exists (an unscoped `moshi-hook install`,
+  which creates none); 16 the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels), `AllowAgentForwarding yes` (the `ssh -A devbox` escape hatch only - the
   container holds no private key of its own) and `MaxSessions 32` (herdr channels)
@@ -223,10 +223,11 @@ the host's root Docker daemon.
     non-interactive `ssh`. `cli/initialize.sh` resolves `REPO_ROOT` through `readlink -f` for the symlink
   - `up`/`down`/`rebuild` refuse to drop live SSH sessions without `--force`; `hook` restarts the `moshi-hook`
     daemon with a detached `exec` precisely so it does not have to (`--update` runs `moshi-hook update` and
-    rewrites the OMP extension and Claude hooks first, aborting before the old daemon is stopped if the update
+    rewrites every agent's hooks first, aborting before the old daemon is stopped if the update
     fails); `update` runs `omp update` and `claude update` (through the launchers' `update` passthrough), then
-    `hook --update`'s steps, each updater's failure counted rather than fatal and a failed `moshi-hook update`
-    skipping the restart; `keys` prints every identity's installed public keys (or "not set") plus the sshd host-key
+    `moshi-hook update`, `moshi-hook install` (every agent's hooks, run even when the update failed) and the
+    restart, each failure counted rather than fatal and a failed `moshi-hook update` skipping the restart; `keys`
+    prints every identity's installed public keys (or "not set") plus the sshd host-key
     fingerprint - nothing to paste anywhere, since they are already the laptop's own keys
   - `devbox docker setup` - needs `sudo`, idempotent, `--check` reports only: installs `uidmap` and
     `slirp4netns`, creates the `dev:devbox` host user with pinned uid/gid 1001 and denies it in the host's sshd

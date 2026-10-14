@@ -4,15 +4,26 @@ require_moshi_hook() {
 }
 
 # Runs before the old daemon is touched, so a caller that stops on failure
-# leaves that daemon still serving instead of restarting into nothing. The OMP
-# extension and the Claude Code hooks are regenerated for the same reason
-# bootstrap §15 does it: the binary writes them, and stale ones are the
-# daemon's "agent hooks missing or stale" warning.
+# leaves that daemon still serving instead of restarting into nothing.
 moshi_hook_update() {
   log_info 'Updating moshi-hook...'
-  compose exec -T "${SERVICE}" bash -lc 'moshi-hook update' || return 1
-  compose exec -T "${SERVICE}" bash -lc 'moshi-hook install --target omp,claude >/dev/null' ||
-    log_warn 'moshi-hook install --target omp,claude failed; agent events may be stale.'
+  compose exec -T "${SERVICE}" bash -lc 'moshi-hook update'
+}
+
+# Regenerates the hooks of every agent whose config directory exists here (an
+# unscoped install creates none; see bootstrap §15), for the same reason bootstrap
+# §15 does it: the binary writes them, and stale ones are the daemon's "agent
+# hooks missing or stale" warning. Its own run, not part of the update: an agent
+# updater can rewrite its config, and a failed moshi-hook update still leaves the
+# current binary able to install. The per-agent "not found, skipped" lines are
+# filtered out - twenty agents, two or three of them here.
+moshi_hook_install() {
+  log_info 'Installing moshi-hook agent hooks...'
+  # shellcheck disable=SC2016 # the script body must expand inside the container
+  compose exec -T "${SERVICE}" bash -lc '
+    out="$(moshi-hook install 2>&1)" || { printf "%s\n" "${out}" >&2; exit 1; }
+    printf "%s\n" "${out}" | grep -v "not found, skipped" || true
+  '
 }
 
 # A detached `exec`, never a container recreate: the daemon has to be

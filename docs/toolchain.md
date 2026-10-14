@@ -188,8 +188,9 @@ as it is for `omp`: it reaches the project tree, the internet and the rootless p
 
 [Moshi](https://getmoshi.app) connects like any SSH client (`BIND_ADDR:2223`, user `dev`, authorized key) for a terminal
 and herdr panes only — not push notifications, lock-screen approvals or Chat View, which need `moshi-hook`, a companion
-daemon `bootstrap` installs into `~/.local/bin` and the entrypoint starts. `bootstrap` wires it into both agents
-(`moshi-hook install --target omp,claude`).
+daemon `bootstrap` installs into `~/.local/bin` and the entrypoint starts. `bootstrap` wires it into every agent whose
+config directory exists (`moshi-hook install`; `~/.claude`, `~/.omp`, … — a binary alone is not detected, and no
+directory is created).
 
 | Piece                       | Where it lives                             | What breaks without it                |
 | --------------------------- | ------------------------------------------ | ------------------------------------- |
@@ -218,9 +219,10 @@ rebuilds under the bind-mounted home like other credentials.
 No systemd means `moshi-hook service install` can't be used — `container/entrypoint.sh` starts the daemon, tying its
 lifetime to the container's. Restart a crashed/hand-killed one with `./bin/devbox hook` (a detached
 `docker compose exec`: no recreate, no dropped SSH sessions); `./bin/devbox up` alone won't revive it unless compose
-recreates the container. A new release is `./bin/devbox hook --update`: `moshi-hook update`, the OMP extension and the
-Claude hooks rewritten, then the same restart — `update` alone leaves the old version serving. `./bin/devbox update` does
-the same after updating OMP and Claude Code.
+recreates the container. A new release is `./bin/devbox hook --update`: `moshi-hook update`, every agent's hooks
+rewritten (`moshi-hook install`), then the same restart — `update` alone leaves the old version serving.
+`./bin/devbox update` does the same after updating OMP and Claude Code, and reinstalls the hooks even when the
+`moshi-hook update` fails.
 
 A second daemon is harmless: `serve` exits with `another moshi-hook serve is already running (pid N, lock …)`, and a
 killed daemon's lock never blocks the next start, even across PID reuse.
@@ -231,7 +233,7 @@ Moshi also needs the daemon's gateway `127.0.0.1:24543`, reached over its own SS
 ```bash
 moshi-hook status                    # pairing, multiplexers, per-agent hook state
 moshi-hook logs -f                   # ~/.local/state/moshi/hook.log
-moshi-hook install --target omp,claude  # rewrite the OMP extension and Claude hooks by hand (hook --update already does)
+moshi-hook install                   # rewrite every agent's hooks by hand (hook --update and update already do)
 ```
 
 ## 🌐 Agent skills and browser automation
