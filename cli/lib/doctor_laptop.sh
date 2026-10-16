@@ -438,38 +438,31 @@ doctor_laptop() {
   log_info 'connections'
   # Which login answers is only informative; the check is that every identity's
   # connection - `ssh -P <tag>` where it has a key of its own, plain otherwise -
-  # authenticates, and that two identities on the same forge reach two
-  # *different* accounts, which is what their separate keys exist for - unless
-  # the registry gives both the same pubkey, which declares one account
-  # deliberately split by directory (e.g. a private org needing its own PAT).
-  github_login() {
-    ssh ${2:+-P "$2"} -o BatchMode=yes -o ConnectTimeout=10 -T "git@$1" 2>&1 | sed -n 's/^Hi \([^!]*\)!.*/\1/p' || true
-  }
+  # authenticates with the key its registry `pubkey` names (`Server accepts key`
+  # in ssh -v; ControlPath=none, since a shared master connection skips
+  # authentication and never prints it). Two identities may reach one account,
+  # with one key (a tree split off for its own PAT) or separate ones (a per-org
+  # key on the same account).
   if ((identities_ok)); then
-    conn_slugs=() conn_hosts=() conn_logins=() conn_pubkeys=()
     for slug in ${slugs}; do
       host="$(di_get "${slug}" host)"
       tag="$(di_get "${slug}" tag)"
+      pubkey="$(di_get "${slug}" pubkey)"
       label="git@${host}${tag:+ (ssh -P ${tag})}"
-      login="$(github_login "${host}" "${tag}")"
-      conn_slugs+=("${slug}")
-      conn_hosts+=("${host}")
-      conn_logins+=("${login}")
-      conn_pubkeys+=("$(di_get "${slug}" pubkey)")
-      if [[ -n ${login} ]]; then
-        log_success "[${slug}] ${label} → ${login}"
+      conn_out="$(ssh -v ${tag:+-P "${tag}"} -o BatchMode=yes -o ConnectTimeout=10 -o ControlPath=none -T "git@${host}" 2>&1 || true)"
+      login="$(sed -n 's/^Hi \([^!]*\)!.*/\1/p' <<<"${conn_out}")"
+      accepted="$(sed -n 's/^debug1: Server accepts key: .* \(SHA256:[^ ]*\).*/\1/p' <<<"${conn_out}")"
+      expected=''
+      [[ -z ${pubkey} ]] || expected="$(ssh-keygen -lf - <<<"${pubkey}" 2>/dev/null | awk '{print $2}')"
+      if [[ -z ${login} ]]; then
+        # ssh's own last word (Permission denied, timeout, agent refused to sign),
+        # not its -v debug lines.
+        fail "[${slug}] ${label} did not authenticate: $(grep -v '^debug' <<<"${conn_out}" | tail -n 1)"
+      elif [[ -n ${expected} && ${accepted} != "${expected}" ]]; then
+        fail "[${slug}] ${label} → ${login} with ${accepted:-an unknown key}, not its pubkey ${expected} - the ssh config offers the wrong key (ssh -G${tag:+ -P ${tag}} ${host})"
       else
-        fail "[${slug}] ${label} did not authenticate"
+        log_success "[${slug}] ${label} → ${login}"
       fi
-    done
-    conn_count=${#conn_slugs[@]}
-    for ((i = 0; i < conn_count; i++)); do
-      for ((j = i + 1; j < conn_count; j++)); do
-        [[ ${conn_hosts[i]} == "${conn_hosts[j]}" ]] || continue
-        [[ -n ${conn_logins[i]} && ${conn_logins[i]} == "${conn_logins[j]}" ]] || continue
-        [[ -z ${conn_pubkeys[i]} || ${conn_pubkeys[i]} != "${conn_pubkeys[j]}" ]] || continue
-        fail "[${conn_slugs[i]}] and [${conn_slugs[j]}] both reach ${conn_logins[i]} on ${conn_hosts[i]} - the ssh config offers the wrong key for one of them (ssh -G -P <slug> ${conn_hosts[i]})"
-      done
     done
   else
     log_warn 'identity registry unusable - skipping per-identity connection checks'

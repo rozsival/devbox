@@ -638,9 +638,9 @@ registry](#-the-identity-registry).
 Yes — the way to give an organization of your own its own token, since a fine-grained PAT has exactly one resource owner
 (your user _or_ one org). Copy the default block under a new slug with its own `dir` and `orgs` naming that org, the
 same `pubkey`/`signing_pubkey` as the default (so it gets no tag — the key already matches the plain one), and copy
-`id_<default>.pub`/`signing_<default>.pub` to the new slug's names on the laptop. `devbox doctor laptop` normally fails
-two identities' connections greeting one login as a wrong key; identical `pubkey` lines in the registry declare it
-deliberate, so that check skips the pair.
+`id_<default>.pub`/`signing_<default>.pub` to the new slug's names on the laptop. A key of its own per org on the same
+account works too: give the block its own `pubkey`/`signing_pubkey` and it gets a tag. Either way `devbox doctor laptop`
+only checks that each connection authenticates with the key its `pubkey` names, not which account answers.
 
 ### Both machines hold `identities.conf` — which one wins?
 

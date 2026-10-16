@@ -64,8 +64,8 @@ own, the plain `Host github.com` block for the rest.
 
 Check: `ssh -G devbox | grep -E 'identityfile|identitiesonly|identityagent'`, then `ssh -T git@github.com`
 plus `ssh -P <slug> -T git@github.com` per identity with a tag (`devbox-identities get <slug> tag`) - each
-must greet a different account, unless the two blocks deliberately share one `pubkey` (one account split by
-directory, e.g. a private org).
+must authenticate with its own registry `pubkey` (`ssh -v` prints `Server accepts key: … SHA256:…`); two
+identities may reach the same account.
 `devbox doctor laptop` also checks the `Host <workstation>` block (the default identity's `id_<slug>.pub`) and
 asks the workstation, without signing, whether it would accept `devbox.pub` - but the repo names no
 workstation hostname: set `DEVBOX_HOST` (environment, or `DEVBOX_HOST=<alias>` in `.push.env`, which
@@ -222,7 +222,7 @@ repo.
 | `no <slug> token` / `token is rejected`                                       | Fill/re-issue `GH_TOKEN_<SLUG>` in `secrets.env` (phase 5)                                                                                                                                                                                                                                                                          |
 | `ssh devbox failed` / `ssh <workstation> failed`                              | 1Password locked, or that host's key (`devbox.pub` / the default `id_<slug>.pub`) unapproved for this app                                                                                                                                                                                                                           |
 | `<workstation> accepts devbox.pub`                                            | In order: authorize `~/.ssh/id_<default>.pub` on the workstation (devbox-setup phase 1's `ssh-copy-id -f -i ~/.ssh/id_<default>.pub -p 2222 <user>@<workstation>`) and point `Host <workstation>` at it (phase 2) until `ssh <workstation> true` passes; only then delete `devbox.pub` from that account's `~/.ssh/authorized_keys` |
-| `[<slug>] and [<slug>] both reach <login>`                                    | Two identities' `id_<slug>.pub` files hold the same key while their registry `pubkey`s differ; re-export the wrong one (phase 1)                                                                                                                                                                                                    |
+| `[<slug>] … with <fingerprint>, not its pubkey <fingerprint>`                 | That identity's `id_<slug>.pub` holds another key than its registry `pubkey`, or its `Host`/`Match` block is missing; re-run the renderer or re-export the `.pub` (phase 1)                                                                                                                                                         |
 | `… is not a symlink onto …/bin/devbox` / `bash completion … missing or stale` | `./bin/devbox install` from the checkout you want `devbox` to run                                                                                                                                                                                                                                                                   |
 | `a login shell does not find devbox` / `… does not load bash-completion`      | Add the printed `PATH` line, or `brew install bash-completion@2` and source it from `~/.bashrc`                                                                                                                                                                                                                                     |
 
