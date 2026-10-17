@@ -6,15 +6,15 @@
 # each). A setting changed in OMP on the laptop lands in ~/.omp/agent/config.yml only: copy that file over
 # this one first (`make fmt`; `dot doctor` flags any difference), or the sync replaces it.
 modelRoles:
-  slow: anthropic/claude-opus-5-5:max
-  smol: anthropic/claude-haiku-5-5:medium
   default: anthropic/claude-opus-5-5:medium
-  plan: anthropic/claude-fable-5-1:high
-  task: anthropic/claude-sonnet-5-5:high
   advisor: anthropic/claude-fable-5-1:high
-  vision: anthropic/claude-sonnet-5-5:medium
+  task: anthropic/claude-sonnet-5-5:high
+  plan: anthropic/claude-opus-5-5:high
   commit: anthropic/claude-haiku-5-5:medium
+  smol: anthropic/claude-haiku-5-5:medium
   tiny: anthropic/claude-haiku-5-5:low
+  vision: anthropic/claude-sonnet-5-5:medium
+  slow: anthropic/claude-opus-5-5:xhigh
 symbolPreset: unicode
 theme:
   dark: titanium
