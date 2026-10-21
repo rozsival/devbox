@@ -86,7 +86,7 @@ compose up` that changes nothing leaves the container running, so a no-op `up` n
 | `down [--force\|-f]`     | Stop and remove the container: `docker compose down`. Bind mount and `.env` untouched                                                                                |
 | `rebuild [--force\|-f]`  | Rebuild the image from scratch and restart: `docker compose build --no-cache && docker compose up -d`. Use after a `Dockerfile` change                               |
 | `bootstrap`              | Re-run the in-container user setup: `docker compose exec` of `container/bootstrap.sh`; idempotent, reprints the checklist                                            |
-| `skills`                 | Install the optional agent skills and agent-browser — see [`devbox skills`](#devbox-skills)                                                                          |
+| `skills`                 | Install the optional agent skills — see [`devbox skills`](#devbox-skills)                                                                                            |
 | `shell`                  | Open a login shell inside the container: `docker compose exec -it devbox bash -l`. Works even with sshd or Tailscale broken                                          |
 | `sessions`               | List the SSH sessions connected to the container: established sshd connections plus the last 10 `Accepted`/`Disconnected` lines, tracing a disconnect after the fact |
 | `logs [--follow\|-f]`    | Show the container logs (last 100 lines): `--tail 100` by default; `--follow`/`-f` follows                                                                           |
@@ -116,9 +116,8 @@ Build precedes the session check — a fresh image alone justifies recreating.
 
 ### `devbox skills`
 
-`docker compose exec` of `container/skills.sh`: three global agent skills plus `agent-browser`'s CLI and Chrome build.
-Optional, idempotent, kept separate from `bootstrap` — first run downloads ~180 MB. See
-[Toolchain](toolchain.md#-agent-skills-and-browser-automation).
+`docker compose exec` of `container/skills.sh`: two global agent skills. Optional, idempotent, kept separate from
+`bootstrap`. See [Toolchain](toolchain.md#-agent-skills).
 
 ### `devbox hook`
 

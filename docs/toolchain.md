@@ -4,8 +4,7 @@
 > `Dockerfile` and is verified — upstream's checksum file, else GitHub's recorded asset digest, else a signed package
 > repository. The one download pinned by tag only is nvm's installer (fetched over TLS; upstream publishes no checksum
 > file or asset digest for it), and nvm then checks Node against nodejs.org's `SHASUMS256.txt`. This page covers the
-> pinned versions, where each tool lives, the agents (OMP, Claude Code, Moshi), skills and browser automation, and how
-> to add a tool.
+> pinned versions, where each tool lives, the agents (OMP, Claude Code, Moshi), agent skills, and how to add a tool.
 
 **Related:** [Installation](installation.md) · [Docker](docker.md) · [Secrets](secrets.md) ·
 [Git Identities](git.md) · [Security Model](security.md) · [CLI Reference](cli.md)
@@ -236,52 +235,30 @@ moshi-hook logs -f                   # ~/.local/state/moshi/hook.log
 moshi-hook install                   # rewrite every agent's hooks by hand (hook --update and update already do)
 ```
 
-## 🌐 Agent skills and browser automation
+## 🧩 Agent skills
 
-Optional, recommended, and not in `bootstrap` since the first run downloads a ~180 MB Chrome build:
+Optional, recommended, and not in `bootstrap`:
 
 ```bash
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'
 ```
 
-`container/skills.sh` installs three skills with `--global --agent universal claude-code`: the skill itself lands in
+`container/skills.sh` installs two skills with `--global --agent universal claude-code`: the skill itself lands in
 `~/.agents/skills`, which OMP reads, and a symlink to it in `~/.claude/skills`, the only skills directory Claude Code
 reads:
 
-| Skill           | Source, pinned at                                                          | What it is for                                       |
-| --------------- | -------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `agent-browser` | `vercel-labs/agent-browser` @ `v${AGENT_BROWSER_VERSION}`, the CLI's tag   | Browser automation: navigate, fill, screenshot, test |
-| `skill-creator` | `anthropics/skills` @ `SKILL_CREATOR_REF`, a commit (the repo has no tags) | Authoring, editing and evaluating skills             |
-| `find-skills`   | `vercel-labs/skills` @ `v${SKILLS_CLI_VERSION}`, the skills CLI's tag      | Discovering and installing more skills mid-task      |
+| Skill           | Source, pinned at                                                          | What it is for                                  |
+| --------------- | -------------------------------------------------------------------------- | ----------------------------------------------- |
+| `skill-creator` | `anthropics/skills` @ `SKILL_CREATOR_REF`, a commit (the repo has no tags) | Authoring, editing and evaluating skills        |
+| `find-skills`   | `vercel-labs/skills` @ `v${SKILLS_CLI_VERSION}`, the skills CLI's tag      | Discovering and installing more skills mid-task |
 
 A skill is instructions an agent follows, so it is pinned like a binary: each comes from a GitHub tree URL at that ref,
 which the CLI refuses when the ref doesn't exist — a bare `owner/repo` would install whatever the default branch holds
 that day.
 
-Also installs the pinned `agent-browser` CLI and Chrome build:
-
-```bash
-agent-browser open https://example.com
-agent-browser snapshot          # accessibility tree, with refs to act on
-agent-browser close
-```
-
-### Why this works unprivileged
-
-- **Chrome's shared libraries are in the image.** `agent-browser install --with-deps` needs root `apt-get`, unavailable
-  to `dev`, so the ~26 packages Chrome links against are baked into the `Dockerfile` — the headless set, omitting GTK,
-  Vulkan and CJK fonts on purpose (~300 MB).
-- **The npm prefix is per call, not exported.** `npm install -g --prefix "$HOME/.local"` lands the binary in
-  `~/.local/bin`, on the non-interactive `PATH` and bind mount, unlike a global install under `/opt/nvm`.
-- **Chrome lives in `~/.agent-browser/browsers`.** Also the bind mount, so rebuilds skip re-download.
-
-> [!CAUTION]
-> Exporting `NPM_CONFIG_PREFIX` (or setting `prefix=` in `~/.npmrc`) instead of the per-call `--prefix` makes nvm refuse
-> its default Node in every interactive shell — do neither.
-
-Re-running `./bin/devbox skills` is safe: npm and `npx skills add` overwrite in place, Chrome skips if present. Bump
-`SKILLS_CLI_VERSION`/`AGENT_BROWSER_VERSION`/`SKILL_CREATOR_REF` in `container/skills.sh` to move a pin (the first two
-move their skill with them), or export any of them for one run.
+Re-running `./bin/devbox skills` is safe: `npx skills add` overwrites in place. Bump `SKILLS_CLI_VERSION`/
+`SKILL_CREATOR_REF` in `container/skills.sh` to move a pin (the first moves `find-skills` with it), or export either for
+one run.
 
 ## 📦 Node and pnpm
 
@@ -391,14 +368,9 @@ It symlinks them into ~45 per-agent dotdirs (`~/.aider-desk/skills`, `~/.astrbot
 installed here, reporting `Failed to install 2` for two rejecting global installs. `--agent universal` writes only
 `~/.agents/skills`; add `--agent claude` for one reading its own directory.
 
-### Does `agent-browser` need `--no-sandbox` here?
-
-No — it launches and drives Chrome headless as `dev` with `cap_drop: [ALL]` unchanged, verified via `agent-browser open`
-plus `snapshot`. Headed mode needs the omitted GTK packages and a virtual display.
-
 ### Do the skills survive a rebuild?
 
-Yes — `~/.agents/skills` is on the bind mount. Only Chrome's shared libraries live in the image, rebuilt with it.
-`npx skills update` keeps each skill at the ref recorded in `~/.agents/.skill-lock.json` (verified with skills 1.5.26
+Yes — `~/.agents/skills` is on the bind mount. `npx skills update` keeps each skill at the ref recorded in
+`~/.agents/.skill-lock.json` (verified with skills 1.5.26
 and 1.7.1), so it changes nothing here; to move a skill, bump its pin in `container/skills.sh` and re-run
 `./bin/devbox skills`.

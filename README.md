@@ -56,7 +56,7 @@ ssh -t <workstation> 'nano ~/devbox/.env'                             # DEVBOX_E
 ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'  # once: project Docker, asks for a password
 ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
 herdr machine add devbox --label "Devbox"                             # once the ~/.ssh/config blocks exist
-ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'                # optional: agent skills + browser automation
+ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'                # optional: agent skills
 ./bin/devbox sync omp                                                 # optional: repo OMP preset → laptop and devbox
 ./bin/devbox sync claude                                              # optional: repo Claude Code preset → laptop and devbox
 ssh -t devbox claude                                                  # once, if you use Claude Code: /login

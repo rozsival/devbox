@@ -185,13 +185,13 @@ herdr                                    # `Devbox` appears next to `Local`
 Extras outside `bootstrap`, keeping first starts fast, offline-safe:
 
 ```bash
-ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # 3 global agent skills + agent-browser + Chrome
+ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # 2 global agent skills
 ./bin/devbox sync omp                                    # repo OMP preset → laptop and devbox
 ./bin/devbox sync claude                                 # repo Claude Code preset → laptop and devbox
 ssh -t devbox claude                                     # once: /login for Claude Code on the devbox
 ```
 
-All idempotent, rerunnable anytime. Details: [Toolchain](toolchain.md#-agent-skills-and-browser-automation),
+All idempotent, rerunnable anytime. Details: [Toolchain](toolchain.md#-agent-skills),
 [Claude Code](toolchain.md#-claude-code).
 
 ### 6. Agent git on the laptop (optional but recommended)

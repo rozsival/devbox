@@ -93,9 +93,8 @@ PRs carry the bot author too. Full mechanism: `docs/git.md`.
 
 ## Two optional extras, not installed by default
 
-`./bin/devbox skills` (workstation) installs `agent-browser`, `skill-creator`, `find-skills` into
-`~/.agents/skills` (OMP) with a symlink each in `~/.claude/skills` (Claude Code), plus its CLI and a Chrome
-build, so panes can drive a headless browser. `./bin/devbox sync omp` and `./bin/devbox sync claude` (laptop) apply the
+`./bin/devbox skills` (workstation) installs `skill-creator` and `find-skills` into `~/.agents/skills` (OMP) with a
+symlink each in `~/.claude/skills` (Claude Code). `./bin/devbox sync omp` and `./bin/devbox sync claude` (laptop) apply the
 repo's OMP preset, `home/.omp/agent/config.yml`, and Claude Code preset, `home/.claude/settings.json` (`model` plus
 `permissions.deny`/`ask` rules mirroring OMP's `bash.patterns` guardrail), to the laptop and the devbox so both share
 them; `sync omp` copies, `sync claude` merges (other tools write `hooks` into that file). Neither sync nor `skills` runs

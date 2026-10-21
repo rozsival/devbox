@@ -41,7 +41,7 @@ commands:
 
   - name: skills
     group: Workstation
-    help: Install the optional agent skills and agent-browser
+    help: Install the optional agent skills
     filters: [host]
 
   - name: shell
