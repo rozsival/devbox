@@ -31,7 +31,7 @@ devbox_usage() {
   printf "  %s   Stop and remove the container\n" "down           "
   printf "  %s   Rebuild the image from scratch and restart\n" "rebuild        "
   printf "  %s   Re-run the in-container user setup\n" "bootstrap      "
-  printf "  %s   Install the optional agent skills\n" "skills         "
+  printf "  %s   Install the optional agent skills and agent-browser\n" "skills         "
   printf "  %s   Open a login shell inside the container\n" "shell          "
   printf "  %s   List the SSH sessions connected to the container\n" "sessions       "
   printf "  %s   Show the container logs (last 100 lines)\n" "logs           "
@@ -181,7 +181,7 @@ devbox_bootstrap_usage() {
 }
 
 devbox_skills_usage() {
-  printf "devbox skills - Install the optional agent skills\n\n"
+  printf "devbox skills - Install the optional agent skills and agent-browser\n\n"
 
   printf "%s\n" "Usage:"
   printf "  devbox skills\n"

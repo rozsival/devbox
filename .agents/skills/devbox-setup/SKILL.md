@@ -180,13 +180,16 @@ sessions (`omp`/`claude` launchers) skip this, pushing HTTPS with a token minted
 ## Optional but recommended, after the phases pass
 
 ```bash
-ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # agent skills
+ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # agent skills + agent-browser CLI + Chrome
 ./bin/devbox sync omp                                    # repo OMP preset → laptop and devbox
 ./bin/devbox sync claude                                 # repo Claude Code preset → laptop and devbox
 ```
 
 `skills` installs `skill-creator` and `find-skills` into `~/.agents/skills` (OMP's skills dir) and symlinks each into
-`~/.claude/skills` (Claude Code's). Both idempotent; details: `docs/toolchain.md#-agent-skills`.
+`~/.claude/skills` (Claude Code's), plus the `agent-browser` CLI and Chrome build. Separate from bootstrap
+since the first run downloads ~180 MB, needs
+Chrome shared libraries the `Dockerfile` provides - run after an `up` on the current image, not stale. Both
+idempotent; details: `docs/toolchain.md#-agent-skills-and-browser-automation`.
 
 ## When setup does not work
 
