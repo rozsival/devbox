@@ -179,17 +179,20 @@ treats an explicit one as deliberate.
 ## Phase 5 - what the override needs
 
 - `~/.config/devbox/secrets.env` (mode 600, from `devbox agent install`): one `GH_TOKEN_<SLUG>` per identity -
-  fine-grained, `contents: write` on repos agents push to without the App, plus `actions`/`checks` read,
-  `issues`/`pull-requests` write if agents should post, `workflows` write only if agents should push
-  `.github/workflows/` changes (otherwise GitHub rejects that push). Used by the credential helper for App-less repos,
-  by `gh` in agent sessions. Same file and variable names as the devbox, and on neither machine are the
-  `GH_TOKEN_<SLUG>` lines exported (the devbox's `~/.bashrc.d/devbox.sh` exports only its model keys): they are
-  read by name, from the file. Model keys come from OMP's own config, Claude Code from its login.
+  fine-grained. Where a permission lives follows which token answers (`docs/secrets.md#permissions-per-token`):
+  on repos without the App the PAT needs the whole agent set (`contents`, `pull-requests`, `issues`, `actions`
+  write - `actions` write is what `gh run rerun` needs - `checks`/`statuses` read, `workflows` write only if agents
+  push `.github/workflows/` changes); on repos with the App it needs only `metadata` read plus what you run by hand.
+  Used by the credential helper for App-less repos, by `gh` in agent sessions. Same file and variable names as
+  the devbox, and on neither machine are the `GH_TOKEN_<SLUG>` lines exported (the devbox's
+  `~/.bashrc.d/devbox.sh` exports only its model keys): they are read by name, from the file. Model keys come
+  from OMP's own config, Claude Code from its login.
 - Per identity with an `app` field in `identities.conf`: `<app-dir>/app-id`, `<app-dir>/app.pem`
   (mode 600) - the credential helper mints a repo-scoped installation token (cached ≤30 min on tmpfs) for
   agent git on a repo the App is installed on, ahead of the PAT, and the `gh` shim uses the same token for
   an agent's `pr`/`issue`/`run`/... on that repo, so its PRs carry the bot author. Without them, that
-  identity's repos push, and its PRs open, with the PAT - as you.
+  identity's repos push, and its PRs open, with the PAT - as you. The App needs the same agent set as an App-less
+  repo's PAT; a permission change applies only after an org owner accepts it and the cached token (≤30 min) expires.
 
 Check: `./bin/devbox doctor laptop` validates every identity's own token (`devbox-gh-token --identity <slug>`,
 with `GH_HOST` set to that identity's host, for every identity) against its host, each `app.pem` as a key;

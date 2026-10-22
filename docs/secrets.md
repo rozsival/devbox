@@ -86,17 +86,8 @@ a git identity, one mental model for both. With the example registry from `ident
 Every identity gets its own `GH_TOKEN_<SLUG>` — `<SLUG>` is its slug upper-cased
 (`devbox-identities get <slug> token_var`).
 
-Minimum useful permissions:
-
-| Permission             | Level     | When                                                                                                                                    |
-| ---------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `contents`             | **write** | repos agents push to without the GitHub App installed — agent git falls back to this PAT (see [Git Identities](git.md#-agent-sessions)) |
-| `actions` / `checks`   | **read**  | always (the minimum useful set)                                                                                                         |
-| issues / pull-requests | **write** | only if agents should post                                                                                                              |
-| `workflows`            | **write** | only if agents should push `.github/workflows/` changes — without it GitHub rejects the push, and you push yourself                     |
-
-Where the identity's App is installed, agent `gh` about that repository uses the App instead (next section), so the PAT
-then serves only your own `gh`, account-wide commands and repos without the App.
+Which permissions each token needs depends on whether the identity's App is installed on the repository — see
+[Permissions per token](#permissions-per-token).
 
 ```bash
 cd ~/projects/work/<repo>
@@ -169,12 +160,70 @@ repository bypasses the App with `GH_TOKEN=$(devbox-gh-token) gh ...`.
 > A failed App lookup or mint (broken `app.pem`, API outage) makes `gh` exit 1 rather than fall back to the PAT and act
 > as someone else — the helper's rule; the failure is never cached, so the next command tries again.
 
-The App needs the permissions those commands use — `pull_requests`/`issues` **write** to post, `checks` and `statuses`
-**read** for `gh pr checks` — and, like the PAT, `workflows` **write** before its git pushes may change
-`.github/workflows/`.
+The App needs the permissions those commands use — see [Permissions per token](#permissions-per-token).
 
-Minting costs ~0.75 s (two API calls), so the helper caches the answer per repository — see [Git
-Identities](git.md#devbox-git-credential); a cached call costs what the PAT does.
+Minting costs ~0.75 s (two API calls), so the helper caches the answer per repository — see
+[Git Identities](git.md#devbox-git-credential); a cached call costs what the PAT does.
+
+#### Permissions per token
+
+Which token answers decides where a permission has to live: agent git and agent `gh` about one repository use the App
+wherever it is installed on that repository, the PAT everywhere else. The usual layout — your own account's repos
+without an App, an org's repos with the org's App installed — therefore gives three permission sets. A fine-grained PAT
+has exactly one resource owner, so an org's PAT is a token of its own on an identity of its own
+([Git Identities](git.md#can-two-identities-be-the-same-github-account)). Every table is _Repository permissions_;
+`Metadata: read` is mandatory in all three and GitHub adds it by itself.
+
+**PAT on your account's repos (no App).** The PAT does all agent work there: git through the credential helper's PAT
+path and every `gh` command.
+
+| Permission      | Level               | For                                                                                                   |
+| --------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
+| Contents        | **write**           | agent clone, pull and push; `gh pr merge`                                                             |
+| Pull requests   | **write**           | `gh pr create`, `gh pr comment`, `gh pr review` — **read** if agents should not post                  |
+| Issues          | **write**           | `gh issue create`, `gh issue comment` — **read** if agents should not post                            |
+| Actions         | **write**           | `gh run rerun`, `gh run cancel`, `gh workflow run` — **read** covers only `gh run list/view/watch`    |
+| Checks          | read                | `gh pr checks`                                                                                        |
+| Commit statuses | read                | `gh pr checks`                                                                                        |
+| Workflows       | **write**, optional | pushes that change `.github/workflows/` — without it GitHub rejects them, and you push those yourself |
+
+**PAT on an org's repos (org App installed).** Agents' repository commands go to the App, so this token serves only what
+names no repository — an agent's `gh repo list`, `gh search`, `gh api user`, and an explicit
+`GH_TOKEN=$(devbox-gh-token) gh …` — plus every `gh` you run yourself in that tree, a devbox pane included.
+
+| Permission                    | Level    | For                                                                                         |
+| ----------------------------- | -------- | ------------------------------------------------------------------------------------------- |
+| Metadata                      | read     | `gh repo list`, `gh search repos`, `gh repo view` — the minimum agents need from this token |
+| Contents                      | read     | `gh repo view`'s README, `gh search code`                                                   |
+| Issues, Pull requests         | read     | `gh search issues`, `gh search prs` across the org, if agents search                        |
+| Anything from the first table | as there | only what you run by hand — Actions **write** for your own `gh run rerun`, for example      |
+
+An org repo the App is _not_ installed on falls back to this PAT for agent git and `gh` alike, so it needs the whole
+first table. The org itself must allow fine-grained PATs (org settings → _Personal access tokens_); one requiring
+administrator approval leaves a new token pending — public resources only — until an owner approves it.
+
+**The org's App.** Set under the App's settings → _Permissions & events_; it needs no account or organization
+permission. Each token is minted for one repository with the installation's whole permission set
+([Git Identities](git.md#devbox-git-credential)), so this table is exactly what an agent can do there.
+
+| Permission      | Level               | For                                                                                                   |
+| --------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
+| Contents        | **write**           | agent clone, pull and push; `gh pr merge`                                                             |
+| Pull requests   | **write**           | `gh pr create`, `gh pr comment`, `gh pr review` — the bot authors them                                |
+| Issues          | **write**           | `gh issue create`, `gh issue comment`                                                                 |
+| Actions         | **write**           | `gh run rerun`, `gh run cancel`, `gh workflow run` — **read** covers only `gh run list/view/watch`    |
+| Checks          | read                | `gh pr checks`                                                                                        |
+| Commit statuses | read                | `gh pr checks`                                                                                        |
+| Workflows       | **write**, optional | pushes that change `.github/workflows/` — without it GitHub rejects them, and you push those yourself |
+
+> [!IMPORTANT]
+> Changing an App's permissions is only a request: an org installation keeps the old set until an org owner
+> accepts it (org settings → _GitHub Apps_ → the App → _Review request_). A token minted before that keeps its old
+> permissions too, and the helper caches it for up to 30 minutes — delete `devbox-agent-<uid>/` (under
+> `$XDG_RUNTIME_DIR`, else `/dev/shm`, else `$TMPDIR`) to mint a fresh one.
+
+An App installed on your own account works the same way: its repos follow the App table, and the account's PAT shrinks
+to the second one.
 
 #### Why not `gh auth login`
 
@@ -381,6 +430,12 @@ keys; nothing here or in `bootstrap` needs a new branch. See [Git Identities](gi
 
 Because `GH_TOKEN` — however set — makes every account stored in `~/.config/gh` inert, and the "active account" is one
 global value concurrent agents would race. See [Why not `gh auth login`](#why-not-gh-auth-login).
+
+### Why does `gh run rerun` fail in an agent session but work in my shell?
+
+In an agent session, `gh run` on a repository the org's App is installed on sends the App's token, never the PAT, so the
+App needs `Actions: write`. Your own shell sends the PAT. Grant it on the App, have an org owner accept the request,
+then wait for or delete the cached token — see [Permissions per token](#permissions-per-token).
 
 ### Does OMP see my keys in plaintext?
 
