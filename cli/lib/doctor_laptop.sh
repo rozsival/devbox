@@ -406,7 +406,7 @@ doctor_laptop() {
       # GH_TOKEN answer for every identity, so a missing token would show as
       # accepted.
       if ! token="$("${HOME}/.local/bin/devbox-gh-token" --identity "${slug}" 2>/dev/null)" || [[ -z ${token} ]]; then
-        fail "no ${slug} token: set $(di_get "${slug}" token_var) in ${secrets_file} (fine-grained; contents write on repos agents push without the App)"
+        fail "no ${slug} token: set $(di_get "${slug}" token_var) in ${secrets_file} (fine-grained; permissions: docs/secrets.md, \"Permissions per token\")"
       # A subshell export, not a VAR=value prefix: the variable's name follows
       # the host, and `env NAME=token` would put the token on a command line.
       # GH_HOST because gh refuses a host it has no stored login for.

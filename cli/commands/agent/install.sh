@@ -208,7 +208,7 @@ if ((identities_seeded)); then
 fi
 if ((identities_ok)); then
   for slug in ${slugs}; do
-    echo "  - $(di_get "${slug}" token_var) in ${secrets_file} (fine-grained; contents write on the repositories agents push without the App)"
+    echo "  - $(di_get "${slug}" token_var) in ${secrets_file} (fine-grained; permissions: docs/secrets.md, \"Permissions per token\")"
   done
   for slug in ${slugs}; do
     app_dir="$(di_get "${slug}" app)"

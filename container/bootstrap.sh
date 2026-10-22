@@ -439,7 +439,7 @@ if ${identities_ok}; then
     # inherited GH_TOKEN answer for every identity, so a missing token would
     # show as accepted.
     if ! token="$(devbox-gh-token --identity "${slug}" 2>/dev/null)" || [[ -z "${token}" ]]; then
-      register_action "Add a fine-grained GitHub token for the ${slug} account to ${secrets_file} as $(di_get "${slug}" token_var) (contents write on the repositories agents push without an App; actions and checks read; issues or pull-requests write only if agents should post)"
+      register_action "Add a fine-grained GitHub token for the ${slug} account to ${secrets_file} as $(di_get "${slug}" token_var) (permissions: docs/secrets.md, \"Permissions per token\" - the full agent set on repositories without the App, little more than metadata read where it is installed)"
     # gh_env: a GitHub Enterprise Server token is read from GH_ENTERPRISE_TOKEN,
     # and checked against its own host - as GH_TOKEN it would be tried on
     # github.com and reported rejected. GH_HOST because gh refuses a host it
