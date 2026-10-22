@@ -148,8 +148,9 @@ do.
 `./bin/devbox agent install`: `bash.patterns` that deny `gh auth token|login|…`, an absolute-path `gh` (`*/bin/gh *` —
 past the shim), unsetting or reassigning the launcher's exports (`env -u`, `unset GIT_CONFIG_GLOBAL`, `GH_CONFIG_DIR=…`;
 reading them stays allowed; `env -i` prompts instead, since this repo's own smoke tests use it), keychain reads,
-`gh secret`/`variable`/`repo delete`, `--no-verify` and force pushes, and prompt for `op`, `gcloud` and
-`terraform apply`.
+`gh secret`/`variable`/`repo delete`, `--no-verify` and force pushes, Vercel/Neon project deletion, API `DELETE`s and
+token minting, and prompt for `op`, `gcloud`, `terraform apply` and every Vercel/Neon write, deploy, login or
+database-password read ([Toolchain](toolchain.md#-omp)).
 
 > [!WARNING]
 > `deny` holds even under yolo, but the rules match command text in the `bash` tool only — not `eval`, not a script file
@@ -157,7 +158,8 @@ reading them stays allowed; `env -i` prompts instead, since this repo's own smok
 > carry the rules it wants itself.
 
 `home/.claude/settings.json` is the Claude Code counterpart: `permissions.deny` and `permissions.ask` rules, written
-`Bash(<pattern>)`, that mirror the OMP list with the same deny/prompt split (bare `op`/`gcloud` folded into `Bash(op *)`/`Bash(gcloud *)`). Seeded or merged by
+`Bash(<pattern>)`, that mirror the OMP list with the same deny/prompt split (bare `op`/`gcloud`/`vercel` and
+`*vercel* token` folded into their `Bash(… *)` or `Bash(*vercel)` rule). Seeded or merged by
 `bootstrap` and `./bin/devbox agent install` when `~/.claude/settings.json` has no `permissions.deny`, re-applied by
 `./bin/devbox sync claude`; merge, not copy, because other tools write that file ([Toolchain](toolchain.md#-claude-code)).
 Claude Code differs from OMP in four ways that matter here:

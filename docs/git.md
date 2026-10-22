@@ -305,20 +305,21 @@ next source, an askpass program. A failure therefore ends the operation, with th
 lookup or mint is never cached, and `devbox-git-credential token` exits non-zero on it, so the `gh` shim stops there
 instead of falling back to the PAT. Only a definitive "App not installed" (every candidate `404`) falls back.
 
-`store` and `erase` are accepted and ignored. Two subcommands inspect it:
+`store` and `erase` are accepted and ignored. Three subcommands inspect or reset it:
 
 | Command                                          | Prints                                                                                                                                                                                                                         |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `devbox-git-credential explain owner/repo [dir]` | Which path a request would take — `app:<slug>:<installation-id>` or `pat:<slug>` — without minting anything                                                                                                                    |
 | `devbox-git-credential token owner/repo [dir]`   | Just the App token, or nothing when no App covers the repository, and exits 1 when the lookup or mint fails: the `gh` shim's way to act as the same bot in an agent session ([Secrets](secrets.md#agent-sessions-use-the-app)) |
+| `devbox-git-credential forget [owner/repo]`      | The cache entries it dropped — every identity's for that repository, or all of them without one; run after an App's permissions change ([Secrets](secrets.md#changing-app-permissions))                                        |
 
 Minting takes two API round trips (~0.75 s), so the App answer is cached per repository and per working directory's
 identity: a token for 30 of its 60 minutes (whoever receives it keeps at least half an hour — `gh run watch` included),
 "no App installed" for 5 minutes, so installing the App on a repository takes effect within that; a failure is never
 cached. The cache is `devbox-agent-<uid>/` under `$XDG_RUNTIME_DIR`, else `/dev/shm` (the container's tmpfs), else
 `$TMPDIR` (the laptop) — mode 700, files 600, never under `$HOME`, which is the bind mount and gets backed up; a
-directory not owned by you there disables caching rather than trusting it. Delete it to force a fresh mint. The PAT path
-was never slow and is not cached.
+directory not owned by you there disables caching rather than trusting it. `devbox-git-credential forget` forces a fresh
+mint. The PAT path was never slow and is not cached.
 
 An App is scoped per repository by its installation — no allowlist; installing it is all the configuration. A repo
 without the App gets the PAT, needing `contents: write` there, not read-only — see [Secrets](secrets.md#-github-cli).

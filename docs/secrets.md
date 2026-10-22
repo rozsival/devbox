@@ -214,11 +214,25 @@ the second one.
 
 #### Changing App permissions
 
-> [!IMPORTANT]
-> A permission change is only a request: the installation keeps the old set until an org owner accepts it (org settings
-> → _GitHub Apps_ → the App → _Review request_). A token minted before that keeps the old permissions for up to 30
-> minutes — delete `devbox-agent-<uid>/` (under `$XDG_RUNTIME_DIR`, else `/dev/shm`, else `$TMPDIR`) to mint a fresh
-> one.
+An agent's `gh` failing with _"Resource not accessible by **integration**"_ means the App's token lacks a permission.
+Fix it in this order, on the machine the agent runs on:
+
+1. **Grant it.** App settings → _Permissions & events_ → raise the permission → _Save_.
+2. **Accept it.** The change is only a request until an org owner accepts it: org settings → _GitHub Apps_ → the App →
+   _Review request_ → _Accept new permissions_. Until then every new token still has the old set.
+3. **Drop the cached token.** Tokens keep the permissions they were minted with and are cached for up to 30 minutes.
+   On the machine the agent runs on:
+
+   ```bash
+   devbox-git-credential forget <owner>/<repo>    # or no argument: every cached repository
+   ```
+
+4. **Retry the command.** Restarting the agent does nothing: the cache is on tmpfs, not in the session, and the `gh`
+   shim mints a fresh token on its next call.
+
+If it still fails with the same message, step 2 has not happened yet. _"… by **personal access token**"_ instead
+means the repository is not covered by the App (`devbox-git-credential explain <owner>/<repo>`), and the PAT needs the
+permission.
 
 ### Why not `gh auth login`
 
@@ -407,8 +421,12 @@ Add a `[slug]` block to `identities.conf`, its `GH_TOKEN_<SLUG>` here, and its t
 ### Why does `gh run rerun` fail in an agent session but work in my shell?
 
 In an agent session, `gh run` on a repository with the org's App uses the App's token, so the **App** needs
-`Actions: write`; your shell sends the PAT. Grant it on the App, have an org owner accept the request, then wait for or
-delete the cached token — see [Changing App permissions](#changing-app-permissions).
+`Actions: write`; your shell sends the PAT. Grant it on the App, have an org owner accept the request, then run
+`devbox-git-credential forget <owner>/<repo>` — see [Changing App permissions](#changing-app-permissions).
+
+GitHub's error names the token that was refused: _"Resource not accessible by **integration**"_ is the App's token,
+_"… by **personal access token**"_ is the PAT. `devbox-git-credential explain <owner>/<repo>` shows which one the
+repository gets.
 
 ### Does OMP see my keys in plaintext?
 

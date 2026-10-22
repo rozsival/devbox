@@ -173,6 +173,613 @@ bash:
       approval: prompt
     - match: '*terraform destroy*'
       approval: deny
+    # Vercel and Neon: reads (list, inspect, logs, env ls, `api` GETs) stay with
+    # the session's mode; anything that writes, deploys, spends, links, logs
+    # in or hands out a secret prompts. Every rule starts with `*` and puts
+    # `*` after the CLI name, so the global binary, `npx`/`pnpx`/`pnpm dlx`/
+    # `bunx`, a pinned `vercel@<v>`, `neonctl` and global flags before the
+    # subcommand all match; the cost is a prompt on any other command that
+    # mentions the CLI before such a word (`git commit -m "vercel: add …"`,
+    # and for `vc` any word containing it, `svc`). Write subcommands are
+    # matched by verb, not enumerated per resource, so new resources sharing
+    # a verb are covered; a new verb is not. A bare `npx vercel@<v>` still
+    # deploys unprompted. Deny mirrors `gh repo delete` and `gh api -X
+    # DELETE`: project deletion, raw API DELETEs and minting account tokens.
+    - match: '*vercel* project delete*'
+      approval: deny
+    - match: '*vercel* project remove*'
+      approval: deny
+    - match: '*vercel* project rm*'
+      approval: deny
+    - match: '*vercel* projects delete*'
+      approval: deny
+    - match: '*vercel* projects remove*'
+      approval: deny
+    - match: '*vercel* projects rm*'
+      approval: deny
+    - match: '*vercel* tokens create*'
+      approval: deny
+    - match: '*vercel* api *-X DELETE*'
+      approval: deny
+    - match: '*vercel* api *-XDELETE*'
+      approval: deny
+    - match: '*vercel* api *--method DELETE*'
+      approval: deny
+    - match: '*vercel* api *--method=DELETE*'
+      approval: deny
+    - match: '*vc* project delete*'
+      approval: deny
+    - match: '*vc* project remove*'
+      approval: deny
+    - match: '*vc* project rm*'
+      approval: deny
+    - match: '*vc* projects delete*'
+      approval: deny
+    - match: '*vc* projects remove*'
+      approval: deny
+    - match: '*vc* projects rm*'
+      approval: deny
+    - match: '*vc* tokens create*'
+      approval: deny
+    - match: '*vc* api *-X DELETE*'
+      approval: deny
+    - match: '*vc* api *-XDELETE*'
+      approval: deny
+    - match: '*vc* api *--method DELETE*'
+      approval: deny
+    - match: '*vc* api *--method=DELETE*'
+      approval: deny
+    - match: '*neon* projects delete*'
+      approval: deny
+    - match: '*neon* project delete*'
+      approval: deny
+    - match: '*neon* api-keys create*'
+      approval: deny
+    - match: '*neon* api-key create*'
+      approval: deny
+    - match: '*neon* api *-X DELETE*'
+      approval: deny
+    - match: '*neon* api *-XDELETE*'
+      approval: deny
+    - match: '*neon* api *--method DELETE*'
+      approval: deny
+    - match: '*neon* api *--method=DELETE*'
+      approval: deny
+    # Vercel, then the same rules for its `vc` alias: bare `vercel` or a path
+    # deploys, `alias`/`ln` default to `set`, `sandbox` is paid remote compute,
+    # and `--add`/`--remove`/`--restore` write through otherwise-read commands.
+    - match: 'vercel'
+      approval: prompt
+    - match: '*vercel'
+      approval: prompt
+    - match: '*vercel .*'
+      approval: prompt
+    - match: '*vercel /*'
+      approval: prompt
+    - match: '*vercel ~*'
+      approval: prompt
+    - match: '*vercel* --prod*'
+      approval: prompt
+    - match: '*vercel* --prebuilt*'
+      approval: prompt
+    - match: '*vercel* --yes*'
+      approval: prompt
+    - match: '*vercel* --add*'
+      approval: prompt
+    - match: '*vercel* --remove*'
+      approval: prompt
+    - match: '*vercel* --restore*'
+      approval: prompt
+    - match: '*vercel* i *'
+      approval: prompt
+    - match: '*vercel* token *'
+      approval: prompt
+    - match: '*vercel* token'
+      approval: prompt
+    - match: '*vercel* sandbox *'
+      approval: prompt
+    - match: '*vercel* abort*'
+      approval: prompt
+    - match: '*vercel* accept-terms*'
+      approval: prompt
+    - match: '*vercel* activate-key*'
+      approval: prompt
+    - match: '*vercel* add*'
+      approval: prompt
+    - match: '*vercel* alias*'
+      approval: prompt
+    - match: '*vercel* approve*'
+      approval: prompt
+    - match: '*vercel* archive*'
+      approval: prompt
+    - match: '*vercel* attach*'
+      approval: prompt
+    - match: '*vercel* auto-renew*'
+      approval: prompt
+    - match: '*vercel* autoupdate*'
+      approval: prompt
+    - match: '*vercel* block*'
+      approval: prompt
+    - match: '*vercel* buy*'
+      approval: prompt
+    - match: '*vercel* claim*'
+      approval: prompt
+    - match: '*vercel* clear*'
+      approval: prompt
+    - match: '*vercel* complete*'
+      approval: prompt
+    - match: '*vercel* connect*'
+      approval: prompt
+    - match: '*vercel* copy*'
+      approval: prompt
+    - match: '*vercel* cp*'
+      approval: prompt
+    - match: '*vercel* create*'
+      approval: prompt
+    - match: '*vercel* dangerously-delete*'
+      approval: prompt
+    - match: '*vercel* delete*'
+      approval: prompt
+    - match: '*vercel* deploy*'
+      approval: prompt
+    - match: '*vercel* detach*'
+      approval: prompt
+    - match: '*vercel* disable*'
+      approval: prompt
+    - match: '*vercel* discard*'
+      approval: prompt
+    - match: '*vercel* disconnect*'
+      approval: prompt
+    - match: '*vercel* empty-store*'
+      approval: prompt
+    - match: '*vercel* enable*'
+      approval: prompt
+    - match: '*vercel* import*'
+      approval: prompt
+    - match: '*vercel* init*'
+      approval: prompt
+    - match: '*vercel* install*'
+      approval: prompt
+    - match: '*vercel* invalidate*'
+      approval: prompt
+    - match: '*vercel* invite*'
+      approval: prompt
+    - match: '*vercel* invoke*'
+      approval: prompt
+    - match: '*vercel* issue*'
+      approval: prompt
+    - match: '*vercel* link*'
+      approval: prompt
+    - match: '*vercel* ln*'
+      approval: prompt
+    - match: '*vercel* login*'
+      approval: prompt
+    - match: '*vercel* logout*'
+      approval: prompt
+    - match: '*vercel* mcp*'
+      approval: prompt
+    - match: '*vercel* move*'
+      approval: prompt
+    - match: '*vercel* override*'
+      approval: prompt
+    - match: '*vercel* pause*'
+      approval: prompt
+    - match: '*vercel* presign*'
+      approval: prompt
+    - match: '*vercel* promote*'
+      approval: prompt
+    - match: '*vercel* publish*'
+      approval: prompt
+    - match: '*vercel* pull*'
+      approval: prompt
+    - match: '*vercel* purge*'
+      approval: prompt
+    - match: '*vercel* push*'
+      approval: prompt
+    - match: '*vercel* put*'
+      approval: prompt
+    - match: '*vercel* redeploy*'
+      approval: prompt
+    - match: '*vercel* remove*'
+      approval: prompt
+    - match: '*vercel* rename*'
+      approval: prompt
+    - match: '*vercel* renew*'
+      approval: prompt
+    - match: '*vercel* reopen*'
+      approval: prompt
+    - match: '*vercel* reorder*'
+      approval: prompt
+    - match: '*vercel* reply*'
+      approval: prompt
+    - match: '*vercel* request*'
+      approval: prompt
+    - match: '*vercel* rerun*'
+      approval: prompt
+    - match: '*vercel* resolve*'
+      approval: prompt
+    - match: '*vercel* restore*'
+      approval: prompt
+    - match: '*vercel* resume*'
+      approval: prompt
+    - match: '*vercel* revoke*'
+      approval: prompt
+    - match: '*vercel* rm*'
+      approval: prompt
+    - match: '*vercel* rollback*'
+      approval: prompt
+    - match: '*vercel* rollout*'
+      approval: prompt
+    - match: '*vercel* run*'
+      approval: prompt
+    - match: '*vercel* scale*'
+      approval: prompt
+    - match: '*vercel* set*'
+      approval: prompt
+    - match: '*vercel* setup*'
+      approval: prompt
+    - match: '*vercel* signed-token*'
+      approval: prompt
+    - match: '*vercel* signup*'
+      approval: prompt
+    - match: '*vercel* split*'
+      approval: prompt
+    - match: '*vercel* start*'
+      approval: prompt
+    - match: '*vercel* stop*'
+      approval: prompt
+    - match: '*vercel* switch*'
+      approval: prompt
+    - match: '*vercel* tag*'
+      approval: prompt
+    - match: '*vercel* token-pass*'
+      approval: prompt
+    - match: '*vercel* transfer-in*'
+      approval: prompt
+    - match: '*vercel* unarchive*'
+      approval: prompt
+    - match: '*vercel* unblock*'
+      approval: prompt
+    - match: '*vercel* unlink*'
+      approval: prompt
+    - match: '*vercel* update*'
+      approval: prompt
+    - match: '*vercel* upgrade*'
+      approval: prompt
+    - match: '*vercel* upload*'
+      approval: prompt
+    - match: '*vercel* use*'
+      approval: prompt
+    - match: '*vercel* api *-X*'
+      approval: prompt
+    - match: '*vercel* api *--method*'
+      approval: prompt
+    - match: '*vercel* api * -F *'
+      approval: prompt
+    - match: '*vercel* api * -f *'
+      approval: prompt
+    - match: '*vercel* api *--field*'
+      approval: prompt
+    - match: '*vercel* api *--raw-field*'
+      approval: prompt
+    - match: '*vercel* api *--input*'
+      approval: prompt
+    - match: 'vc'
+      approval: prompt
+    - match: '*vc'
+      approval: prompt
+    - match: '*vc .*'
+      approval: prompt
+    - match: '*vc /*'
+      approval: prompt
+    - match: '*vc ~*'
+      approval: prompt
+    - match: '*vc* --prod*'
+      approval: prompt
+    - match: '*vc* --prebuilt*'
+      approval: prompt
+    - match: '*vc* --yes*'
+      approval: prompt
+    - match: '*vc* --add*'
+      approval: prompt
+    - match: '*vc* --remove*'
+      approval: prompt
+    - match: '*vc* --restore*'
+      approval: prompt
+    - match: '*vc* i *'
+      approval: prompt
+    - match: '*vc* token *'
+      approval: prompt
+    - match: '*vc* token'
+      approval: prompt
+    - match: '*vc* sandbox *'
+      approval: prompt
+    - match: '*vc* abort*'
+      approval: prompt
+    - match: '*vc* accept-terms*'
+      approval: prompt
+    - match: '*vc* activate-key*'
+      approval: prompt
+    - match: '*vc* add*'
+      approval: prompt
+    - match: '*vc* alias*'
+      approval: prompt
+    - match: '*vc* approve*'
+      approval: prompt
+    - match: '*vc* archive*'
+      approval: prompt
+    - match: '*vc* attach*'
+      approval: prompt
+    - match: '*vc* auto-renew*'
+      approval: prompt
+    - match: '*vc* autoupdate*'
+      approval: prompt
+    - match: '*vc* block*'
+      approval: prompt
+    - match: '*vc* buy*'
+      approval: prompt
+    - match: '*vc* claim*'
+      approval: prompt
+    - match: '*vc* clear*'
+      approval: prompt
+    - match: '*vc* complete*'
+      approval: prompt
+    - match: '*vc* connect*'
+      approval: prompt
+    - match: '*vc* copy*'
+      approval: prompt
+    - match: '*vc* cp*'
+      approval: prompt
+    - match: '*vc* create*'
+      approval: prompt
+    - match: '*vc* dangerously-delete*'
+      approval: prompt
+    - match: '*vc* delete*'
+      approval: prompt
+    - match: '*vc* deploy*'
+      approval: prompt
+    - match: '*vc* detach*'
+      approval: prompt
+    - match: '*vc* disable*'
+      approval: prompt
+    - match: '*vc* discard*'
+      approval: prompt
+    - match: '*vc* disconnect*'
+      approval: prompt
+    - match: '*vc* empty-store*'
+      approval: prompt
+    - match: '*vc* enable*'
+      approval: prompt
+    - match: '*vc* import*'
+      approval: prompt
+    - match: '*vc* init*'
+      approval: prompt
+    - match: '*vc* install*'
+      approval: prompt
+    - match: '*vc* invalidate*'
+      approval: prompt
+    - match: '*vc* invite*'
+      approval: prompt
+    - match: '*vc* invoke*'
+      approval: prompt
+    - match: '*vc* issue*'
+      approval: prompt
+    - match: '*vc* link*'
+      approval: prompt
+    - match: '*vc* ln*'
+      approval: prompt
+    - match: '*vc* login*'
+      approval: prompt
+    - match: '*vc* logout*'
+      approval: prompt
+    - match: '*vc* mcp*'
+      approval: prompt
+    - match: '*vc* move*'
+      approval: prompt
+    - match: '*vc* override*'
+      approval: prompt
+    - match: '*vc* pause*'
+      approval: prompt
+    - match: '*vc* presign*'
+      approval: prompt
+    - match: '*vc* promote*'
+      approval: prompt
+    - match: '*vc* publish*'
+      approval: prompt
+    - match: '*vc* pull*'
+      approval: prompt
+    - match: '*vc* purge*'
+      approval: prompt
+    - match: '*vc* push*'
+      approval: prompt
+    - match: '*vc* put*'
+      approval: prompt
+    - match: '*vc* redeploy*'
+      approval: prompt
+    - match: '*vc* remove*'
+      approval: prompt
+    - match: '*vc* rename*'
+      approval: prompt
+    - match: '*vc* renew*'
+      approval: prompt
+    - match: '*vc* reopen*'
+      approval: prompt
+    - match: '*vc* reorder*'
+      approval: prompt
+    - match: '*vc* reply*'
+      approval: prompt
+    - match: '*vc* request*'
+      approval: prompt
+    - match: '*vc* rerun*'
+      approval: prompt
+    - match: '*vc* resolve*'
+      approval: prompt
+    - match: '*vc* restore*'
+      approval: prompt
+    - match: '*vc* resume*'
+      approval: prompt
+    - match: '*vc* revoke*'
+      approval: prompt
+    - match: '*vc* rm*'
+      approval: prompt
+    - match: '*vc* rollback*'
+      approval: prompt
+    - match: '*vc* rollout*'
+      approval: prompt
+    - match: '*vc* run*'
+      approval: prompt
+    - match: '*vc* scale*'
+      approval: prompt
+    - match: '*vc* set*'
+      approval: prompt
+    - match: '*vc* setup*'
+      approval: prompt
+    - match: '*vc* signed-token*'
+      approval: prompt
+    - match: '*vc* signup*'
+      approval: prompt
+    - match: '*vc* split*'
+      approval: prompt
+    - match: '*vc* start*'
+      approval: prompt
+    - match: '*vc* stop*'
+      approval: prompt
+    - match: '*vc* switch*'
+      approval: prompt
+    - match: '*vc* tag*'
+      approval: prompt
+    - match: '*vc* token-pass*'
+      approval: prompt
+    - match: '*vc* transfer-in*'
+      approval: prompt
+    - match: '*vc* unarchive*'
+      approval: prompt
+    - match: '*vc* unblock*'
+      approval: prompt
+    - match: '*vc* unlink*'
+      approval: prompt
+    - match: '*vc* update*'
+      approval: prompt
+    - match: '*vc* upgrade*'
+      approval: prompt
+    - match: '*vc* upload*'
+      approval: prompt
+    - match: '*vc* use*'
+      approval: prompt
+    - match: '*vc* api *-X*'
+      approval: prompt
+    - match: '*vc* api *--method*'
+      approval: prompt
+    - match: '*vc* api * -F *'
+      approval: prompt
+    - match: '*vc* api * -f *'
+      approval: prompt
+    - match: '*vc* api *--field*'
+      approval: prompt
+    - match: '*vc* api *--raw-field*'
+      approval: prompt
+    - match: '*vc* api *--input*'
+      approval: prompt
+    # Neon: `connection-string`/`cs`, `psql`, `credentials reveal` and `env
+    # pull` hand the database password to the session; `auth` is `login`.
+    - match: '*neon* accept*'
+      approval: prompt
+    - match: '*neon* add*'
+      approval: prompt
+    - match: '*neon* allow-localhost*'
+      approval: prompt
+    - match: '*neon* apply*'
+      approval: prompt
+    - match: '*neon* assign*'
+      approval: prompt
+    - match: '*neon* auth*'
+      approval: prompt
+    - match: '*neon* bootstrap*'
+      approval: prompt
+    - match: '*neon* cleanup*'
+      approval: prompt
+    - match: '*neon* connection-string*'
+      approval: prompt
+    - match: '*neon* create*'
+      approval: prompt
+    - match: '*neon* cs*'
+      approval: prompt
+    - match: '*neon* delete*'
+      approval: prompt
+    - match: '*neon* deploy*'
+      approval: prompt
+    - match: '*neon* disable*'
+      approval: prompt
+    - match: '*neon* enable*'
+      approval: prompt
+    - match: '*neon* finalize*'
+      approval: prompt
+    - match: '*neon* init*'
+      approval: prompt
+    - match: '*neon* install*'
+      approval: prompt
+    - match: '*neon* link*'
+      approval: prompt
+    - match: '*neon* login*'
+      approval: prompt
+    - match: '*neon* mcp*'
+      approval: prompt
+    - match: '*neon* plugins*'
+      approval: prompt
+    - match: '*neon* psql*'
+      approval: prompt
+    - match: '*neon* pull*'
+      approval: prompt
+    - match: '*neon* put*'
+      approval: prompt
+    - match: '*neon* recover*'
+      approval: prompt
+    - match: '*neon* refresh-schema*'
+      approval: prompt
+    - match: '*neon* register*'
+      approval: prompt
+    - match: '*neon* remove*'
+      approval: prompt
+    - match: '*neon* rename*'
+      approval: prompt
+    - match: '*neon* reset*'
+      approval: prompt
+    - match: '*neon* restore*'
+      approval: prompt
+    - match: '*neon* restrict*'
+      approval: prompt
+    - match: '*neon* reveal*'
+      approval: prompt
+    - match: '*neon* revoke*'
+      approval: prompt
+    - match: '*neon* rotate*'
+      approval: prompt
+    - match: '*neon* set*'
+      approval: prompt
+    - match: '*neon* skills*'
+      approval: prompt
+    - match: '*neon* sync*'
+      approval: prompt
+    - match: '*neon* uninstall*'
+      approval: prompt
+    - match: '*neon* update*'
+      approval: prompt
+    - match: '*neon* api *-X*'
+      approval: prompt
+    - match: '*neon* api *--method*'
+      approval: prompt
+    - match: '*neon* api * -F *'
+      approval: prompt
+    - match: '*neon* api * -f *'
+      approval: prompt
+    - match: '*neon* api *--field*'
+      approval: prompt
+    - match: '*neon* api *--raw-field*'
+      approval: prompt
+    - match: '*neon* api * -d *'
+      approval: prompt
+    - match: '*neon* api *--data*'
+      approval: prompt
     # History and data destruction. --force-with-lease is deliberately left
     # alone: every force pattern needs a space right after --force/-f.
     - match: '* --no-verify*'
