@@ -150,7 +150,7 @@ register on GitHub - already your normal, registered laptop keys.
    revoke.
 2. Put one fine-grained GitHub token per identity in `~/.config/devbox/secrets.env`: `GH_TOKEN_<SLUG>`
    (e.g. `GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK`) - on repos without the GitHub App the agent set (`contents`,
-   `pull-requests`, `issues`, `actions` write, `checks`/`statuses` read, `workflows` write only if agents should
+   `pull-requests`, `issues`, `actions` write, `statuses` read, `workflows` write only if agents should
    push `.github/workflows/` changes); on repos with the App only `metadata` read plus what you run by hand,
    since agents' repository commands use the App there (`docs/secrets.md#permissions-per-token`).
    Working directory picks which (the `dir` prefixes in `identities.conf`, same rule as git identities);

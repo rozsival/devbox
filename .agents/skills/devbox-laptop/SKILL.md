@@ -181,7 +181,7 @@ treats an explicit one as deliberate.
 - `~/.config/devbox/secrets.env` (mode 600, from `devbox agent install`): one `GH_TOKEN_<SLUG>` per identity -
   fine-grained. Where a permission lives follows which token answers (`docs/secrets.md#permissions-per-token`):
   on repos without the App the PAT needs the whole agent set (`contents`, `pull-requests`, `issues`, `actions`
-  write - `actions` write is what `gh run rerun` needs - `checks`/`statuses` read, `workflows` write only if agents
+  write - `actions` write is what `gh run rerun` needs - `statuses` read, `workflows` write only if agents
   push `.github/workflows/` changes); on repos with the App it needs only `metadata` read plus what you run by hand.
   Used by the credential helper for App-less repos, by `gh` in agent sessions. Same file and variable names as
   the devbox, and on neither machine are the `GH_TOKEN_<SLUG>` lines exported (the devbox's

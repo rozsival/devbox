@@ -1,4 +1,4 @@
-# 📚 devbox Documentation
+# 📚 Devbox Documentation
 
 > Entry point to the devbox documentation. Each page covers **one domain**, opens with a one-paragraph summary, links
 > its related pages, and ends with an FAQ where one is useful.

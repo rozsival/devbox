@@ -183,9 +183,10 @@ path and every `gh` command.
 | Pull requests   | **write**           | `gh pr create`, `gh pr comment`, `gh pr review` — **read** if agents should not post                  |
 | Issues          | **write**           | `gh issue create`, `gh issue comment` — **read** if agents should not post                            |
 | Actions         | **write**           | `gh run rerun`, `gh run cancel`, `gh workflow run` — **read** covers only `gh run list/view/watch`    |
-| Checks          | read                | `gh pr checks`                                                                                        |
 | Commit statuses | read                | `gh pr checks`                                                                                        |
 | Workflows       | **write**, optional | pushes that change `.github/workflows/` — without it GitHub rejects them, and you push those yourself |
+
+No _Checks_ row: that permission exists only for GitHub Apps, and the fine-grained token form does not offer it.
 
 **PAT on an org's repos (org App installed).** Agents' repository commands go to the App, so this token serves only what
 names no repository — an agent's `gh repo list`, `gh search`, `gh api user`, and an explicit
