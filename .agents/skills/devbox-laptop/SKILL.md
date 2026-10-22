@@ -185,8 +185,8 @@ treats an explicit one as deliberate.
   push `.github/workflows/` changes); on repos with the App it needs only `metadata` read plus what you run by hand.
   Used by the credential helper for App-less repos, by `gh` in agent sessions. Same file and variable names as
   the devbox, and on neither machine are the `GH_TOKEN_<SLUG>` lines exported (the devbox's
-  `~/.bashrc.d/devbox.sh` exports only its model keys): they are read by name, from the file. Model keys come
-  from OMP's own config, Claude Code from its login.
+  `~/.bashrc.d/devbox.sh` unsets them after sourcing): they are read by name, from the file. Both agents log
+  in with their own `/login` subscription, so no model key is needed.
 - Per identity with an `app` field in `identities.conf`: `<app-dir>/app-id`, `<app-dir>/app.pem`
   (mode 600) - the credential helper mints a repo-scoped installation token (cached ≤30 min on tmpfs) for
   agent git on a repo the App is installed on, ahead of the PAT, and the `gh` shim uses the same token for

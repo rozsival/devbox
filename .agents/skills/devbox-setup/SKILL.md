@@ -157,10 +157,11 @@ register on GitHub - already your normal, registered laptop keys.
    `devbox-gh-token --account` reports it. Skip `gh auth login`: its web flow can't scope below `repo` +
    `read:org` + `gist` - non-expiring, account-wide, plaintext (no keyring here). A box-wide `GH_TOKEN`
    works but overrides every identity's own, killing the per-directory choice.
-3. Fill the rest of `~/.config/devbox/secrets.env` (mode 600) with project-shared `KEY=value` pairs - model
-   API keys for OMP. Every shell sources it, interactive or not. Never put one project's secrets here;
-   those go in that project's `.env`. An `ANTHROPIC_API_KEY` here is OMP's only - `claude-launcher`
-   unsets it so Claude Code stays on its `/login` subscription.
+3. Log both agents in once from a pane: `/login` in `omp` and in `claude` (subscriptions, no API key
+   needed). Anything else in `~/.config/devbox/secrets.env` (mode 600) is optional, project-shared
+   `KEY=value` pairs - a model API key only for a provider used by key. Every shell sources it, interactive
+   or not. Never put one project's secrets here; those go in that project's `.env`. `claude-launcher`
+   unsets `ANTHROPIC_API_KEY` so Claude Code stays on its `/login` subscription.
 4. Place each identity's GitHub App credentials in _that identity's own_ `app` directory from
    `identities.conf` (`app-id`, `app.pem`, mode 600) if it needs one. Bootstrap creates the directory,
    never fetches secrets; once present, the credential helper mints a repo-scoped installation token for

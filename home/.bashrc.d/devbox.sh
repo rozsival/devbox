@@ -65,7 +65,7 @@ fi
 
 # Box-wide tool credentials: plain KEY=value pairs, mode 600, on the bind mount.
 # Sourced outside the interactive guard on purpose - agents and tooling arrive
-# as `ssh devbox <cmd>`, which is non-interactive, and they need the model keys
+# as `ssh devbox <cmd>`, which is non-interactive, and they need any keys here
 # just as much as a pane does. `set -a` exports every assignment without
 # repeating `export` in the file.
 #

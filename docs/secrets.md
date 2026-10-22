@@ -8,86 +8,94 @@
 
 ---
 
-## 🗂️ Three layers
+## 🗂️ Overview
 
 > [!WARNING]
 > A deliberate reduction of authority, not an oversight — the container isolates the host filesystem and contains
 > credentials; it's **not** a confidentiality boundary. Assume anything inside can leave; put nothing in not worth its
 > blast radius. See [Security Model](security.md).
 
+### Layers
+
 | Layer                  | Holds                                    | Scope of a leak                                    |
 | ---------------------- | ---------------------------------------- | -------------------------------------------------- |
 | Identity (public keys) | `~/.ssh/id_<slug>.pub`, one per identity | none alone — selects the forwarded key GitHub sees |
-| Box-wide tools         | `~/.config/devbox/secrets.env`           | the tools' credentials                             |
+| Box-wide tools         | `secrets.env`, agent logins, App keys    | every agent on the box                             |
 | Per project            | that project's `.env`                    | one project                                        |
 
-Everything lives on the `/home/dev` bind mount, so it survives container/image rebuilds, established once per host.
+### Where each secret lives
 
-| Secret                                           | Lives in                                                                       | Established by                                                                                             |
-| ------------------------------------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| SSH identity public keys (one pair per identity) | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing)           | `bootstrap`, from `pubkey`/`signing_pubkey` in `~/.config/devbox/identities.conf` — no private key present |
-| `gh` tokens, one per identity                    | `~/.config/devbox/secrets.env`                                                 | you, one fine-grained GitHub PAT per identity                                                              |
-| Model API keys for OMP                           | `~/.config/devbox/secrets.env` (devbox only: nothing exports it on the laptop) | you, plain values                                                                                          |
-| Claude Code login                                | `~/.claude/.credentials.json`                                                  | you, once, `/login` in a `claude` session ([below](#-claude-code-login))                                   |
-| GitHub App credentials (per identity, optional)  | the directory that identity's `app` field names                                | you, `app-id` + `app.pem` at mode 600 ([Git Identities](git.md#devbox-git-credential))                     |
-| Per-project secrets                              | `<project>/.env`                                                               | you, rendered on the laptop                                                                                |
-| GCP service-account key                          | `~/.config/gcloud/<gcp-project>-*.json`                                        | you, one per project, mode 600                                                                             |
+Everything is on the `/home/dev` bind mount, so it survives rebuilds and is set up once per host.
+
+| Secret                                 | Lives in                                                             | Set up by                                                                   |
+| -------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| SSH public keys, one pair per identity | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `identities.conf` — no private key present                |
+| `gh` tokens, one per identity          | `~/.config/devbox/secrets.env`                                       | you, a fine-grained PAT each ([below](#-github-cli))                        |
+| OMP login                              | `~/.omp/agent/agent.db`                                              | you, once, `/login` in `omp` ([below](#omp))                                |
+| Claude Code login                      | `~/.claude/.credentials.json`                                        | you, once, `/login` in `claude` ([below](#claude-code))                     |
+| Model API keys (optional)              | `~/.config/devbox/secrets.env`                                       | you, only for providers you use by key                                      |
+| GitHub App credentials (optional)      | the directory the identity's `app` field names                       | you, `app-id` + `app.pem` at mode 600 ([Git](git.md#devbox-git-credential)) |
+| Per-project secrets                    | `<project>/.env`                                                     | you, rendered on the laptop ([below](#-per-project-secrets))                |
+| GCP service-account key                | `~/.config/gcloud/<gcp-project>-*.json`                              | you, one per project, mode 600 ([below](#provisioning-a-key))               |
 
 ---
 
 ## ✅ Manual checklist
 
-`bootstrap` prints exactly what's left; nothing below is automated, since it all needs a browser or a secret.
+Everything here needs a browser or a secret, so none of it is automated. `bootstrap` prints the steps still open, except
+the OMP login.
 
-| #   | Step                         | Details                                                                                                                                                                                                                                  |
-| --- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Set identity public keys     | Set each identity's `pubkey` (authentication) and `signing_pubkey` (signing) in `~/.config/devbox/identities.conf` to the laptop's public keys, already on GitHub — the devbox registers nothing. See [Git Identities](git.md#-signing). |
-| 2   | Fill `secrets.env`           | Fill `~/.config/devbox/secrets.env` with a `GH_TOKEN_<SLUG>` per identity, and model API keys — fine-grained, scoped as below (see [`gh`](#gh)). `gh` picks tokens up immediately; reconnect so model keys reach open shells.            |
-| 3   | Place GitHub App credentials | If configured, place any identity's GitHub App credentials in the directory its `app` field names (`app-id`, `app.pem` at mode 600) — see [Agent git credentials](#-agent-git-credentials).                                              |
-| 4   | Log Claude Code in           | Once: `claude` in a pane, then `/login` — see [Claude Code login](#-claude-code-login).                                                                                                                                                  |
+| #   | Step                         | Details                                                                                                      |
+| --- | ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| 1   | Set identity public keys     | `pubkey` and `signing_pubkey` per identity in `identities.conf` — see [Git Identities](git.md#-signing)      |
+| 2   | Fill `secrets.env`           | A `GH_TOKEN_<SLUG>` per identity ([permissions](#permissions-per-token)); model API keys only if you use any |
+| 3   | Place GitHub App credentials | If an identity has an `app` field: `app-id` and `app.pem` (mode 600) in that directory                       |
+| 4   | Log the agents in            | `/login` once in `omp` and once in `claude` — see [Agent logins](#-agent-logins)                             |
 
 ---
 
-## 🔑 Box-wide tool credentials
+## 🔑 `secrets.env`
 
-`~/.config/devbox/secrets.env` is plain `KEY=value` pairs at mode 600, installed from
-`home/.config/devbox/secrets.env.example` if absent, never overwritten. `~/.bashrc.d/devbox.sh` sources it inside
-`set -a`/`set +a`, **outside** the interactive guard, because agents arrive as `ssh devbox <cmd>` (non-interactive);
-`container/bootstrap.sh` prepends the `~/.bashrc.d` loader ahead of Ubuntu's `~/.bashrc` so that path reads it too.
-`~/.bashrc.d/devbox.sh` then unsets every `GH_TOKEN_<SLUG>` right after sourcing: only `devbox-gh-token` needs them,
-and it reads them from the file by name, so a dev server, a test runner or a package's install script never inherits
-every account's PAT. Model keys stay exported — OMP reads them from its environment.
+### What it holds
+
+`~/.config/devbox/secrets.env` holds plain `KEY=value` pairs at mode 600: one GitHub token per identity, plus any model
+API key you choose to use. `bootstrap` installs it from `home/.config/devbox/secrets.env.example` if absent and never
+overwrites it.
 
 ```dotenv
 GH_TOKEN_PERSONAL=github_pat_...
 GH_TOKEN_WORK=github_pat_...
-ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 > [!IMPORTANT]
 > Only credentials **every** project shares belong here — a per-project secret here reaches every agent on every other
 > project, defeating the layering.
 
-The same file exists on the laptop once `./bin/devbox agent install` runs — same template, mode 600, never overwritten —
-read there only by agent sessions: `devbox-gh-token` for the `gh` shim, `devbox-git-credential`'s PAT fallback. Your
-shell never sources it; your `gh` keeps its OAuth login. Fill it with every identity's `GH_TOKEN_<SLUG>`
-(`devbox doctor laptop` validates them); model keys stay the devbox's concern.
+### How it is loaded
 
-### `gh`
+On the devbox, `~/.bashrc.d/devbox.sh` sources it under `set -a` in every shell, interactive or not — agents arrive as
+`ssh devbox <cmd>`. It then unsets every `GH_TOKEN_<SLUG>`: only `devbox-gh-token` needs them, and it reads them from the
+file by name, so a dev server or an install script never inherits every account's PAT. Other keys stay exported.
 
-**One fine-grained token per identity in `identities.conf`, chosen by the working directory** — the same rule that picks
-a git identity, one mental model for both. With the example registry from `identities.conf.example`:
+On the laptop, `./bin/devbox agent install` creates the same file, but no shell sources it: only `devbox-gh-token` and
+`devbox-git-credential` read it, in agent sessions. Your own `gh` keeps its OAuth login.
+
+Neither copy travels: `devbox sync` carries `identities.conf` and the agent presets, never secrets.
+
+---
+
+## 🐙 GitHub CLI
+
+### One token per identity
+
+Each identity in `identities.conf` gets its own fine-grained token, `GH_TOKEN_<SLUG>` (the slug upper-cased;
+`devbox-identities get <slug> token_var`). The working directory picks which one, by the same `dir` rule that picks a
+git identity:
 
 | Working directory    | Variable            | Identity           |
 | -------------------- | ------------------- | ------------------ |
 | everywhere else      | `GH_TOKEN_PERSONAL` | personal (default) |
 | `~/projects/work/**` | `GH_TOKEN_WORK`     | work               |
-
-Every identity gets its own `GH_TOKEN_<SLUG>` — `<SLUG>` is its slug upper-cased
-(`devbox-identities get <slug> token_var`).
-
-Which permissions each token needs depends on whether the identity's App is installed on the repository — see
-[Permissions per token](#permissions-per-token).
 
 ```bash
 cd ~/projects/work/<repo>
@@ -95,87 +103,62 @@ devbox-gh-token --account     # work
 gh repo view --json nameWithOwner
 ```
 
-#### Why a shim rather than an exported `GH_TOKEN`
+### How a token is resolved
 
-`~/.local/libexec/devbox-agent/gh` is a shim ahead of the real `gh` on PATH: it calls `devbox-gh-token`, exporting the
-result once. `~/.bashrc.d/devbox.sh` exports **no** `GH_TOKEN`. One set in the environment — even empty — passes through
-untouched: the caller chose its principal, and empty means "no token", which is how a launcher that starts an unattended
-shell keeps it from ever acting with your PAT.
+`~/.local/libexec/devbox-agent/gh` is a shim ahead of the real `gh` on the PATH. It asks `devbox-gh-token` for a token
+on every call and exports it for that call only; nothing exports `GH_TOKEN` at shell startup. Resolving per call is what
+lets the account follow the tree: an agent's session opens in `$HOME` and only later works in a project.
 
-The variable follows the identity's host: `GH_TOKEN` for `github.com` (and GHE.com), `GH_ENTERPRISE_TOKEN` for a GitHub
-Enterprise Server `host` — the only one gh reads for such a host. Exported as `GH_TOKEN`, an Enterprise token would go
-to `github.com` with every request gh sends there. `devbox-identities get <slug> gh_env` names it; an explicit
-`GH_ENTERPRISE_TOKEN` passes through like an explicit `GH_TOKEN`. Only for an identity whose `host` is not `github.com`
-does the shim also export `GH_HOST=<host>` with the token, and only when `GH_HOST` is unset: gh refuses a host it holds
-no login for unless `GH_HOST` names it, and these sessions hold no login by design.
+`devbox-gh-token` takes the first of:
 
-An agent's directory comes late: the session opens in `$HOME`, then works a project as cwd. A token resolved once at
-startup would pin the default identity for the whole session, including a second identity's tree; resolving per
-invocation makes the account follow the tree.
+| Order | Source                                                                                 |
+| ----- | -------------------------------------------------------------------------------------- |
+| 1     | an explicit `GH_TOKEN` in the environment — even empty, which means "no token"         |
+| 2     | the identity's variable in the environment, set for one command                        |
+| 3     | the same variable read directly from `secrets.env` — so a new token needs no reconnect |
 
-Resolution order inside `devbox-gh-token`, first hit wins:
+A missing token is an error, never a fallback to another identity's: `devbox-gh-token` exits non-zero naming the unset
+variable, and `gh` runs unauthenticated. `devbox-gh-token --identity <slug>` returns one identity's token regardless of
+directory or an inherited `GH_TOKEN`; `bootstrap` and `devbox doctor laptop` use it to check every token.
 
-| Order | Source                                                                                                                                              |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | an explicit `GH_TOKEN` in the environment — a deliberate one-off, and what a pre-split `secrets.env` holds — except for `--identity <slug>` (below) |
-| 2     | the identity's variable in the environment, set for one command (`~/.bashrc.d/devbox.sh` unsets the ones it sources)                                |
-| 3     | the same variable read **directly out of `secrets.env`**                                                                                            |
+### Enterprise hosts
 
-Step 3 is why `gh` needs no reconnect after adding a token, and why the resolver's error is honest: the file is the only
-place it looks. A `secrets.env` that references an unset variable does not silence it: the file is read with `nounset`
-off. A read that fails anyway — a shell syntax error such as an unterminated `X=(`, which bash 3.2's `bash -n` misses —
-reports that syntax error rather than an unset variable.
+For an identity on a GitHub Enterprise Server `host`, the shim exports `GH_ENTERPRISE_TOKEN` instead of `GH_TOKEN` —
+the only variable gh reads for such a host, and one it never sends to `github.com`. It also exports `GH_HOST=<host>`
+when `GH_HOST` is unset, since gh refuses a host it has no login for. `devbox-identities get <slug> gh_env` names the
+variable.
 
-`devbox-gh-token --identity <slug>` returns that identity's token whatever the working directory and ignoring an
-inherited `GH_TOKEN` — for a caller that already knows whose token it needs, like the per-identity checks of `bootstrap`
-and `devbox doctor laptop`, which export `GH_HOST` set to that identity's host with it for every identity, `github.com`
-included.
+### Agent sessions use the App
 
-Three consequences:
+In an agent session (`GIT_CONFIG_GLOBAL` points at `agent.gitconfig`, which only the `omp`/`claude` launchers set), a
+command about **one repository** uses that repository's App installation token from
+`devbox-git-credential token <owner>/<repo>` — the same token agent git pushes with, so PRs and comments carry the bot
+author like the commits do.
 
-- `echo $GH_TOKEN` prints nothing — correct. Anything that reads the token itself (a `curl` against the API, a project
-  script) should ask the resolver: `GH_TOKEN=$(devbox-gh-token)`.
-- A permanent `GH_TOKEN=` line in `secrets.env` (unlike a one-off `GH_TOKEN=$OTHER gh ...`) disables per-directory
-  choice; `bootstrap` warns about it.
-- A missing token errors rather than falls back: `devbox-gh-token` exits non-zero naming the unset variable, while `gh`
-  runs unauthenticated (`--version`/`config set` keep working) — falling back would pick the wrong identity.
+| Uses the App token (when installed on the repo)                             | Keeps the PAT                                                |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `pr`, `issue`, `run`, `workflow`, `release`, `label`, `cache`, `ruleset`    | `repo`, `search`, `api user` — anything naming no repository |
+| `gh api repos/<owner>/<repo>/...`, and `gh api graphql` inside a repository | repositories without the App                                 |
+|                                                                             | every `gh` outside an agent session                          |
 
-#### Agent sessions: the App for one repository's commands
-
-In an agent session — the shim recognises one by `GIT_CONFIG_GLOBAL` pointing at `agent.gitconfig`, which only an agent
-launcher (`omp`, `claude`) sets — a command about **one repository** first asks
-`devbox-git-credential token <owner>/<repo>` for that repository's App installation token, the same token agent git
-pushes with. A PR, issue or comment an agent makes is then authored by the App's bot, like its commits; without it the
-PAT made it _you_. Those commands are `pr`, `issue`, `run`, `workflow`, `release`, `label`, `cache`, `ruleset`, `gh api`
-on a `repos/<owner>/<repo>/...` (or `repos/{owner}/{repo}/...`) endpoint, and `gh api graphql` inside a repository (how
-review threads are resolved — `viewer` is then the bot); the repository is `-R`/`--repo`, then `GH_REPO`, then the
-`origin` remote — gh's own order.
-
-Everything else keeps the PAT: an installation token has no user behind it, so `gh repo list`, `gh search`,
-`gh api user` and `gh api graphql` outside a repository would fail with one. So does a repository the App is not
-installed on, and every `gh` outside an agent session — a devbox pane stays you. An agent that needs the PAT inside a
-repository bypasses the App with `GH_TOKEN=$(devbox-gh-token) gh ...`.
+The repository comes from `-R`/`--repo`, then `GH_REPO`, then the `origin` remote. An agent that needs the PAT inside a
+repository asks for it explicitly: `GH_TOKEN=$(devbox-gh-token) gh ...`.
 
 > [!CAUTION]
 > A failed App lookup or mint (broken `app.pem`, API outage) makes `gh` exit 1 rather than fall back to the PAT and act
-> as someone else — the helper's rule; the failure is never cached, so the next command tries again.
+> as someone else. Failures are never cached; successful tokens are, for up to 30 minutes
+> ([Git Identities](git.md#devbox-git-credential)).
 
-The App needs the permissions those commands use — see [Permissions per token](#permissions-per-token).
+### Permissions per token
 
-Minting costs ~0.75 s (two API calls), so the helper caches the answer per repository — see
-[Git Identities](git.md#devbox-git-credential); a cached call costs what the PAT does.
+Where a permission has to live follows which token answers. With your own account's repos having no App and an org's
+repos having the org's App, that gives three sets. A fine-grained PAT has exactly one resource owner, so the org's PAT
+is a separate token on its own identity ([Git Identities](git.md#can-two-identities-be-the-same-github-account)). All
+are _Repository permissions_; `Metadata: read` is mandatory and added by GitHub.
 
-#### Permissions per token
+#### PAT on your account's repos (no App)
 
-Which token answers decides where a permission has to live: agent git and agent `gh` about one repository use the App
-wherever it is installed on that repository, the PAT everywhere else. The usual layout — your own account's repos
-without an App, an org's repos with the org's App installed — therefore gives three permission sets. A fine-grained PAT
-has exactly one resource owner, so an org's PAT is a token of its own on an identity of its own
-([Git Identities](git.md#can-two-identities-be-the-same-github-account)). Every table is _Repository permissions_;
-`Metadata: read` is mandatory in all three and GitHub adds it by itself.
-
-**PAT on your account's repos (no App).** The PAT does all agent work there: git through the credential helper's PAT
-path and every `gh` command.
+The PAT does all agent work here: git through the credential helper and every `gh` command.
 
 | Permission      | Level               | For                                                                                                   |
 | --------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -186,26 +169,27 @@ path and every `gh` command.
 | Commit statuses | read                | `gh pr checks`                                                                                        |
 | Workflows       | **write**, optional | pushes that change `.github/workflows/` — without it GitHub rejects them, and you push those yourself |
 
-No _Checks_ row: that permission exists only for GitHub Apps, and the fine-grained token form does not offer it.
+There is no _Checks_ row: that permission exists only for GitHub Apps.
 
-**PAT on an org's repos (org App installed).** Agents' repository commands go to the App, so this token serves only what
-names no repository — an agent's `gh repo list`, `gh search`, `gh api user`, and an explicit
-`GH_TOKEN=$(devbox-gh-token) gh …` — plus every `gh` you run yourself in that tree, a devbox pane included.
+#### PAT on an org's repos (org App installed)
 
-| Permission                    | Level    | For                                                                                         |
-| ----------------------------- | -------- | ------------------------------------------------------------------------------------------- |
-| Metadata                      | read     | `gh repo list`, `gh search repos`, `gh repo view` — the minimum agents need from this token |
-| Contents                      | read     | `gh repo view`'s README, `gh search code`                                                   |
-| Issues, Pull requests         | read     | `gh search issues`, `gh search prs` across the org, if agents search                        |
-| Anything from the first table | as there | only what you run by hand — Actions **write** for your own `gh run rerun`, for example      |
+Agents only use this token for commands that name no repository, plus the `gh` you type yourself in a devbox pane.
 
-An org repo the App is _not_ installed on falls back to this PAT for agent git and `gh` alike, so it needs the whole
-first table. The org itself must allow fine-grained PATs (org settings → _Personal access tokens_); one requiring
-administrator approval leaves a new token pending — public resources only — until an owner approves it.
+| Permission                     | Level    | For                                                                                                                 |
+| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| Metadata                       | read     | `gh repo list`, `gh search repos`, `gh repo view` — the minimum agents need from this token                         |
+| Contents                       | read     | `gh repo view`'s README, `gh search code`                                                                           |
+| Issues, Pull requests          | read     | `gh search issues`, `gh search prs` across the org, if agents search                                                |
+| Optional, from the first table | as there | only for `gh` you run by hand on the devbox — Actions **write** if you re-run CI there with `gh run rerun` yourself |
 
-**The org's App.** Set under the App's settings → _Permissions & events_; it needs no account or organization
-permission. Each token is minted for one repository with the installation's whole permission set
-([Git Identities](git.md#devbox-git-credential)), so this table is exactly what an agent can do there.
+An org repo _without_ the App falls back to this PAT for everything, so it needs the first table. The org must allow
+fine-grained PATs (org settings → _Personal access tokens_); if it requires approval, a new token stays pending until an
+owner approves it.
+
+#### The org's App
+
+Set under the App's settings → _Permissions & events_. Each token is minted for one repository with the installation's
+whole permission set, so this table is exactly what an agent can do there.
 
 | Permission      | Level               | For                                                                                                   |
 | --------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -217,66 +201,68 @@ permission. Each token is minted for one repository with the installation's whol
 | Commit statuses | read                | `gh pr checks`                                                                                        |
 | Workflows       | **write**, optional | pushes that change `.github/workflows/` — without it GitHub rejects them, and you push those yourself |
 
+An App installed on your own account works the same way: its repos follow this table, and that account's PAT shrinks to
+the second one.
+
+#### Changing App permissions
+
 > [!IMPORTANT]
-> Changing an App's permissions is only a request: an org installation keeps the old set until an org owner
-> accepts it (org settings → _GitHub Apps_ → the App → _Review request_). A token minted before that keeps its old
-> permissions too, and the helper caches it for up to 30 minutes — delete `devbox-agent-<uid>/` (under
-> `$XDG_RUNTIME_DIR`, else `/dev/shm`, else `$TMPDIR`) to mint a fresh one.
+> A permission change is only a request: the installation keeps the old set until an org owner accepts it (org settings
+> → _GitHub Apps_ → the App → _Review request_). A token minted before that keeps the old permissions for up to 30
+> minutes — delete `devbox-agent-<uid>/` (under `$XDG_RUNTIME_DIR`, else `/dev/shm`, else `$TMPDIR`) to mint a fresh
+> one.
 
-An App installed on your own account works the same way: its repos follow the App table, and the account's PAT shrinks
-to the second one.
+### Why not `gh auth login`
 
-#### Why not `gh auth login`
-
-Its web/device flow can't ask less than `repo`, `read:org`, `gist` (`minimumScopes`, `internal/authflow`; `--scopes`
-only _adds_). A classic `repo` token reads **and writes** every repo any identity can reach, with no expiry or
-allowlist; a fine-grained PAT names its repos, expires, and revokes itself — broader than what's configured here.
-
-`gh`'s multi-account primitive — `gh auth login --with-token` plus `gh auth switch` — goes unused for two reasons:
-`auth switch` mutates one global "active account" in `~/.config/gh` (racy for two agents in two orgs), and any
-`GH_TOKEN` in the environment makes every account inert (`gh auth switch` refuses: _"the value of the GH_TOKEN
-environment variable is being used for authentication"_). Per-directory resolution keeps `gh` stateless instead.
-
-The container has **no keyring**: `gh` would store a login in plaintext in `~/.config/gh/hosts.yml`, same posture as
-`secrets.env`. Plaintext isn't the deciding factor — scope breadth and the active account are.
-
-`gh auth status` succeeds on a resolved token alone, so `bootstrap` stops asking once every identity's is set.
+- **Scope:** its web flow can't ask for less than `repo`, `read:org`, `gist` (`--scopes` only adds) — read **and
+  write** on every repo the account reaches, with no expiry. A fine-grained PAT names its repos and expires.
+- **One active account:** `gh auth switch` changes a global setting in `~/.config/gh`, which two agents in two orgs
+  would race, and any `GH_TOKEN` in the environment makes stored accounts inert anyway.
+- **No keyring:** the container would store the login in plaintext, like `secrets.env` — not the deciding factor, but no
+  better either.
 
 ---
 
-## 🤖 Claude Code login
+## 🤖 Agent logins
 
-Claude Code authenticates with your claude.ai subscription, not a key in `secrets.env`: run `claude` in a pane,
-`/login`, open the printed URL in a laptop browser and paste the code back. The resulting OAuth credentials live in
-`~/.claude/.credentials.json` (written by Claude) on the bind mount — one login per host, surviving rebuilds. Same blast
-radius as the other box-wide credentials: any agent here can read it and spend that subscription's usage. Revoke it from
-claude.ai's settings if the box is compromised, then `/login` again.
+Both agents log in with a subscription, not an API key. Each login lives on the bind mount, survives rebuilds, and is
+readable by any agent on the box — the same blast radius as `secrets.env`. If the box is compromised, revoke it at the
+provider and log in again.
 
-An `ANTHROPIC_API_KEY` exported from `secrets.env` is there for OMP only: `claude-launcher` unsets it for Claude's
-process tree, because Claude otherwise bills such a key instead of the subscription — always under `-p`, after one
-approval interactively. A `claude` that bypasses the launcher (absolute path) would see it.
+### OMP
+
+Run `omp` in a pane and `/login` (or `omp login <provider>` from a shell) and follow the provider's prompts. The
+credentials land in `~/.omp/agent/agent.db`. OMP needs no API key in `secrets.env`; add one
+only for a provider you deliberately use by key.
+
+Already logged in on the laptop? Copy that login over instead: `omp auth export | ssh devbox omp auth import -`. It
+carries every credential the laptop's OMP holds, API keys included, so the devbox then holds all of them.
+
+### Claude Code
+
+Run `claude` in a pane and `/login`, the same way. The credentials land in `~/.claude/.credentials.json`; `bootstrap`
+lists the login as outstanding until that file exists.
+
+`claude-launcher` unsets `ANTHROPIC_API_KEY` for Claude's process tree: Claude would otherwise bill such a key instead
+of the subscription. A `claude` started by absolute path, bypassing the launcher, would see it.
 
 ---
 
 ## 🧾 Agent git credentials
 
-`git` itself in an agent session uses a different credential path from `gh` above: the agent launchers'
-`agent.gitconfig` and `devbox-git-credential`. See [Git Identities](git.md#-agent-sessions) for the mechanism; this page
-covers only where those secrets live — `~/.config/devbox/secrets.env` and each identity's `app` directory
-(`{app-id,app.pem}`) on the laptop too, read there by its copy of the helper (`./bin/devbox agent install`). On the
-devbox, `~/.bashrc.d/devbox.sh` sources the file under `set -a` into every shell, which is how OMP sees model keys,
-then unsets the `GH_TOKEN_<SLUG>` variables; the laptop installs no such rc line. On both, `devbox-gh-token` and the
-credential helper read the `GH_TOKEN_<SLUG>` lines straight from the file, by name; model keys on the laptop are unused.
-Neither copy travels: `devbox sync` carries `identities.conf` and the OMP and Claude Code presets, not secrets.
+Agent `git` doesn't use `gh`'s path: the launchers' `agent.gitconfig` hands every HTTPS request to
+`devbox-git-credential`, which answers with the App token where the App is installed and the identity's PAT otherwise.
+The mechanism is in [Git Identities](git.md#-agent-sessions); the secrets it reads are the ones above — `GH_TOKEN_<SLUG>`
+from `secrets.env` and each identity's `app-id`/`app.pem` — on the laptop as well as the devbox.
 
 ---
 
 ## 📁 Per-project secrets
 
-A cloned project's `.env` looks exactly as on the laptop — same variable names, no devbox-specific additions; no
-injection mechanism to accommodate, so nothing needs extending "for the devbox".
+### Rendering `.env` on the laptop
 
-The laptop keeps 1Password in the loop. Commit a template of references and render it locally:
+A project's `.env` looks exactly as on the laptop — same variable names, nothing devbox-specific. Commit a template of
+1Password references and render it locally:
 
 ```bash
 # <project>/.env.tpl, committed
@@ -290,29 +276,29 @@ scp .env devbox:projects/<project>/.env             # into the box
 ssh devbox 'chmod 600 projects/<project>/.env'
 ```
 
-1Password stays the source of truth; the rendered file is never committed; the container never authenticates to a vault.
-Rotation is one re-render, one copy.
-
-Values differing because the box is a different machine — `localhost` ports, container-local database hosts, callback
-URLs — are ordinary environment differences, kept in the project's override convention, not a devbox mechanism.
+1Password stays the source of truth, the rendered file is never committed, and the container never authenticates to a
+vault. Rotation is one re-render and one copy. Values that differ because the box is another machine (`localhost`
+ports, callback URLs) belong in the project's own override convention.
 
 ### Projects that call `op` themselves
 
-A `package.json` script or `Makefile` wrapped in `op run --` or `op inject` fails in the container: no `op` binary, no
-account. Render the `.env` on the laptop and run the command directly — the one place op's absence shows.
+A script wrapped in `op run --` or `op inject` fails in the container: there is no `op`. Render the `.env` on the laptop
+and run the command directly.
 
 ---
 
 ## ☁️ Google Cloud (ADC)
 
-For a project needing Google APIs, use a **dedicated service account in that project's GCP project**, never
-`gcloud auth application-default login`.
+### Use a service account, never your login
 
-That command writes a refresh token for **your** Google account with `cloud-platform` scope to
-`~/.config/gcloud/application_default_credentials.json`. It never expires and impersonates you across every reachable
-project — in a box built for unattended agents, the largest, least contained credential available.
+For a project that needs Google APIs, use a **dedicated service account in that project's GCP project**.
+`gcloud auth application-default login` would write a never-expiring refresh token for **your** Google account, with
+`cloud-platform` scope over every project you reach — the largest credential you could put in a box built for
+unattended agents.
 
-ADC resolves in three steps, first hit wins:
+### How ADC resolves
+
+First hit wins:
 
 | Order | Source                                                  | Note                                          |
 | ----- | ------------------------------------------------------- | --------------------------------------------- |
@@ -320,10 +306,16 @@ ADC resolves in three steps, first hit wins:
 | 2     | `~/.config/gcloud/application_default_credentials.json` | the well-known user file                      |
 | 3     | the GCE/GKE/Cloud Run metadata server                   | absent in this container                      |
 
-Step 1 beating step 2 is the whole mechanism: point the variable at a scoped key so your identity never enters the box.
-No tier consults `gcloud config`, so `gcloud config set project` has no effect.
+Pointing step 1 at a scoped key keeps your identity out of the box. No step reads `gcloud config`.
 
-Provision on the laptop, once per project:
+> [!CAUTION]
+> Never write a service-account key to `application_default_credentials.json` — that's ADC step 2, becoming a silent
+> box-wide default any project picks up when its variable is missing. Leaving step 2 empty makes a misconfigured project
+> fail loudly, not quietly bill the wrong project.
+
+### Provisioning a key
+
+On the laptop (the image has no `gcloud`), once per project:
 
 ```bash
 PROJECT=<gcp-project-id>
@@ -350,25 +342,14 @@ GOOGLE_CLOUD_PROJECT=<gcp-project-id>
 GOOGLE_CLOUD_LOCATION=<region>
 ```
 
-`GOOGLE_CLOUD_PROJECT` matters: with a service-account key, no metadata server infers the project. Rotation is
-`keys create` then `keys delete <old-key-id>`, no devbox change.
-
-> [!CAUTION]
-> Never write a service-account key to `application_default_credentials.json` — that's ADC step 2, becoming a silent
-> box-wide default any project picks up when its variable is missing. Leaving step 2 empty makes a misconfigured project
-> fail loudly, not quietly bill the wrong project.
-
-There's no `gcloud` CLI in the image: nothing shells out to it, and ADC needs only the key file. Run `gcloud` on the
-laptop, where your identity lives.
+`GOOGLE_CLOUD_PROJECT` is required: with a key file, nothing infers the project. Rotation is `keys create` then
+`keys delete <old-key-id>`.
 
 ### Containing spend
 
-An inference credential's blast radius is **cost**, not data — an autonomous loop can bill real money, so containment is
-a billing budget with alerts plus Vertex per-model quota limits there. Budgets notify; quotas cap, the one that matters
-for an unattended overnight run.
-
-Note what does _not_ contain it: forbidding `gcloud` or `op` in an agent's allowlist changes nothing — any script can
-read the key and call the API through the SDK. The boundary is what the service account is permitted to do.
+An inference key's blast radius is **cost**. Contain it with a billing budget with alerts plus Vertex per-model quotas:
+budgets notify, quotas cap — the one that matters for an unattended overnight run. Denying `gcloud` or `op` to an agent
+contains nothing; any script can read the key and call the SDK. The boundary is what the service account may do.
 
 ---
 
@@ -376,85 +357,66 @@ read the key and call the API through the SDK. The boundary is what the service 
 
 ### Why is `op` not installed?
 
-Its only use was injecting secrets, and a live `op` session is reachable by any agent in that shell — a leak would then
-cost every vault, not one project's. Secrets end up in plaintext in `.env` regardless, since apps must read them;
-removing `op` shrinks blast radius without weakening anything at rest.
+A live `op` session is reachable by any agent in that shell, so a leak would cost every vault rather than one project.
+Apps read secrets in plaintext from `.env` anyway, so removing `op` loses nothing at rest.
 
 ### Don't I need `op` for signing?
 
-No — unrelated to `op`. Manual signing (`ssh -A devbox`) borrows the laptop's forwarded 1Password _SSH agent_, signing
-with `ssh-keygen -Y sign` — different from the uninstalled `op` CLI. Agent sessions don't sign at all: `agent.gitconfig`
-sets `commit.gpgsign = false`, and their git never touches a key or a forwarded agent. See
-[Git Identities](git.md#-signing).
+No. Manual signing (`ssh -A devbox`) uses the laptop's forwarded 1Password _SSH agent_, not the `op` CLI, and agent
+sessions don't sign at all. See [Git Identities](git.md#-signing).
 
 ### Why does `.env` on the host hold no secrets?
 
-It holds addressing, host-user mapping and SSH-authorization configuration only (`BIND_ADDR`, `HOST_UID`/`HOST_GID`,
-`DEVBOX_GITHUB_USER`) — gitignored and excluded from `devbox deploy`, but not a secret store. Git identities — names,
-emails, public keys, bot authors, GitHub Apps — live in `~/.config/devbox/identities.conf` instead, on the bind mount
-and not tracked by this repo at all; see [Git Identities](git.md#-the-identity-registry).
-
-### Can I put a raw API key in `secrets.env`?
-
-That's exactly what it's for — plain values, mode 600. Keep it to credentials shared across projects.
+It holds addressing and host-user mapping only (`BIND_ADDR`, `HOST_UID`/`HOST_GID`, `DEVBOX_GITHUB_USER`). Identities
+live in `~/.config/devbox/identities.conf`; see [Git Identities](git.md#-the-identity-registry).
 
 ### What if `bootstrap` says my `secrets.env` still holds `op://` references?
 
-`/home/dev` survives every rebuild, so an old `op run` file is still there, now sourced directly, exporting `op://…`
-into every shell. Replace those lines with plain values, rendered on the laptop. A leftover per-account secrets file
-from an older layout reports the same way and can be deleted — one `secrets.env` now serves every project.
+It's a file from an older `op run` layout, now sourced directly and exporting `op://…` into every shell. Replace those
+lines with plain values rendered on the laptop. A leftover per-account secrets file reports the same way and can be
+deleted.
 
 ### I already had a single box-wide `GH_TOKEN`. What now?
 
-It keeps working — the resolver returns it for every directory — but overrides every per-identity variable, so nothing's
-chosen per tree. `bootstrap` prints exactly that: rename it to the `GH_TOKEN_<SLUG>` of your default identity, issue
-further fine-grained tokens as `GH_TOKEN_<SLUG>` for each other identity, reconnect.
+It still works but overrides every per-identity variable, so nothing is chosen per tree; `bootstrap` warns about it.
+Rename it to your default identity's `GH_TOKEN_<SLUG>` and add one per other identity.
 
 ### `echo $GH_TOKEN` is empty — is `gh` broken?
 
-No. Nothing exports `GH_TOKEN`, nor the `GH_TOKEN_<SLUG>` variables; the `gh` shim resolves a token per invocation from
-the working directory, read from `secrets.env`. Check with `devbox-gh-token --account` and `gh auth status`; for your
-own calls use `GH_TOKEN=$(devbox-gh-token)`.
+No. Nothing exports it; the shim resolves a token per call. Check with `devbox-gh-token --account` and `gh auth status`;
+for a `curl` or script of your own, use `GH_TOKEN=$(devbox-gh-token)`.
 
 ### What does `devbox-gh-token: GH_TOKEN_WORK is unset` mean?
 
-You're inside the `work` identity's tree and only the default identity's token is configured — deliberate: no fallback,
-since the default token on a `work` repo is the wrong identity, not a degraded one. Add the variable, or work outside
-the tree.
+You're in the `work` identity's tree and only the default identity's token is set. There's deliberately no fallback —
+the default token on a `work` repo is the wrong identity. Add the variable.
 
-### Can I add a third account?
+### How do I add another account?
 
-Yes — `identities.conf` takes any number of `[slug]` blocks. Add one, its `GH_TOKEN_<SLUG>` here, and its two public
-keys; nothing here or in `bootstrap` needs a new branch. See [Git Identities](git.md#-the-identity-registry).
-
-### Why not just `gh auth switch` between accounts?
-
-Because `GH_TOKEN` — however set — makes every account stored in `~/.config/gh` inert, and the "active account" is one
-global value concurrent agents would race. See [Why not `gh auth login`](#why-not-gh-auth-login).
+Add a `[slug]` block to `identities.conf`, its `GH_TOKEN_<SLUG>` here, and its two public keys — no code change. See
+[Git Identities](git.md#-the-identity-registry).
 
 ### Why does `gh run rerun` fail in an agent session but work in my shell?
 
-In an agent session, `gh run` on a repository the org's App is installed on sends the App's token, never the PAT, so the
-App needs `Actions: write`. Your own shell sends the PAT. Grant it on the App, have an org owner accept the request,
-then wait for or delete the cached token — see [Permissions per token](#permissions-per-token).
+In an agent session, `gh run` on a repository with the org's App uses the App's token, so the **App** needs
+`Actions: write`; your shell sends the PAT. Grant it on the App, have an org owner accept the request, then wait for or
+delete the cached token — see [Changing App permissions](#changing-app-permissions).
 
 ### Does OMP see my keys in plaintext?
 
-`~/.omp/agent/config.yml` sets `secrets: { enabled: true }`, obfuscating environment secrets before they reach a
-provider. The Claude Code preset (`~/.claude/settings.json`) sets no such obfuscation; `claude-launcher` instead keeps
-`ANTHROPIC_API_KEY` out of Claude's environment ([above](#-claude-code-login)).
+`~/.omp/agent/config.yml` sets `secrets: { enabled: true }`, which obfuscates environment secrets before they reach a
+provider. The Claude Code preset has no such setting.
 
 ### How do I rotate a leaked key?
 
-Revoke at source — GitHub's token settings page for a PAT, `gcloud iam service-accounts keys delete` for GCP, or
-regenerate `app.pem` from the App's settings and replace it at the directory that identity's `app` field names in
-`identities.conf`, then update `secrets.env` or the project `.env`. No SSH keypair to rotate: identity is your laptop's
-key, unaffected by the container.
+Revoke it at the source — GitHub's token settings for a PAT, a new `app.pem` from the App's settings, `gcloud iam
+service-accounts keys delete` for GCP, the provider's account page for an agent login — then update `secrets.env`, the
+`app` directory or the project `.env`. There's no SSH keypair to rotate: identity is your laptop's key.
 
 ### Are secrets visible to the workstation's host user?
 
-Yes. The bind mount is owned by `HOST_UID`, readable by the host user. The container protects the host from the agent,
-not the agent's files from the owner — workstation disk encryption is part of this model.
+Yes. The bind mount is owned by `HOST_UID`. The container protects the host from the agent, not the agent's files from
+the owner — workstation disk encryption is part of this model.
 
 ### What happens to secrets on `./bin/devbox rebuild`?
 

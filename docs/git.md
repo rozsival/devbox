@@ -71,7 +71,7 @@ Everything else is derived from the slug alone:
 | --------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Key files             | `~/.ssh/id_<slug>.pub` / `~/.ssh/signing_<slug>.pub` (see the key files below)                                      |
 | ssh tag               | `<slug>`, when its key differs from its host's plain one (`devbox-identities get <slug> tag`, [Cloning](#-cloning)) |
-| GitHub token          | `GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env` (see [Secrets](secrets.md#gh))                                  |
+| GitHub token          | `GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env` (see [Secrets](secrets.md#-github-cli))                         |
 | Generated gitconfigs  | `agent-<slug>.gitconfig` / `user-<slug>.gitconfig` / `org-<slug>.gitconfig` (below)                                 |
 
 > [!TIP]
@@ -307,10 +307,10 @@ instead of falling back to the PAT. Only a definitive "App not installed" (every
 
 `store` and `erase` are accepted and ignored. Two subcommands inspect it:
 
-| Command                                          | Prints                                                                                                                                                                                                                                                  |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `devbox-git-credential explain owner/repo [dir]` | Which path a request would take — `app:<slug>:<installation-id>` or `pat:<slug>` — without minting anything                                                                                                                                             |
-| `devbox-git-credential token owner/repo [dir]`   | Just the App token, or nothing when no App covers the repository, and exits 1 when the lookup or mint fails: the `gh` shim's way to act as the same bot in an agent session ([Secrets](secrets.md#agent-sessions-the-app-for-one-repositorys-commands)) |
+| Command                                          | Prints                                                                                                                                                                                                                         |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `devbox-git-credential explain owner/repo [dir]` | Which path a request would take — `app:<slug>:<installation-id>` or `pat:<slug>` — without minting anything                                                                                                                    |
+| `devbox-git-credential token owner/repo [dir]`   | Just the App token, or nothing when no App covers the repository, and exits 1 when the lookup or mint fails: the `gh` shim's way to act as the same bot in an agent session ([Secrets](secrets.md#agent-sessions-use-the-app)) |
 
 Minting takes two API round trips (~0.75 s), so the App answer is cached per repository and per working directory's
 identity: a token for 30 of its 60 minutes (whoever receives it keeps at least half an hour — `gh run watch` included),
@@ -321,8 +321,8 @@ directory not owned by you there disables caching rather than trusting it. Delet
 was never slow and is not cached.
 
 An App is scoped per repository by its installation — no allowlist; installing it is all the configuration. A repo
-without the App gets the PAT, needing `contents: write` there, not read-only — see [Secrets](secrets.md#gh). A host
-nothing in the registry names gets no credential at all.
+without the App gets the PAT, needing `contents: write` there, not read-only — see [Secrets](secrets.md#-github-cli).
+A host nothing in the registry names gets no credential at all.
 
 ### The fence
 
@@ -612,7 +612,7 @@ For an agent commit: expected — never signed.
 
 The same way git picks an identity: by directory. `GH_TOKEN_<SLUG>` for each identity lives in
 `~/.config/devbox/secrets.env`; the `gh` shim (`~/.local/libexec/devbox-agent/gh`) resolves one per invocation from the
-directory (`devbox-gh-token --account` reports which). See [Secrets](secrets.md#gh).
+directory (`devbox-gh-token --account` reports which). See [Secrets](secrets.md#-github-cli).
 
 ### Can an agent push to a repo the App is not installed on?
 
@@ -624,7 +624,7 @@ read-only. Install the App to scope pushes to one hour and one repo instead.
 In an agent session, `gh` commands about one repository the identity's App is installed on use that App's installation
 token — the one its git pushes with — so PRs, issues and comments carry the same author as the commits. Your own `gh`,
 and account-wide agent commands (`gh repo list`, `gh api user`), keep the PAT. See
-[Secrets](secrets.md#agent-sessions-the-app-for-one-repositorys-commands).
+[Secrets](secrets.md#agent-sessions-use-the-app).
 
 ### How do I add a third account?
 

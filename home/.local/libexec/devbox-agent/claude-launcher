@@ -10,8 +10,8 @@
 # auto-updater re-points at every release - so the launcher symlink can never
 # live there, only in a directory ahead of it on the PATH.
 #
-# ANTHROPIC_API_KEY is dropped for Claude's process tree: secrets.env exports
-# it for OMP, and Claude would otherwise bill it instead of the /login
+# ANTHROPIC_API_KEY is dropped for Claude's process tree: one exported from
+# secrets.env or a shell would otherwise be billed instead of the /login
 # subscription - always in `-p` mode, after one approval interactively. Claude
 # Code runs on the subscription; a project's own LLM calls take their key from
 # that project's .env, not from here.
