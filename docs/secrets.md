@@ -139,10 +139,12 @@ author like the commits do.
 | --------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `pr`, `issue`, `run`, `workflow`, `release`, `label`, `cache`, `ruleset`    | `repo`, `search`, `api user` — anything naming no repository |
 | `gh api repos/<owner>/<repo>/...`, and `gh api graphql` inside a repository | repositories without the App                                 |
+| `project` with `--owner` naming the checkout's owner                        | `project` with `--owner @me`, another owner, or none         |
 |                                                                             | every `gh` outside an agent session                          |
 
-The repository comes from `-R`/`--repo`, then `GH_REPO`, then the `origin` remote. An agent that needs the PAT inside a
-repository asks for it explicitly: `GH_TOKEN=$(devbox-gh-token) gh ...`.
+The repository comes from `-R`/`--repo`, then `GH_REPO`, then the `origin` remote; for `project` it is always the
+checkout, since a project belongs to an owner rather than a repository. An agent that needs the PAT inside a repository
+asks for it explicitly: `GH_TOKEN=$(devbox-gh-token) gh ...`.
 
 > [!CAUTION]
 > A failed App lookup or mint (broken `app.pem`, API outage) makes `gh` exit 1 rather than fall back to the PAT and act
@@ -154,7 +156,7 @@ repository asks for it explicitly: `GH_TOKEN=$(devbox-gh-token) gh ...`.
 Where a permission has to live follows which token answers. With your own account's repos having no App and an org's
 repos having the org's App, that gives three sets. A fine-grained PAT has exactly one resource owner, so the org's PAT
 is a separate token on its own identity ([Git Identities](git.md#can-two-identities-be-the-same-github-account)). All
-are _Repository permissions_; `Metadata: read` is mandatory and added by GitHub.
+are _Repository permissions_ unless marked; `Metadata: read` is mandatory and added by GitHub.
 
 #### PAT on your account's repos (no App)
 
@@ -169,7 +171,11 @@ The PAT does all agent work here: git through the credential helper and every `g
 | Commit statuses | read                | `gh pr checks`                                                                                        |
 | Workflows       | **write**, optional | pushes that change `.github/workflows/` — without it GitHub rejects them, and you push those yourself |
 
-There is no _Checks_ row: that permission exists only for GitHub Apps.
+There is no _Checks_ row: fine-grained PATs
+[cannot call the Checks API](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#fine-grained-personal-access-tokens-limitations)
+at all, so with a PAT `gh pr checks` relies on commit statuses and may not show check runs. Nor is there a _Projects_
+row: a fine-grained PAT cannot reach a project owned by a user account either — only a classic PAT can, which this setup
+does not use. Put a board agents should work under an org.
 
 #### PAT on an org's repos (org App installed)
 
@@ -181,6 +187,7 @@ Agents only use this token for commands that name no repository, plus the `gh` y
 | Contents                       | read     | `gh repo view`'s README, `gh search code`                                                                           |
 | Issues, Pull requests          | read     | `gh search issues`, `gh search prs` across the org, if agents search                                                |
 | Optional, from the first table | as there | only for `gh` you run by hand on the devbox — Actions **write** if you re-run CI there with `gh run rerun` yourself |
+| Projects (_organization_)      | read     | optional — your own `gh project` in a devbox pane; agents' go to the App                                            |
 
 An org repo _without_ the App falls back to this PAT for everything, so it needs the first table. The org must allow
 fine-grained PATs (org settings → _Personal access tokens_); if it requires approval, a new token stays pending until an
@@ -191,15 +198,16 @@ owner approves it.
 Set under the App's settings → _Permissions & events_. Each token is minted for one repository with the installation's
 whole permission set, so this table is exactly what an agent can do there.
 
-| Permission      | Level               | For                                                                                                   |
-| --------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
-| Contents        | **write**           | agent clone, pull and push; `gh pr merge`                                                             |
-| Pull requests   | **write**           | `gh pr create`, `gh pr comment`, `gh pr review` — the bot authors them                                |
-| Issues          | **write**           | `gh issue create`, `gh issue comment`                                                                 |
-| Actions         | **write**           | `gh run rerun`, `gh run cancel`, `gh workflow run` — **read** covers only `gh run list/view/watch`    |
-| Checks          | read                | `gh pr checks`                                                                                        |
-| Commit statuses | read                | `gh pr checks`                                                                                        |
-| Workflows       | **write**, optional | pushes that change `.github/workflows/` — without it GitHub rejects them, and you push those yourself |
+| Permission                | Level               | For                                                                                                   |
+| ------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
+| Contents                  | **write**           | agent clone, pull and push; `gh pr merge`                                                             |
+| Pull requests             | **write**           | `gh pr create`, `gh pr comment`, `gh pr review` — the bot authors them                                |
+| Issues                    | **write**           | `gh issue create`, `gh issue comment`                                                                 |
+| Actions                   | **write**           | `gh run rerun`, `gh run cancel`, `gh workflow run` — **read** covers only `gh run list/view/watch`    |
+| Checks                    | read                | `gh pr checks`                                                                                        |
+| Commit statuses           | read                | `gh pr checks`                                                                                        |
+| Workflows                 | **write**, optional | pushes that change `.github/workflows/` — without it GitHub rejects them, and you push those yourself |
+| Projects (_organization_) | **write**, optional | `gh project item-add`, `item-edit`, …; `gh pr create --project`, `gh issue edit --add-project`        |
 
 An App installed on your own account works the same way: its repos follow this table, and that account's PAT shrinks to
 the second one.

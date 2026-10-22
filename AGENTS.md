@@ -181,7 +181,7 @@ the host's root Docker daemon.
   for an identity off `github.com` and only when `GH_HOST` is unset (gh refuses a host it holds no login for
   otherwise). In an agent session
   (`GIT_CONFIG_GLOBAL` is `agent.gitconfig`), a command about one repository - `pr`, `issue`, `run`, ...,
-  `api repos/<o>/<r>/...`, `api graphql` inside a checkout
+  `api repos/<o>/<r>/...`, `api graphql` inside a checkout, `project` whose `--owner` is the checkout's owner
   - takes that repository's App installation token from `devbox-git-credential token` instead, so agent PRs
     carry the bot author their commits do; account-wide commands and every non-agent `gh` keep the PAT, and a
     failed App lookup or mint is an error, never a PAT fallback (`token` exits 1 and the shim stops; a failing

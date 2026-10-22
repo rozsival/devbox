@@ -79,15 +79,39 @@ current_repo() {
 }
 
 # Prints owner/repo when the command acts on exactly one repository, which is
-# all an installation token can: the repository subcommands, and `gh api` on a
-# `repos/{owner}/{repo}/...` endpoint. Everything else - `repo list`, `search`,
-# `api user`, `api graphql` - keeps the PAT, since an installation token has no
-# user behind it.
+# all an installation token can: the repository subcommands, `project` on the
+# checkout's own owner, and `gh api` on a `repos/{owner}/{repo}/...` endpoint.
+# Everything else - `repo list`, `search`, `api user`, `api graphql` outside a
+# checkout - keeps the PAT, since an installation token has no user behind it.
 repo_scoped() {
-  local command="${1:-}" arg skip=false endpoint=''
+  local command="${1:-}" arg skip=false endpoint='' owner='' repo
   case "${command}" in
   pr | issue | run | workflow | release | label | cache | ruleset)
     current_repo "${@:2}"
+    ;;
+  project)
+    # A project belongs to an owner, not a repository: run it as the bot only
+    # when --owner names the owner of the checkout, whose installation token
+    # carries the org's Projects permission. `@me`, another owner or no
+    # --owner at all (gh then targets you) keep the PAT.
+    for arg in "${@:2}"; do
+      if [[ ${skip} == true ]]; then
+        owner="${arg}"
+        break
+      fi
+      case "${arg}" in
+      --owner) skip=true ;;
+      --owner=*)
+        owner="${arg#--owner=}"
+        break
+        ;;
+      esac
+    done
+    [[ -n ${owner} && ${owner} != @me ]] || return 0
+    repo="$(current_repo)"
+    [[ -n ${repo} ]] || return 0
+    [[ "$(tr '[:upper:]' '[:lower:]' <<<"${repo%%/*}")" == "$(tr '[:upper:]' '[:lower:]' <<<"${owner}")" ]] || return 0
+    printf '%s\n' "${repo}"
     ;;
   api)
     for arg in "${@:2}"; do
