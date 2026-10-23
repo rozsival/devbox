@@ -60,8 +60,8 @@ One `[slug]` block per identity, `slug` lowercase `[a-z][a-z0-9_]*`:
 | `name`, `email`             | Your git identity in that tree. Required.                                                                                                                                                                                                                                                                                                                                                            | —                                                      |
 | `pubkey`                    | The laptop's _public_ authentication key, one line, as in `~/.ssh/id_<slug>.pub`. Devbox only: it holds no private key. Empty disables SSH-as-you for that tree.                                                                                                                                                                                                                                     | empty                                                  |
 | `signing_pubkey`            | The matching _public_ signing key. GitHub registers authentication and signing keys separately; signing with the auth key shows _Unverified_.                                                                                                                                                                                                                                                        | empty                                                  |
-| `agent_name`, `agent_email` | Author of agent commits in that tree.                                                                                                                                                                                                                                                                                                                                                                | the default identity's                                 |
-| `app`                       | Directory holding a GitHub App's `app-id` + `app.pem` (mode 600) — see [`devbox-git-credential`](#devbox-git-credential).                                                                                                                                                                                                                                                                            | none — the PAT is used instead                         |
+| `agent_name`, `agent_email` | Author of agent commits in that tree — the identity's App bot, `<app-slug>[bot]` and `<bot-user-id>+<app-slug>[bot]@users.noreply.github.com` (`gh api 'users/<app-slug>[bot]' --jq .id`).                                                                                                                                                                                                           | the default identity's                                 |
+| `app`                       | Directory holding the identity's GitHub App `app-id` + `app.pem` (mode 600) — see [`devbox-git-credential`](#devbox-git-credential). Every identity gets one: PATs are read-only, so it is the only way an agent writes.                                                                                                                                                                             | none — agents in that tree can only read               |
 | `host`                      | Forge host. A GitHub Enterprise host moves the HTTPS rewrite, the API this identity's credentials use, and every `orgs` pattern onto that instance.                                                                                                                                                                                                                                                  | `github.com`                                           |
 | `orgs`                      | GitHub owners (orgs or user logins) whose repositories this identity pushes to — space- or comma-separated, spelled exactly as GitHub spells them (matching is case-sensitive). Required for any identity whose `pubkey` differs from its host's plain key, since nothing else would ever select it. See [Cloning](#-cloning).                                                                       | none — the plain key and the default identity's author |
 
@@ -259,7 +259,8 @@ checks, on either side, that the symlinks are still symlinks.
 
 ### `agent.gitconfig`
 
-- **Author**: not real — a name like `your-agent`, since the pusher is a token and the author is visibly not you.
+- **Author**: the identity's App bot (`<app-slug>[bot]`), since the App's token is what pushes and the author is visibly
+  not you.
 - **Unsigned**: `commit.gpgsign = false`, `tag.gpgsign = false` — keys are yours, out of an agent's reach.
 - **HTTPS rewrite**: one `[url "https://<host>/"]` block per forge host any identity names, covering `git@<host>:`, the
   user-less `<host>:` form an ssh config with `User git` allows, `ssh://git@<host>/`, and (on `github.com`) the `gh:`
@@ -297,8 +298,8 @@ with two Apps on the same host stay apart:
    `https://<host>/api/v3` for a GitHub Enterprise `host`). `200` → mint an installation token
    (`POST /app/installations/{id}/access_tokens`, `repositories:[repo]`, one hour) and use it. `404` → try the next
    candidate identity; any other status, or a failed mint, → hard failure, never a silent PAT downgrade.
-2. Otherwise, the fine-grained PAT of the identity the working directory belongs to — `devbox-gh-token`, the same rule
-   `gh` and git's `includeIf` use.
+2. Otherwise, the read-only fine-grained PAT of the identity the working directory belongs to — `devbox-gh-token`, the
+   same rule `gh` and git's `includeIf` use. A clone or fetch succeeds, a push is refused by GitHub.
 
 Any failure past the host check also prints `quit=1`: git otherwise reads a failed helper as "no answer" and asks the
 next source, an askpass program. A failure therefore ends the operation, with the helper's one-line reason. A failed App
@@ -322,8 +323,8 @@ directory not owned by you there disables caching rather than trusting it. `devb
 mint. The PAT path was never slow and is not cached.
 
 An App is scoped per repository by its installation — no allowlist; installing it is all the configuration. A repo
-without the App gets the PAT, needing `contents: write` there, not read-only — see [Secrets](secrets.md#-github-cli).
-A host nothing in the registry names gets no credential at all.
+without the App gets the PAT, which is read-only ([Secrets](secrets.md#permissions-per-token)): agents can clone it, not
+push to it. A host nothing in the registry names gets no credential at all.
 
 ### The fence
 
@@ -617,8 +618,9 @@ directory (`devbox-gh-token --account` reports which). See [Secrets](secrets.md#
 
 ### Can an agent push to a repo the App is not installed on?
 
-Yes, with the fine-grained PAT for that identity — why it needs `contents: write` on repos pushed without the App, not
-read-only. Install the App to scope pushes to one hour and one repo instead.
+No. It gets the identity's PAT, which is read-only by design, so GitHub refuses the push. Install the App on the
+repository — `devbox-git-credential explain <owner>/<repo>` then prints `app:<slug>:<id>`. Never give the PAT write
+access: every agent could then push as you.
 
 ### Why are an agent's PRs opened by the App's bot and not by me?
 
@@ -629,7 +631,8 @@ and account-wide agent commands (`gh repo list`, `gh api user`), keep the PAT. S
 
 ### How do I add a third account?
 
-One `[slug]` block in `~/.config/devbox/identities.conf`, a `GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env`, and the
+One `[slug]` block in `~/.config/devbox/identities.conf` with its own `app` directory, a read-only `GH_TOKEN_<SLUG>` in
+`~/.config/devbox/secrets.env`, the App's `app-id` + `app.pem`, and the
 identity's two public keys, already on GitHub. Apply with `./bin/devbox sync identities` from the laptop, or
 `./bin/devbox bootstrap` on the devbox alone — no code change, nowhere. See [The identity
 registry](#-the-identity-registry).

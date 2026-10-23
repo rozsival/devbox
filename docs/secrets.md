@@ -27,16 +27,16 @@
 
 Everything is on the `/home/dev` bind mount, so it survives rebuilds and is set up once per host.
 
-| Secret                                 | Lives in                                                             | Set up by                                                                   |
-| -------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| SSH public keys, one pair per identity | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `identities.conf` — no private key present                |
-| `gh` tokens, one per identity          | `~/.config/devbox/secrets.env`                                       | you, a fine-grained PAT each ([below](#-github-cli))                        |
-| OMP login                              | `~/.omp/agent/agent.db`                                              | you, once, `/login` in `omp` ([below](#omp))                                |
-| Claude Code login                      | `~/.claude/.credentials.json`                                        | you, once, `/login` in `claude` ([below](#claude-code))                     |
-| Model API keys (optional)              | `~/.config/devbox/secrets.env`                                       | you, only for providers you use by key                                      |
-| GitHub App credentials (optional)      | the directory the identity's `app` field names                       | you, `app-id` + `app.pem` at mode 600 ([Git](git.md#devbox-git-credential)) |
-| Per-project secrets                    | `<project>/.env`                                                     | you, rendered on the laptop ([below](#-per-project-secrets))                |
-| GCP service-account key                | `~/.config/gcloud/<gcp-project>-*.json`                              | you, one per project, mode 600 ([below](#provisioning-a-key))               |
+| Secret                                   | Lives in                                                             | Set up by                                                                   |
+| ---------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| SSH public keys, one pair per identity   | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `identities.conf` — no private key present                |
+| `gh` tokens, one per identity            | `~/.config/devbox/secrets.env`                                       | you, a read-only fine-grained PAT each ([below](#-github-cli))              |
+| OMP login                                | `~/.omp/agent/agent.db`                                              | you, once, `/login` in `omp` ([below](#omp))                                |
+| Claude Code login                        | `~/.claude/.credentials.json`                                        | you, once, `/login` in `claude` ([below](#claude-code))                     |
+| Model API keys (optional)                | `~/.config/devbox/secrets.env`                                       | you, only for providers you use by key                                      |
+| GitHub App credentials, one per identity | the directory the identity's `app` field names                       | you, `app-id` + `app.pem` at mode 600 ([Git](git.md#devbox-git-credential)) |
+| Per-project secrets                      | `<project>/.env`                                                     | you, rendered on the laptop ([below](#-per-project-secrets))                |
+| GCP service-account key                  | `~/.config/gcloud/<gcp-project>-*.json`                              | you, one per project, mode 600 ([below](#provisioning-a-key))               |
 
 ---
 
@@ -45,12 +45,12 @@ Everything is on the `/home/dev` bind mount, so it survives rebuilds and is set 
 Everything here needs a browser or a secret, so none of it is automated. `bootstrap` prints the steps still open, except
 the OMP login.
 
-| #   | Step                         | Details                                                                                                      |
-| --- | ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| 1   | Set identity public keys     | `pubkey` and `signing_pubkey` per identity in `identities.conf` — see [Git Identities](git.md#-signing)      |
-| 2   | Fill `secrets.env`           | A `GH_TOKEN_<SLUG>` per identity ([permissions](#permissions-per-token)); model API keys only if you use any |
-| 3   | Place GitHub App credentials | If an identity has an `app` field: `app-id` and `app.pem` (mode 600) in that directory                       |
-| 4   | Log the agents in            | `/login` once in `omp` and once in `claude` — see [Agent logins](#-agent-logins)                             |
+| #   | Step                         | Details                                                                                                                |
+| --- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1   | Set identity public keys     | `pubkey` and `signing_pubkey` per identity in `identities.conf` — see [Git Identities](git.md#-signing)                |
+| 2   | Fill `secrets.env`           | A read-only `GH_TOKEN_<SLUG>` per identity ([permissions](#permissions-per-token)); model API keys only if you use any |
+| 3   | Place GitHub App credentials | Every identity's `app` directory: `app-id` and `app.pem` (mode 600) — without them its agents can only read            |
+| 4   | Log the agents in            | `/login` once in `omp` and once in `claude` — see [Agent logins](#-agent-logins)                                       |
 
 ---
 
@@ -143,8 +143,8 @@ author like the commits do.
 |                                                                             | every `gh` outside an agent session                          |
 
 The repository comes from `-R`/`--repo`, then `GH_REPO`, then the `origin` remote; for `project` it is always the
-checkout, since a project belongs to an owner rather than a repository. An agent that needs the PAT inside a repository
-asks for it explicitly: `GH_TOKEN=$(devbox-gh-token) gh ...`.
+checkout, since a project belongs to an owner rather than a repository. Everything in the right column runs on a
+read-only token: an agent can look, but writes only where the App is installed.
 
 > [!CAUTION]
 > A failed App lookup or mint (broken `app.pem`, API outage) makes `gh` exit 1 rather than fall back to the PAT and act
@@ -153,50 +153,36 @@ asks for it explicitly: `GH_TOKEN=$(devbox-gh-token) gh ...`.
 
 ### Permissions per token
 
-Where a permission has to live follows which token answers. With your own account's repos having no App and an org's
-repos having the org's App, that gives three sets. A fine-grained PAT has exactly one resource owner, so the org's PAT
-is a separate token on its own identity ([Git Identities](git.md#can-two-identities-be-the-same-github-account)). All
-are _Repository permissions_ unless marked; `Metadata: read` is mandatory and added by GitHub.
+Agents never act as you. Every identity has a GitHub App, and every PAT — your account's and every org's — is
+**read-only**: an agent reads `secrets.env` as easily as `devbox-gh-token` does, so whatever a PAT can write, an agent
+can write as you. Write access exists only as an App installation token, minted for one repository and authored by the
+bot. A repository the App is not installed on is read-only to agents: they clone and fetch it with the PAT, and a push
+or a `gh pr create` there fails. A fine-grained PAT has exactly one resource owner, so an org's PAT is a separate token
+on its own identity ([Git Identities](git.md#can-two-identities-be-the-same-github-account)). All are _Repository
+permissions_ unless marked; `Metadata: read` is mandatory and added by GitHub.
 
-#### PAT on your account's repos (no App)
+#### Every PAT: read-only
 
-The PAT does all agent work here: git through the credential helper and every `gh` command.
+Agents use it for git on repositories without the App, for commands that name no repository, and in a devbox pane it
+is your own `gh` too — write work by hand goes through `ssh -A devbox` git or the laptop's own `gh`.
 
-| Permission      | Level               | For                                                                                                   |
-| --------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
-| Contents        | **write**           | agent clone, pull and push; `gh pr merge`                                                             |
-| Pull requests   | **write**           | `gh pr create`, `gh pr comment`, `gh pr review` — **read** if agents should not post                  |
-| Issues          | **write**           | `gh issue create`, `gh issue comment` — **read** if agents should not post                            |
-| Actions         | **write**           | `gh run rerun`, `gh run cancel`, `gh workflow run` — **read** covers only `gh run list/view/watch`    |
-| Commit statuses | read                | `gh pr checks`                                                                                        |
-| Workflows       | **write**, optional | pushes that change `.github/workflows/` — without it GitHub rejects them, and you push those yourself |
+| Permission                | Level           | For                                                                          |
+| ------------------------- | --------------- | ---------------------------------------------------------------------------- |
+| Metadata                  | read            | `gh repo list`, `gh search repos`, `gh repo view`                            |
+| Contents                  | read            | clone and fetch of repositories without the App, `gh search code`            |
+| Issues, Pull requests     | read            | `gh search issues`, `gh search prs`, if agents search                        |
+| Actions, Commit statuses  | read, optional  | `gh run list/view`, `gh pr checks` on repositories without the App           |
+| Projects (_organization_) | read, optional  | your own `gh project` in a devbox pane; agents' go to the App                |
+| anything                  | **never write** | a write permission here is a write permission for every agent, acting as you |
 
-There is no _Checks_ row: fine-grained PATs
-[cannot call the Checks API](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#fine-grained-personal-access-tokens-limitations)
-at all, so with a PAT `gh pr checks` relies on commit statuses and may not show check runs. Nor is there a _Projects_
-row: a fine-grained PAT cannot reach a project owned by a user account either — only a classic PAT can, which this setup
-does not use. Put a board agents should work under an org.
+The org must allow fine-grained PATs (org settings → _Personal access tokens_); if it requires approval, a new token
+stays pending until an owner approves it.
 
-#### PAT on an org's repos (org App installed)
+#### Each identity's App
 
-Agents only use this token for commands that name no repository, plus the `gh` you type yourself in a devbox pane.
-
-| Permission                     | Level    | For                                                                                                                 |
-| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| Metadata                       | read     | `gh repo list`, `gh search repos`, `gh repo view` — the minimum agents need from this token                         |
-| Contents                       | read     | `gh repo view`'s README, `gh search code`                                                                           |
-| Issues, Pull requests          | read     | `gh search issues`, `gh search prs` across the org, if agents search                                                |
-| Optional, from the first table | as there | only for `gh` you run by hand on the devbox — Actions **write** if you re-run CI there with `gh run rerun` yourself |
-| Projects (_organization_)      | read     | optional — your own `gh project` in a devbox pane; agents' go to the App                                            |
-
-An org repo _without_ the App falls back to this PAT for everything, so it needs the first table. The org must allow
-fine-grained PATs (org settings → _Personal access tokens_); if it requires approval, a new token stays pending until an
-owner approves it.
-
-#### The org's App
-
-Set under the App's settings → _Permissions & events_. Each token is minted for one repository with the installation's
-whole permission set, so this table is exactly what an agent can do there.
+One per identity — your own account included, installed there on the repositories agents may write to. Set under the
+App's settings → _Permissions & events_. Each token is minted for one repository with the installation's whole
+permission set, so this table is exactly what an agent can do there.
 
 | Permission                | Level               | For                                                                                                   |
 | ------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -209,8 +195,8 @@ whole permission set, so this table is exactly what an agent can do there.
 | Workflows                 | **write**, optional | pushes that change `.github/workflows/` — without it GitHub rejects them, and you push those yourself |
 | Projects (_organization_) | **write**, optional | `gh project item-add`, `item-edit`, …; `gh pr create --project`, `gh issue edit --add-project`        |
 
-An App installed on your own account works the same way: its repos follow this table, and that account's PAT shrinks to
-the second one.
+A project owned by a user account is out of reach of both tokens — a fine-grained PAT cannot reach one, and an App's
+_Projects_ permission is an organization permission. Put a board agents should work under an org.
 
 #### Changing App permissions
 
@@ -218,8 +204,9 @@ An agent's `gh` failing with _"Resource not accessible by **integration**"_ mean
 Fix it in this order, on the machine the agent runs on:
 
 1. **Grant it.** App settings → _Permissions & events_ → raise the permission → _Save_.
-2. **Accept it.** The change is only a request until an org owner accepts it: org settings → _GitHub Apps_ → the App →
-   _Review request_ → _Accept new permissions_. Until then every new token still has the old set.
+2. **Accept it.** The change is only a request until the installation's owner accepts it: org settings → _GitHub Apps_,
+   or for your own account _Settings_ → _Applications_ → _Installed GitHub Apps_ → the App → _Review request_ → _Accept
+   new permissions_. Until then every new token still has the old set.
 3. **Drop the cached token.** Tokens keep the permissions they were minted with and are cached for up to 30 minutes.
    On the machine the agent runs on:
 
@@ -231,8 +218,8 @@ Fix it in this order, on the machine the agent runs on:
    shim mints a fresh token on its next call.
 
 If it still fails with the same message, step 2 has not happened yet. _"… by **personal access token**"_ instead
-means the repository is not covered by the App (`devbox-git-credential explain <owner>/<repo>`), and the PAT needs the
-permission.
+means the repository is not covered by the App (`devbox-git-credential explain <owner>/<repo>`): install the App on it.
+Never raise the PAT.
 
 ### Why not `gh auth login`
 
@@ -415,18 +402,18 @@ the default token on a `work` repo is the wrong identity. Add the variable.
 
 ### How do I add another account?
 
-Add a `[slug]` block to `identities.conf`, its `GH_TOKEN_<SLUG>` here, and its two public keys — no code change. See
-[Git Identities](git.md#-the-identity-registry).
+Add a `[slug]` block to `identities.conf` with its own `app` directory, its read-only `GH_TOKEN_<SLUG>` here, and its two
+public keys — no code change. See [Git Identities](git.md#-the-identity-registry).
 
-### Why does `gh run rerun` fail in an agent session but work in my shell?
+### Why does `gh run rerun` fail in an agent session?
 
-In an agent session, `gh run` on a repository with the org's App uses the App's token, so the **App** needs
-`Actions: write`; your shell sends the PAT. Grant it on the App, have an org owner accept the request, then run
-`devbox-git-credential forget <owner>/<repo>` — see [Changing App permissions](#changing-app-permissions).
+`gh run` on a repository with the identity's App uses the App's token, so the **App** needs `Actions: write`. Grant it on
+the App, have the installation's owner accept the request, then run `devbox-git-credential forget <owner>/<repo>` — see
+[Changing App permissions](#changing-app-permissions).
 
 GitHub's error names the token that was refused: _"Resource not accessible by **integration**"_ is the App's token,
-_"… by **personal access token**"_ is the PAT. `devbox-git-credential explain <owner>/<repo>` shows which one the
-repository gets.
+_"… by **personal access token**"_ is the read-only PAT — the App is not installed on that repository.
+`devbox-git-credential explain <owner>/<repo>` shows which one the repository gets.
 
 ### Does OMP see my keys in plaintext?
 

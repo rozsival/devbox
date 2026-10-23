@@ -87,9 +87,10 @@ fetches - unlike `includeIf gitdir:`, which needs the directory to exist first. 
 
 The devbox holds no private key for any identity: manual git (pane push, signed commit) borrows the
 laptop's 1Password agent, forwarded per connection with `ssh -A devbox`; agent git never touches it - the
-`omp`/`claude` launchers rewrite their git to HTTPS with a repo-scoped token (GitHub App installation token or
-fine-grained PAT) and bot author, unsigned; their `gh` on a repo the App covers uses the same App token, so
-PRs carry the bot author too. Full mechanism: `docs/git.md`.
+`omp`/`claude` launchers rewrite their git to HTTPS with a repo-scoped token and bot author, unsigned. Agents
+write only through each identity's GitHub App (one per identity, personal included); every PAT is read-only,
+so a repo without the App is clone/fetch only. Their `gh` on a repo the App covers uses the same App token,
+so PRs carry the bot author too. Full mechanism: `docs/git.md`, `docs/secrets.md#permissions-per-token`.
 
 ## Two optional extras, not installed by default
 

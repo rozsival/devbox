@@ -204,16 +204,19 @@ if [[ ${claude_settings_state} == invalid ]]; then
   echo "  - ${claude_settings} is not valid JSON - fix it, then re-run ./bin/devbox agent install to merge in the Claude Code guardrail"
 fi
 if ((identities_seeded)); then
-  echo "  - Create ${identities_file}: cp ${TEMPLATE_DIR}/.config/devbox/identities.conf.example ${identities_file} and fill in one [slug] block per account (name, email, the laptop's public keys, optionally a GitHub App directory), then re-run ./bin/devbox agent install"
+  echo "  - Create ${identities_file}: cp ${TEMPLATE_DIR}/.config/devbox/identities.conf.example ${identities_file} and fill in one [slug] block per account (name, email, the laptop's public keys, its GitHub App directory), then re-run ./bin/devbox agent install"
 fi
 if ((identities_ok)); then
   for slug in ${slugs}; do
-    echo "  - $(di_get "${slug}" token_var) in ${secrets_file} (fine-grained; permissions: docs/secrets.md, \"Permissions per token\")"
+    echo "  - $(di_get "${slug}" token_var) in ${secrets_file} (fine-grained, read-only; permissions: docs/secrets.md, \"Permissions per token\")"
   done
   for slug in ${slugs}; do
     app_dir="$(di_get "${slug}" app)"
-    [[ -n ${app_dir} ]] || continue
-    echo "  - ${app_dir}/{app-id,app.pem} (mode 600) so [${slug}] repositories get App tokens; without them the PAT is used"
+    if [[ -z ${app_dir} ]]; then
+      echo "  - A GitHub App for [${slug}]: set app = <dir> in ${identities_file} - its PAT is read-only, so until then its agents can only read"
+    else
+      echo "  - ${app_dir}/{app-id,app.pem} (mode 600) so [${slug}] agents can write; without them they can only read"
+    fi
   done
 else
   echo "  - Fix ${identities_file} (devbox-identities check reports every problem) - the GH_TOKEN_<SLUG> and App-directory steps follow once it is usable"

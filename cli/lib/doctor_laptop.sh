@@ -406,7 +406,7 @@ doctor_laptop() {
       # GH_TOKEN answer for every identity, so a missing token would show as
       # accepted.
       if ! token="$("${HOME}/.local/bin/devbox-gh-token" --identity "${slug}" 2>/dev/null)" || [[ -z ${token} ]]; then
-        fail "no ${slug} token: set $(di_get "${slug}" token_var) in ${secrets_file} (fine-grained; permissions: docs/secrets.md, \"Permissions per token\")"
+        fail "no ${slug} token: set $(di_get "${slug}" token_var) in ${secrets_file} (fine-grained, read-only; permissions: docs/secrets.md, \"Permissions per token\")"
       # A subshell export, not a VAR=value prefix: the variable's name follows
       # the host, and `env NAME=token` would put the token on a command line.
       # GH_HOST because gh refuses a host it has no stored login for.
@@ -416,9 +416,14 @@ doctor_laptop() {
       else
         log_success "${slug} token accepted by gh"
       fi
+      # Every identity writes through its own App: PATs are read-only, so an
+      # identity without one leaves its agents unable to push - by policy
+      # never fixed by giving the PAT write access, which would let any agent
+      # act as you.
       app_dir="$(di_get "${slug}" app)"
-      [[ -n ${app_dir} ]] || continue
-      if [[ -r ${app_dir}/app-id && -r ${app_dir}/app.pem ]]; then
+      if [[ -z ${app_dir} ]]; then
+        fail "[${slug}] has no app - create a GitHub App for it and set app = <dir> in ${identities_file}; until then its agents can only read (docs/secrets.md, \"Permissions per token\")"
+      elif [[ -r ${app_dir}/app-id && -r ${app_dir}/app.pem ]]; then
         if [[ "$(file_mode "${app_dir}/app.pem")" != 600 ]]; then
           fail "${app_dir}/app.pem is not mode 600"
         elif openssl pkey -in "${app_dir}/app.pem" -noout >/dev/null 2>&1; then
@@ -427,7 +432,7 @@ doctor_laptop() {
           fail "${app_dir}/app.pem is not a readable private key"
         fi
       else
-        log_warn "no App credentials in ${app_dir} - ${slug} repositories are pushed with the PAT until app-id + app.pem (mode 600) are there"
+        fail "no App credentials in ${app_dir} - place app-id + app.pem (mode 600); until then ${slug} agents can only read"
       fi
     done
   else

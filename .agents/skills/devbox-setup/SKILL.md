@@ -148,11 +148,10 @@ register on GitHub - already your normal, registered laptop keys.
    `./bin/devbox up` - until then, manual git over a forwarded agent (`ssh -A devbox`) can't pick a key,
    commits sign with nothing. A prior bootstrap's private key is deleted this run, fingerprint printed to
    revoke.
-2. Put one fine-grained GitHub token per identity in `~/.config/devbox/secrets.env`: `GH_TOKEN_<SLUG>`
-   (e.g. `GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK`) - on repos without the GitHub App the agent set (`contents`,
-   `pull-requests`, `issues`, `actions` write, `statuses` read, `workflows` write only if agents should
-   push `.github/workflows/` changes); on repos with the App only `metadata` read plus what you run by hand,
-   since agents' repository commands use the App there (`docs/secrets.md#permissions-per-token`).
+2. Put one fine-grained, **read-only** GitHub token per identity in `~/.config/devbox/secrets.env`:
+   `GH_TOKEN_<SLUG>` (e.g. `GH_TOKEN_PERSONAL`, `GH_TOKEN_WORK`) - `metadata` and `contents` read, plus
+   `issues`/`pull-requests` read if agents search; never write, since any agent can read the file and would
+   then write as you (`docs/secrets.md#permissions-per-token`). Agents write only through the App (step 4).
    Working directory picks which (the `dir` prefixes in `identities.conf`, same rule as git identities);
    `devbox-gh-token --account` reports it. Skip `gh auth login`: its web flow can't scope below `repo` +
    `read:org` + `gist` - non-expiring, account-wide, plaintext (no keyring here). A box-wide `GH_TOKEN`
@@ -163,9 +162,10 @@ register on GitHub - already your normal, registered laptop keys.
    or not. Never put one project's secrets here; those go in that project's `.env`. `claude-launcher`
    unsets `ANTHROPIC_API_KEY` so Claude Code stays on its `/login` subscription.
 4. Place each identity's GitHub App credentials in _that identity's own_ `app` directory from
-   `identities.conf` (`app-id`, `app.pem`, mode 600) if it needs one. Bootstrap creates the directory,
-   never fetches secrets; once present, the credential helper mints a repo-scoped installation token for
-   that identity's agent git, ahead of the PAT, and agent `gh` on that repo (PRs, issues) uses it too.
+   `identities.conf` (`app-id`, `app.pem`, mode 600) - every identity has one, the personal account
+   included. Bootstrap creates the directory, never fetches secrets; once present, the credential helper
+   mints a repo-scoped installation token for that identity's agent git, and agent `gh` on that repo (PRs,
+   issues) uses it too. Without it, or on a repo the App is not installed on, agents can only read.
 5. Log Claude Code in once (bootstrap installed it): `ssh -t devbox claude`, then `/login`, open the URL on
    the laptop, paste the code back. Lands in `~/.claude/.credentials.json`; survives rebuilds.
 

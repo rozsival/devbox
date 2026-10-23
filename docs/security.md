@@ -39,14 +39,15 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox logs | grep "Server listening"'  
 
 Authority is enumerated, not ambient: each credential is scoped, separately revocable, separately attributable.
 
-| Purpose                                          | Credential                                                               | Reach                                                      |
-| ------------------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| Agent git (clone, pull, push, commit)            | per-repository GitHub App installation token, else a fine-grained PAT    | App: one repo, 1h. PAT: its named repos, `contents: write` |
-| Manual git, incl. signing (you)                  | the laptop's 1Password agent, forwarded per connection (`ssh -A devbox`) | same as your laptop; the container stores no private key   |
-| Agent `gh` on one repository (PRs, issues, runs) | that repository's GitHub App installation token, else the PAT below      | App: one repo, 1h (cached ≤30 min on tmpfs)                |
-| Dashboards, CI, issues, account-wide `gh`        | one fine-grained PAT per GitHub account                                  | named repos, scoped per token                              |
-| LLM inference                                    | per-project GCP service-account key                                      | one dev project, predict-only                              |
-| Project secrets                                  | that project's `.env`                                                    | one project                                                |
+| Purpose                                          | Credential                                                               | Reach                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------ | -------------------------------------------------------- |
+| Agent git where the App is installed (push)      | per-repository GitHub App installation token, one App per identity       | one repo, 1h                                             |
+| Agent git elsewhere (clone, fetch only)          | the identity's fine-grained PAT, read-only                               | its named repos, read-only                               |
+| Manual git, incl. signing (you)                  | the laptop's 1Password agent, forwarded per connection (`ssh -A devbox`) | same as your laptop; the container stores no private key |
+| Agent `gh` on one repository (PRs, issues, runs) | that repository's GitHub App installation token, else the PAT below      | App: one repo, 1h (cached ≤30 min on tmpfs)              |
+| Dashboards, CI, issues, account-wide `gh`        | one read-only fine-grained PAT per GitHub account                        | named repos, read-only                                   |
+| LLM inference                                    | per-project GCP service-account key                                      | one dev project, predict-only                            |
+| Project secrets                                  | that project's `.env`                                                    | one project                                              |
 
 Notably absent: any 1Password account (`op` isn't installed), any GitHub private key, any Google user credential. See
 [Secrets](secrets.md).
@@ -62,10 +63,11 @@ host's own services (its sshd included), other Tailnet machines over the overlay
 routes that remain), the devbox container's own lifecycle, root inside the container, any unpublished port, and any
 1Password vault.
 
-The consequence: an agent with shell access can push through the same App token or PAT `git`/`gh` already resolve, and
-read each configured App's private key, every identity's PAT, and every project's `.env` and GCP key directly. Your own
-GitHub push authority stays out of reach — no private key to steal — unless an `ssh -A devbox` connection is open
-(accepted limit 2).
+The consequence: an agent with shell access can push through the same App token `git`/`gh` already resolve, and read
+each configured App's private key, every identity's PAT, and every project's `.env` and GCP key directly. None of that
+writes as you: every PAT is read-only, so a stolen one reads what it names and nothing more, and every write an agent
+makes carries an App's bot. Your own GitHub push authority stays out of reach — no private key to steal — unless an
+`ssh -A devbox` connection is open (accepted limit 2).
 
 > [!IMPORTANT]
 > Treat a compromise as "revoke every identity's PAT and App key, plus the service-account key," not "rebuild a laptop."
@@ -225,16 +227,15 @@ risk to trade the boundary away for.
 
 ### Can I give an agent a narrower key?
 
-Already the default: agents commit through each identity's own GitHub App where one is installed, scoped to specific
-repositories and permissions, and `gh` uses a fine-grained PAT rather than an account-wide OAuth token. The forwarded
+Already the default: agents write only through each identity's own GitHub App, scoped to specific repositories and
+permissions, and `gh` otherwise uses a read-only fine-grained PAT rather than an account-wide OAuth token. The forwarded
 1Password agent stays broad for manual work because it's yours — see accepted limit 2.
 
 ### Would per-repo deploy keys be tighter than the fine-grained PAT?
 
-Yes — but the primary path is already that tight: an installed GitHub App mints a token scoped to exactly one repository
-for one hour. Deploy keys matter only for the fallback case — repos without the App installed — where the fine-grained
-PAT trades the same breadth as any multi-repo PAT: it pushes everywhere granted `contents: write`, readable by any
-agent, not just by you at a prompt. Install the App on repos that matter instead of adding a deploy key.
+Not any more: the PAT writes nothing. Every agent write goes through an installed GitHub App, which mints a token scoped
+to exactly one repository for one hour; a repository without the App is read-only to agents. Install the App on the
+repositories agents should change instead of adding a deploy key.
 
 ### How do I revoke access from a lost laptop?
 

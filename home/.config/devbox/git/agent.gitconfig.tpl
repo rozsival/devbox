@@ -25,8 +25,8 @@
 # agent your own author, signing key and ssh tag.
 
 # The author of every agent commit, outside the trees the includes at the end
-# claim. Not an account: the pusher is a fine-grained PAT or an App installation
-# token, the author is visibly not you.
+# claim: the identity's App bot, the only principal an agent pushes as - the
+# author is visibly not you.
 @DEFAULT_AUTHOR@
 
 # Unsigned: the signing keys are yours, and never within an agent's reach.
@@ -37,7 +37,8 @@
 
 # Every forge remote goes over HTTPS whatever URL the clone was made with, and
 # the helper mints a token per operation: a repository-scoped GitHub App
-# installation token where an App is installed, a fine-grained PAT elsewhere.
+# installation token where an App is installed, a read-only fine-grained PAT
+# elsewhere (clone and fetch, never push).
 # The user-less `<host>:` forms are what an `ssh` config with `User git` lets a
 # clone get away with; `gh:` is the personal ~/.gitconfig shorthand.
 #

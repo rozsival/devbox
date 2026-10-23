@@ -234,8 +234,8 @@ export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"
 On a [dotfiles](https://github.com/rozsival/dotfiles) laptop, `~/.config/bash/env.sh` already puts the launchers first.
 
 It reports whether `omp` and `claude` resolve to their launchers, and prints the remaining manual steps per identity: a
-`GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env`, and — for any identity with an `app` directory set — its GitHub
-App credentials there. See [Git Identities](git.md#-laptop-install).
+read-only `GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env`, and its GitHub App credentials in its `app` directory —
+every identity has one, since the App is the only way its agents write. See [Git Identities](git.md#-laptop-install).
 
 `./bin/devbox doctor laptop` is the laptop's acceptance test. It covers steps 1, 2 and 6 plus the GitHub `Host` blocks
 and the signing config: keys held by 1Password with none on disk, every `Host` selecting one `.pub` per registry

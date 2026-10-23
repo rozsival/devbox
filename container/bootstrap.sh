@@ -309,14 +309,19 @@ if ${identities_ok}; then
   # Secrets: bootstrap creates each `app` directory and never fetches the
   # contents. The credential helper (§13) mints a repository-scoped installation
   # token from them for every git operation on a repository the App is installed
-  # on, and falls back to that identity's PAT everywhere else.
+  # on, and falls back to that identity's PAT everywhere else - read-only by
+  # policy, so the App is the only way an agent writes, and an identity without
+  # one is a manual step rather than a reason to grant the PAT write access.
   for slug in ${slugs}; do
     creds_dir="$(di_get "${slug}" app)"
-    [[ -n ${creds_dir} ]] || continue
+    if [[ -z ${creds_dir} ]]; then
+      register_action "Create a GitHub App for [${slug}] and set app = <dir> in ${identities_file} - its PAT is read-only, so until then its agents can only read (docs/secrets.md, \"Permissions per token\")"
+      continue
+    fi
     mkdir -p "${creds_dir}"
     chmod 700 "${creds_dir}"
     if [[ ! -f "${creds_dir}/app.pem" ]]; then
-      register_action "Place the [${slug}] App credentials: printf '%s' '<app-id>' > ${creds_dir}/app-id, copy the private key to ${creds_dir}/app.pem from the laptop, then chmod 600 ${creds_dir}/app.pem - until then agents push those repositories with the PAT"
+      register_action "Place the [${slug}] App credentials: printf '%s' '<app-id>' > ${creds_dir}/app-id, copy the private key to ${creds_dir}/app.pem from the laptop, then chmod 600 ${creds_dir}/app.pem - until then agents can only read those repositories"
     fi
   done
 fi
@@ -439,7 +444,7 @@ if ${identities_ok}; then
     # inherited GH_TOKEN answer for every identity, so a missing token would
     # show as accepted.
     if ! token="$(devbox-gh-token --identity "${slug}" 2>/dev/null)" || [[ -z "${token}" ]]; then
-      register_action "Add a fine-grained GitHub token for the ${slug} account to ${secrets_file} as $(di_get "${slug}" token_var) (permissions: docs/secrets.md, \"Permissions per token\" - the full agent set on repositories without the App, little more than metadata read where it is installed)"
+      register_action "Add a read-only fine-grained GitHub token for the ${slug} account to ${secrets_file} as $(di_get "${slug}" token_var) (permissions: docs/secrets.md, \"Permissions per token\" - never write: agents write through the App)"
     # gh_env: a GitHub Enterprise Server token is read from GH_ENTERPRISE_TOKEN,
     # and checked against its own host - as GH_TOKEN it would be tried on
     # github.com and reported rejected. GH_HOST because gh refuses a host it

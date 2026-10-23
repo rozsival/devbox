@@ -119,7 +119,8 @@ the host's root Docker daemon.
   hasconfig:remote.*.url:` for every identity claiming `orgs` - written after the `gitdir:` includes so the
   owner wins over the tree - both include lists rewritten from scratch every run so a renamed or dropped
   identity leaves no stale `includeIf`); 8 `allowed_signers`; 9
-  GitHub App credential directories per identity (created, never fetched - only placed by hand); 10 shell;
+  GitHub App credential directories per identity (created, never fetched - only placed by hand; an identity with no
+  `app` registered as a manual step, since every PAT is read-only and the App is the only way an agent writes); 10 shell;
   11 the box-wide `secrets.env`; 12 `gh` (the `~/.local/libexec/devbox-agent` shim plus the per-identity
   token checklist, each identity checked with its own `devbox-gh-token --identity <slug>` and `GH_HOST` set to
   that identity's host, for every identity); 13 the agent git override (`agent-launch` and both launchers plus their `omp`/`claude`
@@ -331,7 +332,8 @@ the host's root Docker daemon.
     `devbox-identities` resolve by name), `~/.config/devbox/git` still unwritable and no login shell writing a
     git identity into it, no agent token in the macOS keychain (a system `credential.helper` running ahead of
     ours), every identity's own PAT (`devbox-gh-token --identity <slug>`, with `GH_HOST` set to that identity's
-    host, for every identity) accepted by `gh`, every App pem valid, and every configured connection
+    host, for every identity) accepted by `gh`, every identity naming an `app` with its pem valid (none: its agents
+    can only read, PATs being read-only by policy), and every configured connection
     authenticating - including `Host <workstation>`, whose hostname the repo names nowhere: it reads
     `DEVBOX_HOST` from the environment or `.push.env` - the same per-laptop value `devbox deploy` resolves,
     deliberately one name and one file rather than two - and skips that one check when it is unset. Unsets

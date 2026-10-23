@@ -15,7 +15,7 @@
 # `[a-z][a-z0-9_]*` and names everything derived from the identity:
 #
 #   ~/.ssh/id_<slug>.pub, ~/.ssh/signing_<slug>.pub   the laptop keys it selects
-#   GH_TOKEN_<SLUG> in secrets.env                    its fine-grained PAT
+#   GH_TOKEN_<SLUG> in secrets.env                    its read-only fine-grained PAT
 #   agent-<slug>.gitconfig, user-<slug>.gitconfig,
 #   org-<slug>.gitconfig                              its generated git config
 #
@@ -41,13 +41,18 @@
 #                   authentication and signing keys separately, and signing with
 #                   the auth key shows Unverified.
 #   agent_name,
-#   agent_email     Author of agent commits in those trees. Defaults to the
-#                   default identity's, so a bot per account is optional.
-#   app             Directory holding a GitHub App's `app-id` and `app.pem`
-#                   (mode 600). When the App is installed on the repository an
-#                   agent touches, the credential helper mints a
-#                   repository-scoped installation token instead of using the
-#                   PAT, and `agent_*` should then be the App's bot user.
+#   agent_email     Author of agent commits in those trees: the identity's App
+#                   bot, `<app-slug>[bot]` and
+#                   `<bot-user-id>+<app-slug>[bot]@users.noreply.github.com`
+#                   (`gh api 'users/<app-slug>[bot]' --jq .id`). Defaults to the
+#                   default identity's.
+#   app             Directory holding the identity's GitHub App `app-id` and
+#                   `app.pem` (mode 600). Every identity needs one: PATs are
+#                   read-only, so where the App is installed on the repository
+#                   an agent touches, the repository-scoped installation token
+#                   the credential helper mints is the only way that agent
+#                   writes. Elsewhere it can clone and fetch with the PAT, never
+#                   push. Without `app`, the identity's agents can only read.
 #   host            Forge host; default `github.com`. Set it to a GitHub
 #                   Enterprise host to put that identity on that instance - the
 #                   HTTPS rewrite and the API the credential helper calls both
@@ -63,8 +68,9 @@ name = Your Name
 email = you@example.com
 pubkey =
 signing_pubkey =
-agent_name = your-agent
-agent_email = your-agent@users.noreply.github.com
+agent_name = your-app[bot]
+agent_email = 00000000+your-app[bot]@users.noreply.github.com
+app = ~/.config/personal/your-app
 
 # A second account, selected by the tree a repository is cloned into. Its own
 # key needs `orgs` naming the GitHub owner(s) it pushes to, or nothing ever
@@ -76,10 +82,10 @@ agent_email = your-agent@users.noreply.github.com
 #email = you@work.example.com
 #pubkey =
 #signing_pubkey =
-#agent_name = your-app[bot]
-#agent_email = 00000000+your-app[bot]@users.noreply.github.com
+#agent_name = your-org-app[bot]
+#agent_email = 00000000+your-org-app[bot]@users.noreply.github.com
 #orgs = your-org
-#app = ~/.config/work/your-app
+#app = ~/.config/work/your-org-app
 
 # A GitHub Enterprise account. Everything derived from it moves to that host.
 #[enterprise]
@@ -89,4 +95,7 @@ agent_email = your-agent@users.noreply.github.com
 #email = you@enterprise.example.com
 #pubkey =
 #signing_pubkey =
+#agent_name = your-enterprise-app[bot]
+#agent_email = 00000000+your-enterprise-app[bot]@users.noreply.github.example.com
+#app = ~/.config/enterprise/your-enterprise-app
 #orgs = your-enterprise-org
