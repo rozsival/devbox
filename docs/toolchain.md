@@ -26,6 +26,7 @@
 | `lazygit`        | `0.66.1`  | `/usr/local/bin/lazygit` (alias `lg`)                                  |
 | `wt` (worktrunk) | `0.80.0`  | `/usr/local/bin/wt` + `git-wt`                                         |
 | `terraform`      | `1.16.6`  | `/usr/local/bin/terraform`                                             |
+| `shellcheck`     | `0.11.0`  | `/usr/local/bin/shellcheck`                                            |
 | `nvm`            | `0.40.8`  | `/opt/nvm`                                                             |
 | Docker CLI       | `29.9.0`  | `docker-ce-cli` from Docker's signed apt repository, `/usr/bin/docker` |
 | Compose plugin   | `5.6.0`   | `/usr/local/lib/docker/cli-plugins/docker-compose`                     |
