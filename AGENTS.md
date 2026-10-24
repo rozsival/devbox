@@ -16,7 +16,8 @@ the host's root Docker daemon.
 
 - **Host**: Ubuntu 26.04 LTS, Docker with compose v2, Tailscale >= 1.98; repo lives at `~/devbox`
 - **Image**: `ubuntu:26.04` + pinned `herdr`, `gh`, `lazygit`, `wt` (worktrunk), `terraform`, the Docker CLI
-  with the compose and buildx plugins, and Node 24 / pnpm 12 through nvm in `/opt/nvm`. No `op` and no
+  with the compose and buildx plugins, Node 24 / pnpm 12 through nvm in `/opt/nvm`, Rust through rustup in
+  `/opt/rustup` + `/opt/cargo` and Ruby built from source into `/opt/ruby`. No `op` and no
   `gcloud`: the container holds no vault and no Google account (see `docs/secrets.md`)
 - **Agents**: OMP and Claude Code, installed by bootstrap into `~/.local/bin` on the bind mount (unpinned,
   like `moshi-hook`: each updates itself there), both started through the agent launchers
@@ -80,9 +81,10 @@ the host's root Docker daemon.
   Holds no identity: who this box is, per account and per directory tree, lives in
   `~/.config/devbox/identities.conf` instead (see the `home/` bullet below) - an enumeration of
   per-account variables is what that file replaced
-- `Dockerfile` - pinned toolchain; `NVM_DIR=/opt/nvm` and `COREPACK_HOME=/opt/corepack` exist because
-  `/home/dev` is bind-mounted and would shadow a home-directory install; `herdr` must land in
-  `/usr/local/bin` because non-interactive SSH sessions get the default PATH
+- `Dockerfile` - pinned toolchain; `NVM_DIR=/opt/nvm`, `COREPACK_HOME=/opt/corepack`, `RUSTUP_HOME=/opt/rustup`,
+  `CARGO_HOME=/opt/cargo` and the `/opt/ruby` prefix exist because `/home/dev` is bind-mounted and would shadow a
+  home-directory install (the rustup proxies in `/usr/local/bin` are wrappers that default those two variables);
+  `herdr` must land in `/usr/local/bin` because non-interactive SSH sessions get the default PATH
 - `docker-compose.yml` - `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` is the entire network boundary, written
   `${BIND_ADDR:?...}` so compose itself refuses an empty address instead of publishing on `0.0.0.0`; `user:`,
   `cap_drop: [ALL]`, `no-new-privileges`, no root docker socket, no identity in `environment:` either - same

@@ -13,6 +13,9 @@ ARG HERDR_VERSION=0.9.4
 ARG NVM_VERSION=0.40.8
 ARG NODE_VERSION=24.21.0
 ARG PNPM_VERSION=12.11.2
+ARG RUSTUP_VERSION=1.29.2
+ARG RUST_VERSION=1.99.1
+ARG RUBY_VERSION=4.0.9
 ARG GH_VERSION=2.102.0
 ARG LAZYGIT_VERSION=0.66.1
 ARG WORKTRUNK_VERSION=0.80.0
@@ -28,7 +31,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # `apt-get` only, never `apt`: `apt` has no stable CLI interface and warns on
 # every scripted call. `starship` comes from the Ubuntu archive, the same source
-# the workstation's own shell setup uses.
+# the workstation's own shell setup uses. The `lib*-dev`/`zlib1g-dev` headers are
+# what Ruby's build needs for openssl, psych, fiddle, bigdecimal and zlib; they
+# stay at runtime because native gems build against the same libraries.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     build-essential \
@@ -43,6 +48,10 @@ RUN apt-get update \
     iputils-ping \
     jq \
     less \
+    libffi-dev \
+    libgmp-dev \
+    libssl-dev \
+    libyaml-dev \
     locales \
     nano \
     openssh-client \
@@ -58,6 +67,7 @@ RUN apt-get update \
     unzip \
     xz-utils \
     zip \
+    zlib1g-dev \
   && rm -rf /var/lib/apt/lists/* \
   && ln -s "$(command -v fdfind)" /usr/local/bin/fd
 
@@ -222,6 +232,62 @@ RUN set -eux; \
     if [ -x "/opt/nvm/versions/node/v${NODE_VERSION}/bin/$b" ]; then \
       ln -sf "/opt/nvm/versions/node/v${NODE_VERSION}/bin/$b" "/usr/local/bin/$b"; \
     fi; \
+  done
+
+# Rust and Ruby follow Node: installed as `dev` under /opt (the bind mount would
+# shadow the home directory), so `rustup target add`, `cargo install` and
+# `gem install` work without root and last until the next rebuild.
+#
+# rustup-init is checked against the .sha256 static.rust-lang.org publishes
+# beside it; rustup then checks every toolchain component against the channel
+# manifest's hashes. `minimal` plus clippy and rustfmt skips rust-docs, the
+# largest component and one nothing here reads.
+#
+# Ruby is built from the release tarball, checked against the SHA-256 in
+# ruby-lang.org's index.txt (name, url, sha1, sha256, sha512 per asset). It is
+# built after Rust, with rustc on the PATH, so configure enables the JITs that
+# need it. --disable-install-doc skips the rdoc/ri build.
+ENV RUSTUP_HOME=/opt/rustup \
+    CARGO_HOME=/opt/cargo
+ENV PATH=/opt/cargo/bin:/opt/ruby/bin:${PATH}
+RUN mkdir -p "$RUSTUP_HOME" "$CARGO_HOME" /opt/ruby && chown dev:dev "$RUSTUP_HOME" "$CARGO_HOME" /opt/ruby
+
+USER dev
+RUN set -eux; \
+  tmp="$(mktemp -d)"; cd "$tmp"; \
+  \
+  base="https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu"; \
+  curl -fsSL -o rustup-init "${base}/rustup-init"; \
+  curl -fsSL -o rustup-init.sha256 "${base}/rustup-init.sha256"; \
+  awk '{ print $1 "  rustup-init" }' rustup-init.sha256 | sha256sum -c -; \
+  chmod +x rustup-init; \
+  ./rustup-init -y --no-modify-path --profile minimal --component clippy,rustfmt --default-toolchain "${RUST_VERSION}"; \
+  \
+  curl -fsSL -o ruby.index https://cache.ruby-lang.org/pub/ruby/index.txt; \
+  url="https://cache.ruby-lang.org/pub/ruby/${RUBY_VERSION%.*}/ruby-${RUBY_VERSION}.tar.xz"; \
+  curl -fsSL -o ruby.tar.xz "$url"; \
+  awk -F'\t' -v u="$url" '$2 == u { print $4 "  ruby.tar.xz" }' ruby.index | sha256sum -c -; \
+  tar -xJf ruby.tar.xz; \
+  cd "ruby-${RUBY_VERSION}"; \
+  ./configure --prefix=/opt/ruby --disable-install-doc; \
+  make -j"$(nproc)"; \
+  make install; \
+  \
+  cd /; rm -rf "$tmp"
+
+# /usr/local/bin entries for the same reason as Node's symlinks above. Ruby's
+# are plain symlinks (its scripts carry an absolute #!/opt/ruby/bin/ruby). The
+# rustup proxies get wrappers instead: a proxy reads RUSTUP_HOME and CARGO_HOME,
+# falling back to ~/.rustup and ~/.cargo - empty on the bind mount - in a shell
+# that never sourced ~/.bashrc. `cargo install`/`gem install` output lands in
+# /opt/cargo/bin and /opt/ruby/bin, which ~/.bashrc.d/devbox.sh puts on the PATH.
+USER root
+RUN set -eux; \
+  for f in /opt/ruby/bin/*; do ln -sf "$f" "/usr/local/bin/${f##*/}"; done; \
+  for f in /opt/cargo/bin/*; do \
+    printf '#!/bin/sh\nexport RUSTUP_HOME="${RUSTUP_HOME:-/opt/rustup}" CARGO_HOME="${CARGO_HOME:-/opt/cargo}"\nexec %s "$@"\n' "$f" \
+      >"/usr/local/bin/${f##*/}"; \
+    chmod 0755 "/usr/local/bin/${f##*/}"; \
   done
 
 # Baked in as a fallback; compose bind-mounts the same paths read-only so host

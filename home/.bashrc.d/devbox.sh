@@ -4,6 +4,15 @@
 # Sourced by every shell, interactive or not: `ssh devbox <cmd>` must see the
 # same toolchain a pane does.
 
+# Rust and Ruby live in /opt for the same reason as Node below. rustup's proxies
+# read RUSTUP_HOME/CARGO_HOME (defaulting to the empty ~/.rustup and ~/.cargo),
+# and `cargo install`/`gem install` put binaries in these two bin directories.
+# Added before devbox_path_reset so the agent launchers still come first.
+export RUSTUP_HOME=/opt/rustup
+export CARGO_HOME=/opt/cargo
+case ":$PATH:" in *:/opt/cargo/bin:*) ;; *) PATH="/opt/cargo/bin:$PATH" ;; esac
+case ":$PATH:" in *:/opt/ruby/bin:*) ;; *) PATH="/opt/ruby/bin:$PATH" ;; esac
+
 # OMP and Claude Code install in ~/.local/bin so `omp update` and Claude's
 # auto-update work without an image rebuild. ~/.local/libexec/devbox-agent goes
 # in front of it: that is where the `omp` and `claude` launchers live (the agent
