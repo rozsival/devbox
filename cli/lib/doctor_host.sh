@@ -97,9 +97,9 @@ doctor_host() {
   # shellcheck disable=SC2016 # the probe list must expand inside the container
   if ! compose exec -T "${SERVICE}" bash -lc '
     status=0
-    for probe in "herdr --version" "omp --version" "claude --version" "node -v" "pnpm -v" "gh --version" \
-      "lazygit --version" "wt --version" "terraform version" "git --version" \
-      "docker --version" "docker compose version"; do
+    for probe in "herdr --version" "omp --version" "claude --version" "node -v" "pnpm -v" "rustc --version" \
+      "cargo --version" "ruby --version" "gh --version" "lazygit --version" "wt --version" "terraform version" \
+      "git --version" "docker --version" "docker compose version"; do
       # No pipe into head: a multi-line tool would take SIGPIPE (141) once head
       # exits, and the real exit code is the whole point of this loop.
       label="${probe%% *}"

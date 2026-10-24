@@ -27,7 +27,7 @@ Four facts:
    `/home/dev/projects` - clone repos there for agents to see them.
 2. **`/home/dev` is a host bind mount** (`${DEVBOX_DATA_DIR}`, also `/home/dev` on the host). Surviving a
    rebuild: keys, dotfiles, `~/.config/gh`, project checkouts, sshd host key, Docker images, volumes. Not
-   surviving: installed packages, `/opt/nvm` (writable layer, lost on recreate).
+   surviving: installed packages, `/opt/nvm`, `/opt/cargo`, `/opt/ruby` gems (writable layer, lost on recreate).
 3. **The published port is the entire network boundary**: `${BIND_ADDR}:2223:2222` in `docker-compose.yml`
    plus `127.0.0.1:2223`. Docker's DNAT matches the bound address, so UFW can't restrict it - binding to the
    Tailscale IP keeps devbox off the public internet. An empty `BIND_ADDR` makes `./bin/devbox up` - and

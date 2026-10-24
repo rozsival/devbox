@@ -120,7 +120,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 
 `doctor` runs all checks, reports each, exits non-zero on any failure: compose present, `BIND_ADDR` equal
 to `tailscale ip -4`, port listening on `BIND_ADDR`, **nothing** on `0.0.0.0`, container `healthy`, PID 1
-as `dev`, twelve toolchain probes, real exit codes, the agent git override intact (`omp` and `claude` each
+as `dev`, fifteen toolchain probes, real exit codes, the agent git override intact (`omp` and `claude` each
 resolving through a symlink to their launcher, not a file an update replaced), `moshi-hook` running (unpaired warns,
 stopped fails - `./bin/devbox hook` restarts it), project Docker daemon reachable and rootless, `host.docker.internal`
 resolving to publish address, `devbox-docker-firewall` active with the ruleset and unit this checkout writes, the
