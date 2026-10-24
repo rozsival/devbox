@@ -20,6 +20,7 @@ ARG GH_VERSION=2.102.0
 ARG LAZYGIT_VERSION=0.66.1
 ARG WORKTRUNK_VERSION=0.80.0
 ARG TERRAFORM_VERSION=1.16.6
+ARG SHELLCHECK_VERSION=0.11.0
 # Client only - the daemon lives on the host as the `dev` user (docs/docker.md).
 # Keep DOCKER_CLI_VERSION equal to the host daemon's version; compose refuses to
 # talk to an API newer than the server it reaches.
@@ -129,7 +130,8 @@ RUN if getent passwd "${HOST_UID}" >/dev/null; then userdel -r "$(getent passwd 
 #
 # Every download is verified: against upstream's checksum file where it
 # publishes one, else against the SHA-256 GitHub records for the release asset
-# (herdr publishes no checksum file; its release API carries the asset digest).
+# (herdr and shellcheck publish no checksum file; their release API carries the
+# asset digest).
 # The one exception is nvm's install.sh further down: upstream publishes neither
 # a checksum file nor release assets for it, so its pinned tag over TLS is the
 # contract - nvm itself then checks Node against nodejs.org's SHASUMS256.txt.
@@ -191,6 +193,13 @@ RUN set -eux; \
   awk -v f="terraform_${TERRAFORM_VERSION}_linux_amd64.zip" '$2 == f { print $1 "  terraform.zip" }' terraform.sums | sha256sum -c -; \
   unzip -q terraform.zip terraform; \
   install -m 0755 terraform /usr/local/bin/terraform; \
+  \
+  f="shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"; \
+  curl -fsSL -o shellcheck.tar.xz "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/${f}"; \
+  curl -fsSL -o shellcheck.json "https://api.github.com/repos/koalaman/shellcheck/releases/tags/v${SHELLCHECK_VERSION}"; \
+  jq -r --arg f "$f" '.assets[] | select(.name == $f) | .digest | select(startswith("sha256:")) | ltrimstr("sha256:") + "  shellcheck.tar.xz"' shellcheck.json | sha256sum -c -; \
+  tar -xJf shellcheck.tar.xz; \
+  install -m 0755 "shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck; \
   \
   mkdir -p /usr/local/lib/docker/cli-plugins; \
   curl -fsSL -o compose "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-linux-x86_64"; \

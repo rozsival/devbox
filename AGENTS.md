@@ -15,7 +15,7 @@ the host's root Docker daemon.
 ## Stack
 
 - **Host**: Ubuntu 26.04 LTS, Docker with compose v2, Tailscale >= 1.98; repo lives at `~/devbox`
-- **Image**: `ubuntu:26.04` + pinned `herdr`, `gh`, `lazygit`, `wt` (worktrunk), `terraform`, the Docker CLI
+- **Image**: `ubuntu:26.04` + pinned `herdr`, `gh`, `lazygit`, `wt` (worktrunk), `terraform`, `shellcheck`, the Docker CLI
   with the compose and buildx plugins, Node 24 / pnpm 12 through nvm in `/opt/nvm`, Rust through rustup in
   `/opt/rustup` + `/opt/cargo` and Ruby built from source into `/opt/ruby`. No `op` and no
   `gcloud`: the container holds no vault and no Google account (see `docs/secrets.md`)

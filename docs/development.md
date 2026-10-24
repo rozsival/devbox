@@ -28,7 +28,8 @@ make check   # format check, shellcheck, bash 3.2 parse of the laptop scripts, b
 ```
 
 `make` runs on the laptop: shfmt, shellcheck and bashly from Homebrew, prettier through `mise exec`, which installs the
-pinned version on first use (run `mise trust` once in the repo). The workstation and the container have none of them.
+pinned version on first use (run `mise trust` once in the repo). The workstation has none of them; the container has
+only `shellcheck`, pinned in the `Dockerfile`.
 There is no CI and no test suite: `make check` proves the source, and a change is proven on the workstation with
 `./bin/devbox doctor` and on the laptop with `./bin/devbox doctor laptop`.
 
