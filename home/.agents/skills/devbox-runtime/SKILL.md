@@ -1,6 +1,6 @@
 ---
 name: devbox-runtime
-description: How to work in the machine this agent session runs on - the devbox container (remote, unprivileged Ubuntu sandbox) or the user's macOS laptop - and how the two relate. Use it whenever DEVBOX_ENV matters to a decision - installing a tool, running Docker or a dev server, giving the user a URL or port, a path that may only exist on the other machine, a git or gh authentication failure, a secret or vault-rendered file that is missing - and whenever you catch yourself assuming root, sudo, the user's own credentials or the other machine's files.
+description: How to work in the machine this agent session runs on - the devbox container (remote, unprivileged Ubuntu sandbox) or the user's macOS laptop - and how the two relate. Use it whenever DEVBOX_ENV matters to a decision - installing a tool, running Docker or a dev server, giving the user a URL or port, a path that may only exist on the other machine, a git or gh authentication failure, calling gh or the GitHub API from a script or another language, a secret or vault-rendered file that is missing - and whenever you catch yourself assuming root, sudo, the user's own credentials or the other machine's files.
 ---
 
 # Working in the devbox and on the laptop
@@ -24,7 +24,8 @@ The laptop's `~/projects` and the devbox's `/home/dev/projects` are different tr
    rustup and Ruby live under `/opt`.
 2. Per-user installs work and survive rebuilds when they land under `/home/dev`:
    - `npm i -g --prefix ~/.local <pkg>`; never export `NPM_CONFIG_PREFIX`, because nvm refuses to activate with it set
-   - `cargo install --root ~/.local <crate>`; bare `cargo install` writes to `CARGO_HOME=/opt/cargo`, lost on a rebuild
+   - `cargo install --root ~/.local <crate>`; bare `cargo install` writes to `CARGO_HOME=/opt/cargo`, which is lost
+     whenever the container is recreated
    - `gem install --user-install <gem>`
    - `pipx` or `uv tool` when they exist, or a project-local virtualenv
 3. A system package (`apt-get`) needs root, and there is none. Don't look for one: no `sudo`, no setuid helpers, and
@@ -98,8 +99,19 @@ container. herdr restores the pane layout, not the processes.
 - Remotes may be SSH URLs (the user's own clones): the agent gitconfig rewrites the covered hosts to HTTPS, so leave
   every remote URL alone. Only a remote the rewrite does not cover reaches ssh, and that fails with a one-line
   explanation from `devbox-git-no-ssh`. That is the fence working, not a bug to work around.
-- `gh` is a shim that picks the token per working directory. Inside a checkout, repository commands use the App token.
-  Never run `gh auth login`.
+- **`gh` only through the shim, only from the shell.** `gh` on the session's PATH is
+  `~/.local/libexec/devbox-agent/gh`, a shim that mints the token on every call: the identity's App token for a command
+  about one repository, its read-only PAT otherwise. Nothing exports a token, so a `gh` that skips the shim has none and
+  fails, or on the laptop acts as the user. Run it as a plain `gh …` command in the shell, never:
+  - from a script or another language (Python `subprocess`, Node `child_process`, a Makefile) that resolves `gh`
+    itself, passes its own `env`, or runs a path such as `/usr/bin/gh` or `/opt/homebrew/bin/gh`
+  - with `GH_TOKEN`, `GITHUB_TOKEN` or `GH_CONFIG_DIR` set or cleared by hand, or after `gh auth login`
+  - as a GitHub REST or GraphQL call with a token you fetched yourself
+
+  When a script needs GitHub data, run `gh` (`gh api …`, `gh pr view --json …`) in the shell and give the script its
+  output. If `gh` fails with no token, stop and report the error; `command -v gh` should print the shim's path. Don't
+  route around it.
+
 - **Diagnosing a 403 or a missing repo:** `devbox-git-credential explain <owner>/<repo>` names the identity and whether
   an App or the PAT answers. A read-only PAT can't push: the identity needs its App installed on that repository. Tell
   the user; don't swap credentials.
