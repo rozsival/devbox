@@ -46,19 +46,19 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git wor
 default_branch="$(wt config state default-branch get)" || die 'wt cannot determine the default branch'
 
 # Path of the worktree that has refs/heads/<$1> checked out, or of the primary
-# checkout (listed first) when $1 is empty; empty when none. `-z` because the
-# newline form C-quotes a path holding special or non-ASCII characters. Reads
-# to the end rather than returning early, so git never dies of SIGPIPE.
+# checkout (listed first) when $1 is empty; empty when none. `-z` because a
+# path may hold a newline, which splits the plain porcelain record. Reads to
+# the end rather than returning early, so git never dies of SIGPIPE.
 worktree_of() {
-  local field path='' found=''
+  local ref=${1:-} field path='' found=''
   while IFS= read -r -d '' field; do
     [[ -z ${found} ]] || continue
     case ${field} in
     'worktree '*)
       path=${field#worktree }
-      [[ -n $1 ]] || found=${path}
+      [[ -n ${ref} ]] || found=${path}
       ;;
-    "branch refs/heads/$1") found=${path} ;;
+    "branch refs/heads/${ref}") found=${path} ;;
     esac
   done < <(git worktree list --porcelain -z)
   printf '%s' "${found}"
