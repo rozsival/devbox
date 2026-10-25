@@ -402,7 +402,11 @@ It stops before changing anything when the default branch's worktree has uncommi
 when the pull is not a fast-forward, or outside a herdr pane. With the default branch checked out nowhere, it
 fast-forwards the local branch from its upstream instead of pulling. A re-run for a branch that already has a worktree
 only opens it in herdr (the recovery when that step failed); a branch without a worktree is refused. The worktree's `wt`
-hooks run as usual. It is
+hooks run as usual. On the devbox, which holds no SSH key, the fetch takes the agent sessions' transport for every
+forge host in `identities.conf`, SSH and HTTPS remote URLs alike: HTTPS with a token from `devbox-git-credential`, the
+GitHub App installation token where the App covers the repository, the read-only PAT elsewhere ([Git](git.md)) — no
+forwarded 1Password agent needed. A remote on any other host still goes over SSH. Only the fetch: the fast-forward, the
+worktree and its hooks run under your own `~/.gitconfig`. It is
 `~/.local/bin/wt-herdr`, a worktrunk custom subcommand (any `wt-<name>` on the PATH answers as `wt <name>`), installed by
 `bootstrap` and `./bin/devbox agent install` — a script rather than an `[aliases]` entry, so your own
 `~/.config/worktrunk/config.toml` stays yours.

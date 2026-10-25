@@ -18,6 +18,12 @@
 # A re-run for a branch that already has a worktree (the herdr step failed last
 # time) only opens it; a branch without a worktree is refused.
 #
+# On the devbox the fetch goes over HTTPS with a token from
+# devbox-git-credential (the App installation token, else the read-only PAT) -
+# the agent sessions' transport - because the container holds no SSH key: an
+# SSH remote works there only while a 1Password agent is forwarded. Only the
+# fetch: the merge, the worktree and its hooks keep your own ~/.gitconfig.
+#
 # bash 3.2 compatible: on the laptop this runs under whatever `env bash` finds.
 set -euo pipefail
 
@@ -61,6 +67,20 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git wor
 
 default_branch="$(wt config state default-branch get)" || die 'wt cannot determine the default branch'
 
+# git with the agent gitconfig on the devbox (see the header), for the fetch
+# only: its rewrites send every forge remote over HTTPS and its helper,
+# `!devbox-git-credential`, answers for them from the PATH - devbox.sh puts its
+# directory there, prepended again for a shell that lost it. Plain git elsewhere.
+fetch_git() {
+  if [[ -e /etc/devbox-env ]]; then
+    local agent_dir="${HOME}/.local/libexec/devbox-agent" config="${HOME}/.config/devbox/git/agent.gitconfig"
+    [[ -r ${config} ]] || die "${config} is missing - run ./bin/devbox bootstrap"
+    PATH="${agent_dir}:${PATH}" GIT_CONFIG_GLOBAL="${config}" GIT_TERMINAL_PROMPT=0 git "$@"
+  else
+    git "$@"
+  fi
+}
+
 # Path of the worktree that has refs/heads/<$1> checked out, or of the primary
 # checkout (listed first) when $1 is empty; empty when none. `-z` because a
 # path may hold a newline, which splits the plain porcelain record. Reads to
@@ -92,6 +112,8 @@ fi
 
 if [[ -z ${new_worktree} ]]; then
   main_worktree="$(worktree_of "${default_branch}")"
+  remote="$(git config "branch.${default_branch}.remote")" || die "${default_branch} has no upstream to fetch from"
+  merge="$(git config "branch.${default_branch}.merge")" || die "${default_branch} has no upstream to fetch from"
   if [[ -n ${main_worktree} ]]; then
     # Untracked files named explicitly: status.showUntrackedFiles=no would hide
     # them. A failed status is not a clean worktree.
@@ -99,15 +121,16 @@ if [[ -z ${new_worktree} ]]; then
       die "cannot read the status of ${main_worktree}"
     [[ -z ${dirty} ]] ||
       die "${main_worktree} (${default_branch}) has uncommitted changes; commit or stash them first"
-    printf 'Pulling %s in %s...\n' "${default_branch}" "${main_worktree}" >&2
-    git -C "${main_worktree}" pull --ff-only
+    # A pull split in two, so only the fetch takes the devbox transport: the
+    # upstream ref lands in FETCH_HEAD, merged under your own configuration.
+    printf 'Pulling %s from %s in %s...\n' "${default_branch}" "${remote}" "${main_worktree}" >&2
+    fetch_git -C "${main_worktree}" fetch "${remote}" "${merge}"
+    git -C "${main_worktree}" merge --ff-only FETCH_HEAD
   else
     # Not checked out anywhere: fast-forward the local branch from its upstream
     # directly. A refspec without `+` refuses a non-fast-forward, like the pull.
-    remote="$(git config "branch.${default_branch}.remote")" || die "${default_branch} has no upstream to fetch from"
-    merge="$(git config "branch.${default_branch}.merge")" || die "${default_branch} has no upstream to fetch from"
     printf 'Fetching %s from %s...\n' "${default_branch}" "${remote}" >&2
-    git fetch "${remote}" "${merge}:refs/heads/${default_branch}"
+    fetch_git fetch "${remote}" "${merge}:refs/heads/${default_branch}"
   fi
 
   # --no-cd: this shell stays where it is; the worktree's hooks still run.

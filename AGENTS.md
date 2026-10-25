@@ -133,7 +133,9 @@ the host's root Docker daemon.
   GitHub App credential directories per identity (created, never fetched - only placed by hand; an identity with no
   `app` registered as a manual step, since every PAT is read-only and the App is the only way an agent writes); 10 shell
   (plus `~/.local/bin/wt-herdr`, the `wt herdr [-n|--no-focus] <branch>` custom subcommand: pull the default branch - refusing a
-  dirty worktree or a non-fast-forward - then `wt switch --create --no-cd` and `herdr worktree open`, focused unless `-n`);
+  dirty worktree or a non-fast-forward; on the devbox the fetch alone runs under `agent.gitconfig`, HTTPS through
+  `devbox-git-credential`, since the container holds no SSH key - then `wt switch --create --no-cd` and
+  `herdr worktree open`, focused unless `-n`);
   11 the box-wide `secrets.env`; 12 `gh` (the `~/.local/libexec/devbox-agent` shim plus the per-identity
   token checklist, each identity checked with its own `devbox-gh-token --identity <slug>` and `GH_HOST` set to
   that identity's host, for every identity); 13 the agent git override (`agent-launch` and both launchers plus their `omp`/`claude`
