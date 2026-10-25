@@ -122,7 +122,9 @@ the host's root Docker daemon.
   owner wins over the tree - both include lists rewritten from scratch every run so a renamed or dropped
   identity leaves no stale `includeIf`); 8 `allowed_signers`; 9
   GitHub App credential directories per identity (created, never fetched - only placed by hand; an identity with no
-  `app` registered as a manual step, since every PAT is read-only and the App is the only way an agent writes); 10 shell;
+  `app` registered as a manual step, since every PAT is read-only and the App is the only way an agent writes); 10 shell
+  (plus `~/.local/bin/wt-herdr`, the `wt herdr <branch>` custom subcommand: pull the default branch - refusing a
+  dirty worktree or a non-fast-forward - then `wt switch --create --no-cd` and `herdr worktree open --no-focus`);
   11 the box-wide `secrets.env`; 12 `gh` (the `~/.local/libexec/devbox-agent` shim plus the per-identity
   token checklist, each identity checked with its own `devbox-gh-token --identity <slug>` and `GH_HOST` set to
   that identity's host, for every identity); 13 the agent git override (`agent-launch` and both launchers plus their `omp`/`claude`
@@ -302,7 +304,7 @@ the host's root Docker daemon.
     `DEVBOX_SSH_HOST` (environment or `.push.env`), then `devbox`
   - `devbox agent install` - idempotent: installs the same agent git override the devbox bootstraps (`agent-launch`,
     `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence,
-    `devbox-gh-token`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin` symlink so it answers
+    `devbox-gh-token`, `wt-herdr`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin` symlink so it answers
     by name, the read-only *rendered* `git/agent*.gitconfig`, and `omp`/`claude` symlinks to the launchers in
     `~/.local/libexec/devbox-agent/launchers` - removing the pre-Claude `~/.local/bin/omp` symlink only once
     `omp` already resolves through that directory, since until the PATH line exists the old link is what

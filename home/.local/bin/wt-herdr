@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
+# edit home/.local/bin/wt-herdr in the repo.
+#
+# `wt herdr <branch>`: a new worktree for <branch>, cut from the default branch as
+# it is on the remote right now, opened as its own herdr workspace - without
+# moving this shell or the focused herdr pane. By hand that is: go to main, pull,
+# `wt switch -c <branch>`, go back to main, open the worktree in herdr.
+#
+# worktrunk runs any `wt-<name>` on the PATH as `wt <name>` (a custom
+# subcommand). It is a script rather than an `[aliases]` entry so the repo does
+# not have to merge into the user's own ~/.config/worktrunk/config.toml.
+#
+# Refuses, before changing anything, when the default branch's worktree holds
+# uncommitted changes (untracked files included), when the pull is not a
+# fast-forward, or when not running inside a herdr pane.
+# A re-run for a branch that already has a worktree (the herdr step failed last
+# time) only opens it; a branch without a worktree is refused.
+#
+# bash 3.2 compatible: on the laptop this runs under whatever `env bash` finds.
+set -euo pipefail
+
+die() {
+  printf 'wt herdr: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  printf '%s\n' 'usage: wt herdr <branch>' \
+    '  new worktree for <branch> from the freshly pulled default branch, opened in herdr unfocused' >&2
+  exit "${1:-2}"
+}
+
+case "${1:-}" in
+-h | --help) usage 0 ;;
+'' | -*) usage ;;
+esac
+[[ $# -eq 1 ]] || usage
+branch=$1
+
+# Checked first: a worktree that herdr cannot open is the outcome to avoid.
+[[ ${HERDR_ENV:-} == 1 ]] || die 'not inside a herdr pane (HERDR_ENV is not 1)'
+command -v herdr >/dev/null || die 'herdr is not on the PATH'
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git work tree: ${PWD}"
+
+default_branch="$(wt config state default-branch get)" || die 'wt cannot determine the default branch'
+
+# Path of the worktree that has refs/heads/<$1> checked out; empty when none.
+# awk reads to the end rather than `exit`: under pipefail, git dying of SIGPIPE
+# would fail the whole script.
+worktree_of() {
+  git worktree list --porcelain | awk -v ref="refs/heads/$1" '
+    /^worktree / { path = substr($0, 10) }
+    $0 == "branch " ref && !found { print path; found = 1 }'
+}
+
+# A worktree already holding <branch> is a run whose herdr step failed (or a
+# worktree made by hand): open it, nothing more - no pull, no create. A branch
+# without a worktree is someone's work; leave it alone.
+new_worktree="$(worktree_of "${branch}")"
+if [[ -n ${new_worktree} ]]; then
+  printf '%s already has a worktree at %s; opening it without pulling\n' "${branch}" "${new_worktree}" >&2
+elif git show-ref --verify --quiet "refs/heads/${branch}"; then
+  die "branch ${branch} already exists without a worktree; use wt switch ${branch}"
+fi
+
+if [[ -z ${new_worktree} ]]; then
+  main_worktree="$(worktree_of "${default_branch}")"
+  if [[ -n ${main_worktree} ]]; then
+    [[ -z "$(git -C "${main_worktree}" status --porcelain)" ]] ||
+      die "${main_worktree} (${default_branch}) has uncommitted changes; commit or stash them first"
+    printf 'Pulling %s in %s...\n' "${default_branch}" "${main_worktree}" >&2
+    git -C "${main_worktree}" pull --ff-only
+  else
+    # Not checked out anywhere: fast-forward the local branch from its upstream
+    # directly. A refspec without `+` refuses a non-fast-forward, like the pull.
+    remote="$(git config "branch.${default_branch}.remote")" || die "${default_branch} has no upstream to fetch from"
+    merge="$(git config "branch.${default_branch}.merge")" || die "${default_branch} has no upstream to fetch from"
+    printf 'Fetching %s from %s...\n' "${default_branch}" "${remote}" >&2
+    git fetch "${remote}" "${merge}:refs/heads/${default_branch}"
+  fi
+
+  # --no-cd: this shell stays where it is; the worktree's hooks still run.
+  wt switch --create "${branch}" --base "${default_branch}" --no-cd
+
+  new_worktree="$(worktree_of "${branch}")"
+  [[ -n ${new_worktree} ]] || die "wt switch created no worktree for ${branch}"
+fi
+
+# herdr opens a worktree only from the repository's parent workspace - the
+# primary checkout, listed first - and creates that one when it is not open,
+# whichever workspace this pane happens to be in.
+primary_worktree="$(git worktree list --porcelain | awk '/^worktree / && !found { print substr($0, 10); found = 1 }')"
+herdr worktree open --cwd "${primary_worktree}" --path "${new_worktree}" --no-focus >/dev/null
+printf 'Opened %s in herdr (unfocused): %s\n' "${branch}" "${new_worktree}" >&2

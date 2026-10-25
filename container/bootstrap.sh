@@ -370,6 +370,10 @@ if ! grep -q worktrunk "${bashrc}"; then
   # stdin, which is closed here; feed it one.
   printf 'y\n' | wt config shell install bash || log_warn 'wt config shell install failed; run it by hand.'
 fi
+# `wt herdr <branch>`: worktrunk runs any `wt-<name>` on the PATH as a
+# subcommand. Generated, reinstalled on every run.
+install -d -m 755 "${HOME_DIR}/.local/bin"
+install -m 755 "${TEMPLATE_DIR}/.local/bin/wt-herdr" "${HOME_DIR}/.local/bin/wt-herdr"
 
 # -- 11. Tool credentials -----------------------------------------------------
 # One box-wide file of plain KEY=value pairs, sourced by every shell (see
