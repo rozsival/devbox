@@ -13,7 +13,7 @@ SH_SRC := $(filter-out bin/devbox,$(sort \
 SH_LINT := bin/devbox $(filter-out cli/%,$(SH_SRC))
 # Run on the laptop under whatever bash it resolves, macOS's 3.2 included (docs/cli.md). The parse is a
 # bash 3.2 check on macOS only; elsewhere /bin/bash is newer.
-SH_BASH32 := home/.local/libexec/devbox-identities home/.local/bin/devbox-gh-token \
+SH_BASH32 := home/.local/libexec/devbox-identities home/.local/bin/devbox-gh-token home/.local/bin/wt-herdr \
 	$(wildcard home/.local/libexec/devbox-agent/*)
 # Markdown and YAML; .prettierignore keeps AGENTS.md out.
 PRETTIER_SRC := $(wildcard $(shell $(FILES) '*.md' '*.yml' '*.yaml'))

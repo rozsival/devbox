@@ -12,9 +12,12 @@ done
 install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${AGENT_DIR}/agent-launch"
 
 # The resolver is a user-facing command (`devbox-gh-token --account`), same
-# place as on the devbox.
+# place as on the devbox; so is `wt herdr` (worktrunk runs `wt-<name>` from the
+# PATH as `wt <name>`).
 install -d -m 755 "${BIN_DIR}"
-install -m 755 "${TEMPLATE_DIR}/.local/bin/devbox-gh-token" "${BIN_DIR}/devbox-gh-token"
+for tool in devbox-gh-token wt-herdr; do
+  install -m 755 "${TEMPLATE_DIR}/.local/bin/${tool}" "${BIN_DIR}/${tool}"
+done
 
 # `omp` and `claude` must shadow the real binaries, from a directory holding
 # nothing else: it goes on your PATH ahead of ~/.local/bin, and anything more in
@@ -168,7 +171,7 @@ updated) log_success "Claude Code preset merged into ${claude_settings} (previou
 esac
 
 # -- Report ---------------------------------------------------------------------
-log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
+log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
 path_fix=${legacy_kept}
 for agent in "${AGENTS[@]}"; do
   # Same rule as the launcher: the real binary is the first PATH entry that does
