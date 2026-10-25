@@ -24,7 +24,7 @@ The laptop's `~/projects` and the devbox's `/home/dev/projects` are different tr
    rustup and Ruby live under `/opt`.
 2. Per-user installs work and survive rebuilds when they land under `/home/dev`:
    - `npm i -g --prefix ~/.local <pkg>`; never export `NPM_CONFIG_PREFIX`, because nvm refuses to activate with it set
-   - `cargo install <crate>`
+   - `cargo install --root ~/.local <crate>`; bare `cargo install` writes to `CARGO_HOME=/opt/cargo`, lost on a rebuild
    - `gem install --user-install <gem>`
    - `pipx` or `uv tool` when they exist, or a project-local virtualenv
 3. A system package (`apt-get`) needs root, and there is none. Don't look for one: no `sudo`, no setuid helpers, and
@@ -45,8 +45,10 @@ The laptop's `~/projects` and the devbox's `/home/dev/projects` are different tr
 - **`127.0.0.1:<port>:<port>` in a compose file** binds the host's loopback, which nothing here can reach. Make the
   address a variable (`${DOCKER_BIND_IP:-127.0.0.1}`) and set `DOCKER_BIND_IP=172.17.0.1` in the project's devbox
   `.env`; laptops leave it unset.
-- `--network host` and `--privileged` give you the rootless daemon's view, not the host's. The workstation's own
-  services and the Tailnet stay firewalled off.
+- `--network host` shares the **workstation's** network namespace, not this container's: its `localhost` is the
+  workstation's, and what it listens on does not appear on this container's `localhost`. The firewall still keeps its
+  processes off the workstation's own services and the Tailnet. `--privileged` is privileged only inside the rootless
+  daemon's user namespace, never host root.
 
 ### Dev servers and URLs
 
@@ -72,10 +74,9 @@ with `./bin/devbox skills`.
 ### Persistence
 
 `/home/dev` is a host bind mount and survives everything. `/tmp` is a tmpfs mounted `noexec`, gone on every container
-restart: `chmod +x /tmp/x && /tmp/x` fails with "Permission denied", so run `bash /tmp/x` or use
-`mktemp -d -p "$HOME"` (and clean it up). Anything
-installed outside `/home/dev` is lost on a rebuild. Background processes die with the container. herdr restores the
-pane layout, not the processes.
+restart: `chmod +x /tmp/x && /tmp/x` fails with "Permission denied", so run `bash /tmp/x` or use `mktemp -d -p "$HOME"`
+(and clean it up). Anything installed outside `/home/dev` is lost on a rebuild. Background processes die with the
+container. herdr restores the pane layout, not the processes.
 
 ## On the laptop
 
