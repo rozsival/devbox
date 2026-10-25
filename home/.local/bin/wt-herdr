@@ -45,13 +45,23 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git wor
 
 default_branch="$(wt config state default-branch get)" || die 'wt cannot determine the default branch'
 
-# Path of the worktree that has refs/heads/<$1> checked out; empty when none.
-# awk reads to the end rather than `exit`: under pipefail, git dying of SIGPIPE
-# would fail the whole script.
+# Path of the worktree that has refs/heads/<$1> checked out, or of the primary
+# checkout (listed first) when $1 is empty; empty when none. `-z` because the
+# newline form C-quotes a path holding special or non-ASCII characters. Reads
+# to the end rather than returning early, so git never dies of SIGPIPE.
 worktree_of() {
-  git worktree list --porcelain | awk -v ref="refs/heads/$1" '
-    /^worktree / { path = substr($0, 10) }
-    $0 == "branch " ref && !found { print path; found = 1 }'
+  local field path='' found=''
+  while IFS= read -r -d '' field; do
+    [[ -z ${found} ]] || continue
+    case ${field} in
+    'worktree '*)
+      path=${field#worktree }
+      [[ -n $1 ]] || found=${path}
+      ;;
+    "branch refs/heads/$1") found=${path} ;;
+    esac
+  done < <(git worktree list --porcelain -z)
+  printf '%s' "${found}"
 }
 
 # A worktree already holding <branch> is a run whose herdr step failed (or a
@@ -67,7 +77,11 @@ fi
 if [[ -z ${new_worktree} ]]; then
   main_worktree="$(worktree_of "${default_branch}")"
   if [[ -n ${main_worktree} ]]; then
-    [[ -z "$(git -C "${main_worktree}" status --porcelain)" ]] ||
+    # Untracked files named explicitly: status.showUntrackedFiles=no would hide
+    # them. A failed status is not a clean worktree.
+    dirty="$(git -C "${main_worktree}" status --porcelain --untracked-files=normal)" ||
+      die "cannot read the status of ${main_worktree}"
+    [[ -z ${dirty} ]] ||
       die "${main_worktree} (${default_branch}) has uncommitted changes; commit or stash them first"
     printf 'Pulling %s in %s...\n' "${default_branch}" "${main_worktree}" >&2
     git -C "${main_worktree}" pull --ff-only
@@ -90,6 +104,6 @@ fi
 # herdr opens a worktree only from the repository's parent workspace - the
 # primary checkout, listed first - and creates that one when it is not open,
 # whichever workspace this pane happens to be in.
-primary_worktree="$(git worktree list --porcelain | awk '/^worktree / && !found { print substr($0, 10); found = 1 }')"
+primary_worktree="$(worktree_of '')"
 herdr worktree open --cwd "${primary_worktree}" --path "${new_worktree}" --no-focus >/dev/null
 printf 'Opened %s in herdr (unfocused): %s\n' "${branch}" "${new_worktree}" >&2
