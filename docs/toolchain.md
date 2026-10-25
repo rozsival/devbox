@@ -390,10 +390,12 @@ wt list
 ### New worktree in herdr
 
 `wt herdr <branch>` (devbox and laptop) cuts a worktree from the default branch as it is on the remote right now and
-opens it as its own, unfocused herdr workspace — your shell and focused pane stay where they are:
+opens it as its own herdr workspace, focused; `-n`/`--no-focus` leaves the focused pane where it is. Your shell never
+moves:
 
 ```bash
-wt herdr feat-login    # pull main, wt switch -c feat-login --no-cd, herdr worktree open --no-focus
+wt herdr feat-login       # pull main, wt switch -c feat-login --no-cd, herdr worktree open --focus
+wt herdr -n feat-login    # same, but herdr worktree open --no-focus
 ```
 
 It stops before changing anything when the default branch's worktree has uncommitted changes (untracked files count),

@@ -108,8 +108,8 @@ signature for <email>` with the _signing_ key's fingerprint.
 
 Installs the devbox's bootstrap override, from `home/` templates: `agent-launch` with `omp-launcher` and
 `claude-launcher` (`~/.local/libexec/devbox-agent/launchers/{omp,claude}` → their launcher), `gh`
-shim, `devbox-git-credential`, `devbox-git-no-ssh`, `devbox-gh-token`, `wt-herdr` (`wt herdr <branch>`: a
-worktree from the freshly pulled default branch, opened unfocused in herdr), and `devbox-identities` - the
+shim, `devbox-git-credential`, `devbox-git-no-ssh`, `devbox-gh-token`, `wt-herdr` (`wt herdr [-n] <branch>`: a
+worktree from the freshly pulled default branch, opened in herdr, focused unless `-n`/`--no-focus`), and `devbox-identities` - the
 registry reader, in `~/.local/libexec` with a `~/.local/bin` symlink, since only the latter is on the PATH
 and every checklist tells you to run `devbox-identities check` (`devbox doctor laptop` checks that hop too).
 It never writes `~/.config/devbox/identities.conf`: when that file is absent it prints

@@ -2,9 +2,10 @@
 # Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
 # edit home/.local/bin/wt-herdr in the repo.
 #
-# `wt herdr <branch>`: a new worktree for <branch>, cut from the default branch as
-# it is on the remote right now, opened as its own herdr workspace - without
-# moving this shell or the focused herdr pane. By hand that is: go to main, pull,
+# `wt herdr [-n|--no-focus] <branch>`: a new worktree for <branch>, cut from the
+# default branch as it is on the remote right now, opened as its own herdr
+# workspace and focused - or, with -n/--no-focus, without moving the focused herdr
+# pane. This shell never moves. By hand that is: go to main, pull,
 # `wt switch -c <branch>`, go back to main, open the worktree in herdr.
 #
 # worktrunk runs any `wt-<name>` on the PATH as `wt <name>` (a custom
@@ -26,17 +27,32 @@ die() {
 }
 
 usage() {
-  printf '%s\n' 'usage: wt herdr <branch>' \
-    '  new worktree for <branch> from the freshly pulled default branch, opened in herdr unfocused' >&2
+  printf '%s\n' 'usage: wt herdr [-n|--no-focus] <branch>' \
+    '  new worktree for <branch> from the freshly pulled default branch, opened in herdr and focused' \
+    '  -n, --no-focus  open it without moving the focused herdr pane' >&2
   exit "${1:-2}"
 }
 
-case "${1:-}" in
--h | --help) usage 0 ;;
-'' | -*) usage ;;
-esac
-[[ $# -eq 1 ]] || usage
-branch=$1
+focus=--focus
+branch=''
+while [[ $# -gt 0 ]]; do
+  case $1 in
+  -h | --help) usage 0 ;;
+  -n | --no-focus) focus=--no-focus ;;
+  --) shift && break ;;
+  -*) usage ;;
+  *)
+    [[ -z ${branch} ]] || usage
+    branch=$1
+    ;;
+  esac
+  shift
+done
+if [[ $# -gt 0 ]]; then
+  [[ -z ${branch} && $# -eq 1 ]] || usage
+  branch=$1
+fi
+[[ -n ${branch} ]] || usage
 
 # Checked first: a worktree that herdr cannot open is the outcome to avoid.
 [[ ${HERDR_ENV:-} == 1 ]] || die 'not inside a herdr pane (HERDR_ENV is not 1)'
@@ -105,5 +121,9 @@ fi
 # primary checkout, listed first - and creates that one when it is not open,
 # whichever workspace this pane happens to be in.
 primary_worktree="$(worktree_of '')"
-herdr worktree open --cwd "${primary_worktree}" --path "${new_worktree}" --no-focus >/dev/null
-printf 'Opened %s in herdr (unfocused): %s\n' "${branch}" "${new_worktree}" >&2
+herdr worktree open --cwd "${primary_worktree}" --path "${new_worktree}" "${focus}" >/dev/null
+if [[ ${focus} == --focus ]]; then
+  printf 'Opened %s in herdr: %s\n' "${branch}" "${new_worktree}" >&2
+else
+  printf 'Opened %s in herdr (unfocused): %s\n' "${branch}" "${new_worktree}" >&2
+fi
