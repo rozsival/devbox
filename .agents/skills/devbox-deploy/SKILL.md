@@ -177,8 +177,10 @@ key _is_ in the archive, so restore keeps the laptop's `known_hosts` valid.
 
 `AGENTS.md` is authoritative. Parts biting most often: `apt-get` only, never `apt`; every external binary
 comes from an explicit `ARG <TOOL>_VERSION` and is verified - upstream's checksum file, else GitHub's recorded
-asset digest, else a signed repository with its key fingerprint pinned (never invent a hash). The one exception
-is nvm's installer, pinned by tag over TLS only (upstream publishes no checksum file or asset digest for it);
-nvm then checks Node against nodejs.org's `SHASUMS256.txt`. No root, no `cap_add`, no Docker socket; `BIND_ADDR` on every published port;
+asset digest, else a signed repository with its key fingerprint pinned (never invent a hash), each pin under the
+`# renovate:` comment `renovate.json` bumps it through (weekly PRs; merging one still needs a deploy and `start`).
+The one exception is nvm's installer, pinned by tag over TLS only (upstream publishes no checksum file or asset
+digest for it); nvm then checks Node against nodejs.org's `SHASUMS256.txt`. No root, no `cap_add`, no Docker
+socket; `BIND_ADDR` on every published port;
 bootstrap steps stay individually guarded, so re-runs are no-ops; commits are lowercase Conventional
 Commits, no final punctuation, 100 characters max.

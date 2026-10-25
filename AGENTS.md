@@ -44,7 +44,8 @@ the host's root Docker daemon.
    for the release asset (its release API's `digest`), else through a signed package repository whose key
    fingerprint is pinned (the Docker CLI). The one exception is nvm's installer, pinned by tag over TLS only
    (upstream publishes no checksum file or asset digest for it); nvm then checks Node against nodejs.org's
-   `SHASUMS256.txt`. Never invent a hash
+   `SHASUMS256.txt`. Never invent a hash. Every pin sits directly under a `# renovate: datasource=... depName=...`
+   comment, which is how `renovate.json` finds it; a pin without one is never updated
 4. **No root in the container** - no `privileged`, no `cap_add`, no `/var/run/docker.sock` mount. `sshd` runs
    as `dev`. Project containers come from the *rootless sibling* daemon, never from the host's root daemon and
    never from a nested one: nesting needs setuid `newuidmap`, which `cap_drop: ALL` plus `no-new-privileges`
@@ -77,6 +78,12 @@ the host's root Docker daemon.
   - `docs/operations.md` - redeploy, persistence, backup, health, troubleshooting
   - `docs/security.md` - boundaries, trust assumptions, deliberate limits
   - `docs/development.md` - toolchain, rules, shipping a change, agent assets
+- `renovate.json` - Renovate opens a weekly PR per new version: two regex managers read the `# renovate:` comment
+  above every `Dockerfile` `ARG` and `container/skills.sh` pin (`branch=` + a 40-hex commit for an untagged repository),
+  `extractVersion` strips upstream's `v`; the `ubuntu` base is digest-pinned only (its release matches the host),
+  `docker-cli` waits for Dependency Dashboard approval (it must equal the host daemon's version); nothing automerges,
+  the image build being the only test. `docs/toolchain.md` names each tool's `ARG` instead of its version, so a bump
+  never leaves the docs stale
 - `.env.example` - the only per-host configuration; `.env` is gitignored and never synced by `devbox deploy`.
   Holds no identity: who this box is, per account and per directory tree, lives in
   `~/.config/devbox/identities.conf` instead (see the `home/` bullet below) - an enumeration of

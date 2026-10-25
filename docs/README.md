@@ -56,4 +56,4 @@ quick start live in the [root README](../README.md).
 | Source of truth | Config and scripts (`.env.example`, `docker-compose.yml`, `Dockerfile`, `container/*`, `cli/`) win; docs explain them                                                          |
 | Agent context   | `AGENTS.md`, `CLAUDE.md` and `.agents/skills/*/SKILL.md` stay where their tools look; skills mirror these docs                                                                 |
 | Formatting      | `make fmt`: Prettier (`.prettierrc.yml`: 120 columns, single quotes) for Markdown and YAML, not `AGENTS.md`; shfmt for shell; GitHub-flavored Markdown with alerts and Mermaid |
-| Versions        | Pinned versions live in the `Dockerfile` (`ARG <TOOL>_VERSION`) and `container/skills.sh`; docs name them, the code wins                                                       |
+| Versions        | Pinned versions live only in the `Dockerfile` (`ARG <TOOL>_VERSION`) and `container/skills.sh`, bumped by Renovate; docs name the `ARG`, never the version                     |

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "schedule:weekly", ":semanticCommits", ":disableRateLimiting"],
+  "timezone": "Europe/Prague",
+  "labels": ["dependencies"],
+  "customManagers": [
+    {
+      "description": "Versions pinned in the Dockerfile ARGs and container/skills.sh, each under a `# renovate:` comment",
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/", "/^container/skills\\.sh$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: packageName=(?<packageName>\\S+))?(?: versioning=(?<versioning>\\S+))?\\s+(?:ARG )?[A-Z_]+_VERSION=(?:\"\\$\\{[A-Z_]+:-)?(?<currentValue>[^\\s\"}]+)"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver-coerced{{/if}}",
+      "extractVersionTemplate": "^v?(?<version>.+)$"
+    },
+    {
+      "description": "Commit pins of untagged repositories in container/skills.sh, followed on their branch",
+      "customType": "regex",
+      "managerFilePatterns": ["/^container/skills\\.sh$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>git-refs) depName=(?<depName>\\S+) packageName=(?<packageName>\\S+) branch=(?<currentValue>\\S+)\\s+[A-Z_]+_REF=\"\\$\\{[A-Z_]+:-(?<currentDigest>[0-9a-f]{40})\\}\""
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "The base image matches the workstation's Ubuntu release: pin and refresh its digest, never move the release",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ubuntu"],
+      "pinDigests": true
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ubuntu"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "enabled": false
+    },
+    {
+      "description": "DOCKER_CLI_VERSION must equal the host daemon's version (Dockerfile): upgrade the host first, then approve",
+      "matchDepNames": ["docker-cli"],
+      "dependencyDashboardApproval": true,
+      "prBodyNotes": ["Upgrade the workstation's Docker daemon to this version before deploying this change."]
+    },
+    {
+      "description": "A skill is instructions an agent follows: read the diff before merging a new commit",
+      "matchDepNames": ["anthropic-skills"],
+      "prBodyNotes": ["Review the skill changes between the two commits before merging; agents follow them as instructions."]
+    }
+  ]
+}

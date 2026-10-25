@@ -8,24 +8,42 @@ ARG HOST_UID=1000
 ARG HOST_GID=1000
 
 # Pinned toolchain. Every version is a real upstream release asset; bump one arg
-# at a time and rebuild with `./bin/devbox rebuild`.
+# at a time and rebuild with `./bin/devbox rebuild`. Each `# renovate:` line tells
+# Renovate (renovate.json) where the ARG below it is released; keep it directly
+# above its ARG.
+# renovate: datasource=github-releases depName=herdr packageName=herdrdev/herdr
 ARG HERDR_VERSION=0.9.4
+# renovate: datasource=github-releases depName=nvm packageName=nvm-sh/nvm
 ARG NVM_VERSION=0.40.8
+# renovate: datasource=node-version depName=node versioning=node
 ARG NODE_VERSION=24.21.0
+# renovate: datasource=npm depName=pnpm
 ARG PNPM_VERSION=12.11.2
+# renovate: datasource=github-tags depName=rustup packageName=rust-lang/rustup
 ARG RUSTUP_VERSION=1.29.2
+# renovate: datasource=github-releases depName=rust packageName=rust-lang/rust
 ARG RUST_VERSION=1.99.1
+# renovate: datasource=ruby-version depName=ruby versioning=ruby
 ARG RUBY_VERSION=4.0.9
+# renovate: datasource=github-releases depName=gh packageName=cli/cli
 ARG GH_VERSION=2.102.0
+# renovate: datasource=github-releases depName=lazygit packageName=jesseduffield/lazygit
 ARG LAZYGIT_VERSION=0.66.1
+# renovate: datasource=github-releases depName=worktrunk packageName=max-sixty/worktrunk
 ARG WORKTRUNK_VERSION=0.80.0
+# renovate: datasource=github-releases depName=terraform packageName=hashicorp/terraform
 ARG TERRAFORM_VERSION=1.16.6
+# renovate: datasource=github-releases depName=shellcheck packageName=koalaman/shellcheck
 ARG SHELLCHECK_VERSION=0.11.0
 # Client only - the daemon lives on the host as the `dev` user (docs/docker.md).
 # Keep DOCKER_CLI_VERSION equal to the host daemon's version; compose refuses to
-# talk to an API newer than the server it reaches.
+# talk to an API newer than the server it reaches. Renovate therefore opens this
+# one only once approved on its Dependency Dashboard.
+# renovate: datasource=github-tags depName=docker-cli packageName=docker/cli
 ARG DOCKER_CLI_VERSION=29.9.0
+# renovate: datasource=github-releases depName=docker-compose packageName=docker/compose
 ARG DOCKER_COMPOSE_VERSION=5.6.0
+# renovate: datasource=github-releases depName=docker-buildx packageName=docker/buildx
 ARG DOCKER_BUILDX_VERSION=0.38.0
 
 ENV DEBIAN_FRONTEND=noninteractive
