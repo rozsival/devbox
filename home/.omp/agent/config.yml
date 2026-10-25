@@ -45,6 +45,10 @@ extendedContext: false
 statusLine:
   compactThinkingLevel: false
 disabledProviders: []
+# Reads ~/.claude/CLAUDE.md, which imports the machine's agent context (devbox or laptop) for Claude Code
+# and OMP alike, task subagents included; also loads ~/.claude/skills and Claude's user plugins.
+enabledProviders:
+  - claude
 advisor:
   enabled: true
   syncBacklog: '1'

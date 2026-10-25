@@ -2028,6 +2028,20 @@ doctor_host() {
   *) fail "could not check ~/.config/devbox/git against the registry - run './bin/devbox bootstrap'" ;;
   esac
 
+  # Which machine an agent believes it is on: the devbox template imported
+  # through ~/.claude/CLAUDE.md, read by OMP only with `claude` in its
+  # enabledProviders, plus the image's /etc/devbox-env marker behind
+  # DEVBOX_ENV. Checked by the same script bootstrap installs them with.
+  local agent_context_out context_line
+  if agent_context_out="$(compose exec -T "${SERVICE}" \
+    bash /opt/devbox/container/agent-context check devbox /opt/devbox/home 2>&1)"; then
+    log_success 'agent context current (devbox): marker, ~/.config/devbox/agent-context.md, CLAUDE.md import, OMP reads it, devbox-runtime skill'
+  else
+    while IFS= read -r context_line; do
+      [[ -z "${context_line}" ]] || fail "agent context: ${context_line}"
+    done <<<"${agent_context_out}"
+  fi
+
   # Moshi's notifications, approvals and Chat View all arrive through this
   # daemon, which the entrypoint starts because the container has no systemd.
   # Unpaired is a warning, not a failure: the box works, the phone just gets
@@ -2544,6 +2558,20 @@ doctor_laptop() {
     fail 'the keychain holds an agent token for github.com (username x-access-token): a system credential helper ran ahead of devbox-git-credential - erase it with git credential-osxkeychain erase and check git config --show-origin --get-all credential.helper'
   else
     log_success 'no agent token in the macOS keychain'
+  fi
+
+  # Which machine an agent believes it is on comes from these files, not from
+  # the launcher alone: the laptop template imported through ~/.claude/CLAUDE.md,
+  # which OMP reads only with `claude` in its enabledProviders and only while no
+  # ~/.omp/agent/AGENTS.md shadows it, plus the devbox-runtime skill.
+  log_info 'agent context'
+  local agent_context_out line
+  if agent_context_out="$("${BASH}" "${REPO_ROOT}/container/agent-context" check laptop "${TEMPLATE_DIR}" 2>&1)"; then
+    log_success 'agent context current: ~/.config/devbox/agent-context.md (laptop), imported by ~/.claude/CLAUDE.md, read by OMP, devbox-runtime skill'
+  else
+    while IFS= read -r line; do
+      [[ -z ${line} ]] || fail "agent context: ${line}"
+    done <<<"${agent_context_out}"
   fi
 
   # -- 5. What the helper needs: tokens and App credentials --------------------
@@ -3462,6 +3490,19 @@ devbox_agent_install_command() {
   updated) log_success "Claude Code preset merged into ${claude_settings} (previous copy: ${claude_settings}.bak)." ;;
   esac
 
+  # Which machine this is, for every agent session: the laptop template as
+  # ~/.config/devbox/agent-context.md, one import line appended to your
+  # ~/.claude/CLAUDE.md (Claude Code reads it, and OMP with `claude` in its
+  # enabledProviders), and the devbox-runtime skill. What it cannot fix - OMP's
+  # own config, a shadowing ~/.omp/agent/AGENTS.md - is listed below.
+  agent_context="${REPO_ROOT}/container/agent-context"
+  if agent_context_out="$("${BASH}" "${agent_context}" apply laptop "${TEMPLATE_DIR}" 2>&1)"; then
+    [[ -z ${agent_context_out} ]] || while IFS= read -r line; do log_success "${line}"; done <<<"${agent_context_out}"
+  else
+    log_warn "Installing the agent context failed: ${agent_context_out}"
+  fi
+  agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_DIR}" 2>&1 || true)"
+
   # -- Report ---------------------------------------------------------------------
   log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
   path_fix=${legacy_kept}
@@ -3497,6 +3538,9 @@ devbox_agent_install_command() {
   fi
   if [[ ${claude_settings_state} == invalid ]]; then
     echo "  - ${claude_settings} is not valid JSON - fix it, then re-run ./bin/devbox agent install to merge in the Claude Code guardrail"
+  fi
+  if [[ -n ${agent_context_problems} ]]; then
+    while IFS= read -r line; do echo "  - ${line}"; done <<<"${agent_context_problems}"
   fi
   if ((identities_seeded)); then
     echo "  - Create ${identities_file}: cp ${TEMPLATE_DIR}/.config/devbox/identities.conf.example ${identities_file} and fill in one [slug] block per account (name, email, the laptop's public keys, its GitHub App directory), then re-run ./bin/devbox agent install"

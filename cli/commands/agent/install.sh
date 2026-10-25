@@ -170,6 +170,19 @@ created) log_success "Claude Code preset installed at ${claude_settings}." ;;
 updated) log_success "Claude Code preset merged into ${claude_settings} (previous copy: ${claude_settings}.bak)." ;;
 esac
 
+# Which machine this is, for every agent session: the laptop template as
+# ~/.config/devbox/agent-context.md, one import line appended to your
+# ~/.claude/CLAUDE.md (Claude Code reads it, and OMP with `claude` in its
+# enabledProviders), and the devbox-runtime skill. What it cannot fix - OMP's
+# own config, a shadowing ~/.omp/agent/AGENTS.md - is listed below.
+agent_context="${REPO_ROOT}/container/agent-context"
+if agent_context_out="$("${BASH}" "${agent_context}" apply laptop "${TEMPLATE_DIR}" 2>&1)"; then
+  [[ -z ${agent_context_out} ]] || while IFS= read -r line; do log_success "${line}"; done <<<"${agent_context_out}"
+else
+  log_warn "Installing the agent context failed: ${agent_context_out}"
+fi
+agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_DIR}" 2>&1 || true)"
+
 # -- Report ---------------------------------------------------------------------
 log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
 path_fix=${legacy_kept}
@@ -205,6 +218,9 @@ if ((omp_guard_missing)); then
 fi
 if [[ ${claude_settings_state} == invalid ]]; then
   echo "  - ${claude_settings} is not valid JSON - fix it, then re-run ./bin/devbox agent install to merge in the Claude Code guardrail"
+fi
+if [[ -n ${agent_context_problems} ]]; then
+  while IFS= read -r line; do echo "  - ${line}"; done <<<"${agent_context_problems}"
 fi
 if ((identities_seeded)); then
   echo "  - Create ${identities_file}: cp ${TEMPLATE_DIR}/.config/devbox/identities.conf.example ${identities_file} and fill in one [slug] block per account (name, email, the laptop's public keys, its GitHub App directory), then re-run ./bin/devbox agent install"

@@ -84,7 +84,9 @@ the host's root Docker daemon.
 - `Dockerfile` - pinned toolchain; `NVM_DIR=/opt/nvm`, `COREPACK_HOME=/opt/corepack`, `RUSTUP_HOME=/opt/rustup`,
   `CARGO_HOME=/opt/cargo` and the `/opt/ruby` prefix exist because `/home/dev` is bind-mounted and would shadow a
   home-directory install (the rustup proxies in `/usr/local/bin` are wrappers that default those two variables);
-  `herdr` must land in `/usr/local/bin` because non-interactive SSH sessions get the default PATH
+  `herdr` must land in `/usr/local/bin` because non-interactive SSH sessions get the default PATH;
+  `/etc/devbox-env` is the root-owned marker behind `DEVBOX_ENV=devbox` (a file in the image, not `ENV`,
+  because sshd starts every session with a fresh environment and nothing in the bind mount may decide it)
 - `docker-compose.yml` - `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` is the entire network boundary, written
   `${BIND_ADDR:?...}` so compose itself refuses an empty address instead of publishing on `0.0.0.0`; `user:`,
   `cap_drop: [ALL]`, `no-new-privileges`, no root docker socket, no identity in `environment:` either - same
@@ -140,6 +142,8 @@ the host's root Docker daemon.
   integrations write the same file - when the file is missing or has no `permissions.deny`, the old file kept
   as `settings.json.bak`; invalid JSON registered as a manual action; a file already holding
   `permissions.deny` left alone), placed before §15 because `moshi-hook` merges its hooks into that same file;
+  then the agent context (`container/agent-context apply devbox`, below), its `check` failures - the image
+  lacking `/etc/devbox-env`, OMP's config not reading `~/.claude/CLAUDE.md` - registered as manual actions;
   15 `moshi-hook` plus its hooks for every agent whose config directory exists (an unscoped `moshi-hook install`,
   which creates none); 16 the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
@@ -165,7 +169,8 @@ the host's root Docker daemon.
   compatible, since the laptop-side launchers and shims run under whatever `/usr/bin/env bash` macOS provides.
   `home/.local/libexec/devbox-agent/` holds `agent-launch`, the one body both launchers source (`omp-launcher`,
   `claude-launcher` are three lines each): it exports `GIT_CONFIG_GLOBAL`, the SSH fence,
-  `GIT_TERMINAL_PROMPT=0` and a login-less `GH_CONFIG_DIR` for its own process tree only - on the laptop,
+  `GIT_TERMINAL_PROMPT=0`, a login-less `GH_CONFIG_DIR` and `DEVBOX_ENV` (`devbox` when `/etc/devbox-env`
+  exists, else `laptop`) for its own process tree only - on the laptop,
   bare `gh` would otherwise fall back to your OAuth login - and clears what the calling shell carries for
   you: an IDE terminal's askpass (`GIT_ASKPASS`, `SSH_ASKPASS`, `VSCODE_GIT_*` - it answers git with your own
   GitHub login), `GITHUB_TOKEN` and the two enterprise token variables, `SSH_AUTH_SOCK`, and the
@@ -209,6 +214,19 @@ the host's root Docker daemon.
     therefore asserts the order (move to front) instead of prepending only when absent
 - `container/devbox-ports` - symlinked to `/usr/local/bin` by the `Dockerfile`, so a host edit is live
   without a rebuild; mirrors published project ports onto the container's own `127.0.0.1`
+- `container/agent-context` - `apply|check devbox|laptop <template-dir>`, run in place (never installed) by
+  bootstrap, `devbox agent install` and both doctors: tells every agent session which machine it runs on.
+  `apply` installs the side's `home/.config/devbox/agent-context/<side>.md` as
+  `~/.config/devbox/agent-context.md`, the `home/.agents/skills/devbox-runtime` skill into `~/.agents/skills`
+  with a `~/.claude/skills` link (only a link or nothing there is replaced), and appends one
+  `@~/.config/devbox/agent-context.md` line to `~/.claude/CLAUDE.md` when missing - the rest of that file is
+  the user's. That one file reaches Claude Code natively and OMP through `enabledProviders: [claude]` in the
+  shared preset (OMP expands the import and, unlike an `AGENTS.md`, passes it to task subagents); `check`
+  prints one problem per line: stale files, a missing import, `claude` absent from OMP's `enabledProviders`
+  or present in `disabledProviders` (parsed with awk, no YAML tool on either machine), a non-empty
+  `~/.omp/agent/AGENTS.md` (OMP keeps one user-level context file and its own wins), and the
+  `/etc/devbox-env` marker missing on the devbox or present on the laptop. It never edits OMP's config.
+  Bash >= 4.2 and BSD tools, since the laptop runs it under `bin/devbox`
 - `bashly-settings.yml`, `cli/` and `bin/devbox` - the one CLI for both machines. `bashly-settings.yml` points
   bashly at `cli/` and writes `bin/`; `cli/bashly.yml` declares the commands, `cli/commands/` holds their
   bodies, `cli/lib/` the shared functions, `cli/initialize.sh` the shared constants; `bin/devbox` is the
@@ -316,7 +334,8 @@ the host's root Docker daemon.
     invalid JSON listed as a manual step; one already holding `permissions.deny` left alone; needs `jq`); reports
     whether `omp` and `claude` resolve to their launchers -
     printing the one `PATH` line for the user's shell rc until they do - and the remaining manual steps (PATs,
-    App credentials)
+    App credentials); also runs `container/agent-context apply laptop` and lists its `check` failures as
+    manual steps
   - `devbox doctor laptop` - read-only counterpart of `devbox doctor host`: no private key on disk, one
     `id_<slug>.pub`/`signing_<slug>.pub` pair per identity (plus `devbox.pub`) held by the 1Password agent,
     each forge host's plain key and one `.pub` per identity's ssh tag selecting through it, `Host <workstation>`
@@ -342,6 +361,8 @@ the host's root Docker daemon.
     `DEVBOX_HOST` from the environment or `.push.env` - the same per-laptop value `devbox deploy` resolves,
     deliberately one name and one file rather than two - and skips that one check when it is unset. Unsets
     the launcher's exports and strips its PATH entry first, so it is meaningful from inside an agent session.
+    Also fails each `container/agent-context check laptop` problem; `doctor host` runs `check devbox` in the
+    container the same way.
     `file_mode` (`cli/lib/machine.sh`) uses perl because BSD and GNU `stat` disagree and both can be on a macOS
     PATH
   - `devbox deploy` - rsync deploy; excludes `.git`, `.env`, `data/` and `.DS_Store`, then runs `bin/devbox

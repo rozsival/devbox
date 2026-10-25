@@ -82,6 +82,11 @@ There are no releases: `./bin/devbox deploy` rsyncs the working tree to `~/devbo
 > The skills mirror these docs and must stay consistent with them. Edit only the originals in `.agents/skills/`; a new
 > skill needs its `.claude/skills/` symlink.
 
+Separate from these, `home/.config/devbox/agent-context/{devbox,laptop}.md` and `home/.agents/skills/devbox-runtime/`
+are not about this repo: they are installed on both machines and tell every agent session, in any project, which
+machine it runs on ([Toolchain](toolchain.md#-which-machine-the-agent-context)). Keep them consistent with these docs
+too, especially `docs/docker.md`, `docs/git.md` and `docs/secrets.md`.
+
 ---
 
 ## ❓ FAQ

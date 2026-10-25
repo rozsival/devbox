@@ -309,6 +309,12 @@ COPY home/ /opt/devbox/home/
 # non-interactive sshd PATH, which `ssh devbox 'devbox-ports'` needs.
 RUN ln -sf /opt/devbox/container/devbox-ports /usr/local/bin/devbox-ports
 
+# Which machine an agent runs on: the launchers export DEVBOX_ENV=devbox when
+# this file exists, laptop otherwise. In the image layer, root-owned, because
+# nothing in the bind-mounted home may decide it, and a file rather than ENV
+# because sshd starts every session with a fresh environment.
+RUN printf 'devbox\n' >/etc/devbox-env
+
 # The container has no root process at runtime: sshd runs as `dev` and only ever
 # authenticates the user it already runs as (UsePAM no, pubkey-only), so it needs
 # neither /etc/shadow nor setuid. User namespaces are not configured on the host,

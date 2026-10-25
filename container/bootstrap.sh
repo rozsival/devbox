@@ -569,6 +569,21 @@ elif jq -e '.permissions.deny == null' "${claude_settings}" >/dev/null; then
   fi
 fi
 
+# Which machine this is, for every agent session: ~/.config/devbox/agent-context.md
+# (the devbox template), imported by one line in ~/.claude/CLAUDE.md that both
+# agents read, plus the devbox-runtime skill. What the script cannot fix -
+# OMP's own config not reading that file, an image without the marker - is
+# listed as a manual step. Never fatal: it costs agents context, not access.
+agent_context=/opt/devbox/container/agent-context
+if agent_context_out="$(bash "${agent_context}" apply devbox "${TEMPLATE_DIR}" 2>&1)"; then
+  [[ -z ${agent_context_out} ]] || while IFS= read -r line; do log_info "${line}"; done <<<"${agent_context_out}"
+else
+  log_warn "Installing the agent context failed: ${agent_context_out}"
+fi
+if ! agent_context_out="$(bash "${agent_context}" check devbox "${TEMPLATE_DIR}" 2>&1)"; then
+  while IFS= read -r line; do register_action "${line}"; done <<<"${agent_context_out}"
+fi
+
 # -- 15. moshi-hook -----------------------------------------------------------
 # Companion daemon for the Moshi phone client: it owns the Unix socket the OMP
 # extension and the Claude Code hooks post lifecycle events to, serves the local gateway on
