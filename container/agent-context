@@ -58,21 +58,33 @@ readonly omp_config="${HOME}/.omp/agent/config.yml"
 readonly omp_native="${HOME}/.omp/agent/AGENTS.md"
 
 # Whether a top-level YAML list - flow (`key: [a, b]`) or block (`- a` lines) -
-# holds one of the given values, quotes ignored. Enough for OMP's config.yml
-# without a YAML parser on either machine; path-scoped object entries are
-# skipped, they never name a bare provider.
+# holds one of the given values, quotes and `# comments` ignored. Enough for
+# OMP's config.yml without a YAML parser on either machine; path-scoped object
+# entries are skipped, they never name a bare provider.
 yaml_list_has() {
   local file="$1" key="$2"
   shift 2
   [[ -r ${file} ]] || return 1
   awk -v key="${key}" -v want=" $* " '
+    # A YAML comment: `#` at the start or after whitespace, outside quotes.
+    function uncomment(s, i, c, q) {
+      q = ""
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (q != "") { if (c == q) q = ""; continue }
+        if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:]]/)) break
+        if (c == "\"" || c == "\047") q = c
+      }
+      return substr(s, 1, i - 1)
+    }
     function hit(v) {
       gsub(/^[[:space:]"'\'']+|[[:space:]"'\'',]+$/, "", v)
       return v != "" && index(want, " " v " ") > 0
     }
     $0 ~ "^" key ":" {
       v = $0
-      sub("^" key ":[[:space:]]*", "", v)
+      v = uncomment(substr(v, length(key) + 2))
+      sub(/^[[:space:]]*/, "", v)
       if (v ~ /^\[/) {
         gsub(/\[|\]/, "", v)
         n = split(v, items, ",")
@@ -82,7 +94,7 @@ yaml_list_has() {
       inlist = 1
       next
     }
-    inlist && /^[[:space:]]*-/ { v = $0; sub(/^[[:space:]]*-/, "", v); if (hit(v)) found = 1; next }
+    inlist && /^[[:space:]]*-/ { v = uncomment($0); sub(/^[[:space:]]*-/, "", v); if (hit(v)) found = 1; next }
     inlist && /^[^[:space:]#]/ { exit }
     END { exit !found }
   ' "${file}"

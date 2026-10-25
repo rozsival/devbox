@@ -9,8 +9,8 @@ launcher. If it is empty, git and `gh` are not fenced: stop and tell the user be
 - **System:** Ubuntu 26.04, GNU userland, user `dev`, home `/home/dev`, projects under `~/projects`. There is no root
   and no `sudo`, so `apt-get install` is impossible. To add a missing tool, propose a change to the devbox repo's
   `Dockerfile` and don't hunt for a workaround. Per-user installs into `~/.local` work (`npm i -g --prefix ~/.local`,
-  `cargo install`). `/tmp` is a `noexec` tmpfs that a container restart clears: run scripts there with `bash <file>`, or
-  put executables under `$HOME`.
+  `cargo install --root ~/.local`). `/tmp` is a `noexec` tmpfs that a container restart clears: run scripts there with
+  `bash <file>`, or put executables under `$HOME`.
 - **Reach:** the project tree, the internet, and the project Docker daemon. You can't reach the workstation's
   filesystem, its root Docker daemon, its own services or other Tailnet machines. The user's laptop is a different
   machine: its paths don't exist here.
