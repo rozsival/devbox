@@ -384,6 +384,20 @@ doctor_laptop() {
     log_success 'no agent token in the macOS keychain'
   fi
 
+  # Which machine an agent believes it is on comes from these files, not from
+  # the launcher alone: the laptop template imported through ~/.claude/CLAUDE.md,
+  # which OMP reads only with `claude` in its enabledProviders and only while no
+  # ~/.omp/agent/AGENTS.md shadows it, plus the devbox-runtime skill.
+  log_info 'agent context'
+  local agent_context_out line
+  if agent_context_out="$("${BASH}" "${REPO_ROOT}/container/agent-context" check laptop "${TEMPLATE_DIR}" 2>&1)"; then
+    log_success 'agent context current: ~/.config/devbox/agent-context.md (laptop), imported by ~/.claude/CLAUDE.md, read by OMP, devbox-runtime skill'
+  else
+    while IFS= read -r line; do
+      [[ -z ${line} ]] || fail "agent context: ${line}"
+    done <<<"${agent_context_out}"
+  fi
+
   # -- 5. What the helper needs: tokens and App credentials --------------------
   log_info 'credentials'
   secrets_file="${CONFIG_DIR}/secrets.env"

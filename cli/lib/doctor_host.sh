@@ -214,6 +214,20 @@ doctor_host() {
   *) fail "could not check ~/.config/devbox/git against the registry - run './bin/devbox bootstrap'" ;;
   esac
 
+  # Which machine an agent believes it is on: the devbox template imported
+  # through ~/.claude/CLAUDE.md, read by OMP only with `claude` in its
+  # enabledProviders, plus the image's /etc/devbox-env marker behind
+  # DEVBOX_ENV. Checked by the same script bootstrap installs them with.
+  local agent_context_out context_line
+  if agent_context_out="$(compose exec -T "${SERVICE}" \
+    bash /opt/devbox/container/agent-context check devbox /opt/devbox/home 2>&1)"; then
+    log_success 'agent context current (devbox): marker, ~/.config/devbox/agent-context.md, CLAUDE.md import, OMP reads it, devbox-runtime skill'
+  else
+    while IFS= read -r context_line; do
+      [[ -z "${context_line}" ]] || fail "agent context: ${context_line}"
+    done <<<"${agent_context_out}"
+  fi
+
   # Moshi's notifications, approvals and Chat View all arrive through this
   # daemon, which the entrypoint starts because the container has no systemd.
   # Unpaired is a warning, not a failure: the box works, the phone just gets

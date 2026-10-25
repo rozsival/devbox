@@ -91,6 +91,16 @@ agent_launch() {
   export GH_CONFIG_DIR="${HOME}/.config/devbox/gh"
   mkdir -p "${GH_CONFIG_DIR}"
 
+  # Which machine this session runs on, for the agent and for anything it runs:
+  # the image's root-owned marker on the devbox, nothing on the laptop. The
+  # agent's context (~/.config/devbox/agent-context.md) states the same and
+  # tells it to trust this variable over its assumptions.
+  if [[ -e /etc/devbox-env ]]; then
+    export DEVBOX_ENV=devbox
+  else
+    export DEVBOX_ENV=laptop
+  fi
+
   # `<tool> update` must replace the real install, never a launcher - `omp
   # update` decides what to replace by looking `omp` up on the PATH and takes
   # over whatever it finds there (a plain file in place, a symlink through its

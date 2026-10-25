@@ -198,6 +198,38 @@ What differs from OMP's guardrail, and what it does and does not stop: [Security
 The container is the sandbox, so bypass-permission mode (`claude --dangerously-skip-permissions`) is the same call here
 as it is for `omp`: it reaches the project tree, the internet and the rootless project daemon, never the host.
 
+## 🧭 Which machine: the agent context
+
+Every agent session on either machine knows where it runs. That stops it assuming `sudo` in the container, a laptop path
+on the devbox, or the user's own credentials on the laptop. Three pieces, each installed by `bootstrap` (devbox) and
+`./bin/devbox agent install` (laptop) through `container/agent-context apply`:
+
+| Piece                                     | What it holds                                                                                                                                                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEVBOX_ENV`                              | `devbox` or `laptop`, exported by `agent-launch` for the session's process tree. `devbox` means the image's root-owned `/etc/devbox-env` exists; nothing in the bind mount can set it                          |
+| `~/.config/devbox/agent-context.md`       | A short, always-loaded summary for this machine: what is there, what is missing, what not to try. Copied from `home/.config/devbox/agent-context/{devbox,laptop}.md` on every run                              |
+| `devbox-runtime` skill                    | How-tos for both machines (missing tools, Docker, ports for the user, secrets, git and `gh` failures), from `home/.agents/skills/devbox-runtime`: copied to `~/.agents/skills`, linked from `~/.claude/skills` |
+| `@~/.config/devbox/agent-context.md` line | Appended once to `~/.claude/CLAUDE.md`; the rest of that file stays yours (a dotfiles symlink is written through)                                                                                              |
+
+One file reaches every session. Claude Code reads `~/.claude/CLAUDE.md` natively. OMP reads it because the shared preset
+lists `claude` under `enabledProviders`; OMP also expands the `@` import there and, unlike an `AGENTS.md`, hands it to
+task subagents. Two conditions in OMP's own config can still hide it, so both doctors and both installers report them
+rather than edit that file:
+
+- `claude` missing from `enabledProviders` (or listed in `disabledProviders`): `./bin/devbox sync omp` applies the
+  preset.
+- A non-empty `~/.omp/agent/AGENTS.md`: OMP keeps one user-level context file and its own wins, so move that content
+  into `~/.claude/CLAUDE.md`.
+
+> [!NOTE]
+> Enabling the `claude` provider loads more than `CLAUDE.md` into OMP: skills in `~/.claude/skills` (identical copies of
+> the `~/.agents/skills` ones are dropped; `moshi-hook`'s `moshi-visuals` is new to OMP) and Claude Code's user plugins.
+
+`DEVBOX_ENV=devbox` needs an image built after the marker was added: until `./bin/devbox up` or `rebuild` runs,
+sessions on the devbox get `laptop`, and `doctor host` and `bootstrap` say so. To change what agents are told, edit the
+templates or the skill, commit, deploy, and re-run `bootstrap` and `agent install`; `doctor host` and `doctor laptop`
+fail while either machine's copy is stale.
+
 ## 📱 Moshi and `moshi-hook`
 
 [Moshi](https://getmoshi.app) connects like any SSH client (`BIND_ADDR:2223`, user `dev`, authorized key) for a terminal

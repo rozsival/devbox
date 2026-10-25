@@ -157,6 +157,14 @@ the preset to the laptop and the devbox on purpose. Claude Code applies deny/ask
 command and merges permission arrays across settings scopes, so a repository's own `.claude/settings.json` cannot drop
 these rules; it is the same guardrail, not a boundary - `docs/security.md`.
 
+And it tells laptop agents where they run (`container/agent-context apply laptop`). It installs the laptop template as
+`~/.config/devbox/agent-context.md`, plus the `devbox-runtime` skill in `~/.agents/skills` with a link in
+`~/.claude/skills`, and appends one `@~/.config/devbox/agent-context.md` line to `~/.claude/CLAUDE.md`. Claude Code reads
+that file natively. OMP reads it only with `claude` in `enabledProviders`, which the shared preset sets and
+`./bin/devbox sync omp` applies to an existing config, and only while no `~/.omp/agent/AGENTS.md` shadows it. Launcher
+sessions also get `DEVBOX_ENV=laptop`. On a dotfiles laptop where `~/.claude/CLAUDE.md` is a symlink, the line lands in
+the dotfiles repo: commit it there.
+
 A session's git config is the file `GIT_CONFIG_GLOBAL` names, so any `git config --global …` in its
 process tree rewrites the agent's own identity. The real caller here was `~/.extra` (sourced by
 `~/.bash_profile`), whose `git config --global user.name/email` lines ran in every login bash a session
@@ -229,6 +237,7 @@ repo.
 | `ssh devbox failed` / `ssh <workstation> failed`                              | 1Password locked, or that host's key (`devbox.pub` / the default `id_<slug>.pub`) unapproved for this app                                                                                                                                                                                                                           |
 | `<workstation> accepts devbox.pub`                                            | In order: authorize `~/.ssh/id_<default>.pub` on the workstation (devbox-setup phase 1's `ssh-copy-id -f -i ~/.ssh/id_<default>.pub -p 2222 <user>@<workstation>`) and point `Host <workstation>` at it (phase 2) until `ssh <workstation> true` passes; only then delete `devbox.pub` from that account's `~/.ssh/authorized_keys` |
 | `[<slug>] … with <fingerprint>, not its pubkey <fingerprint>`                 | That identity's `id_<slug>.pub` holds another key than its registry `pubkey`, or its `Host`/`Match` block is missing; re-run the renderer or re-export the `.pub` (phase 1)                                                                                                                                                         |
+| `agent context: …` / `~/.claude/CLAUDE.md does not import …`                  | `./bin/devbox agent install`. For `enabledProviders`, run `./bin/devbox sync omp` (or add `claude` by hand). For a shadowing `~/.omp/agent/AGENTS.md`, move its content into `~/.claude/CLAUDE.md` and delete it                                                                                                                    |
 | `… is not a symlink onto …/bin/devbox` / `bash completion … missing or stale` | `./bin/devbox install` from the checkout you want `devbox` to run                                                                                                                                                                                                                                                                   |
 | `a login shell does not find devbox` / `… does not load bash-completion`      | Add the printed `PATH` line, or `brew install bash-completion@2` and source it from `~/.bashrc`                                                                                                                                                                                                                                     |
 
