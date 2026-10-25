@@ -45,7 +45,8 @@ There is no CI and no test suite: `make check` proves the source, and a change i
    upstream's checksum file where it publishes one, else the SHA-256 GitHub records for the release asset, else a signed
    package repository with its key fingerprint pinned. The one exception is nvm's installer, pinned by tag over TLS
    only (upstream publishes no checksum file or asset digest for it); nvm then checks Node against nodejs.org's
-   `SHASUMS256.txt`. Never invent a hash — see [Adding a tool](toolchain.md#-adding-a-tool).
+   `SHASUMS256.txt`. Never invent a hash — see [Adding a tool](toolchain.md#-adding-a-tool). Every pin carries the
+   `# renovate:` comment that lets [Renovate](toolchain.md#-updates) bump it.
 4. **No root in the container** — no `privileged`, no `cap_add`, no `/var/run/docker.sock` mount; `sshd` runs as
    `dev`. Project containers come from the rootless sibling daemon, never the host's root daemon and never a nested
    one — see [Docker](docker.md).

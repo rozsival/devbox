@@ -10,14 +10,20 @@ log_info() { echo -e "\033[0;34m[INFO]\033[0m  $*"; }
 log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
 
 # Pinned like every other tool in this repo; override to move a single one.
+# Renovate (renovate.json) bumps each from the `# renovate:` line above it.
+# The skills CLI follows vercel-labs/skills' tags rather than npm: find-skills
+# below is installed from the tag of this same version, which must exist.
+# renovate: datasource=github-tags depName=skills packageName=vercel-labs/skills
 SKILLS_CLI_VERSION="${SKILLS_CLI_VERSION:-1.5.26}"
+# renovate: datasource=npm depName=agent-browser
 AGENT_BROWSER_VERSION="${AGENT_BROWSER_VERSION:-0.37.1}"
 # The skills too: a bare `owner/repo` installs whatever the default branch holds
 # at that moment, and a skill is instructions an agent follows. A GitHub tree
 # URL pins the ref (the CLI fails on one that does not exist). Where the
 # repository tags its releases, the tag of the tool already pinned above is
 # used, so a skill and the CLI it drives move together; anthropics/skills has
-# no tags, hence a commit.
+# no tags, hence a commit - Renovate proposes the branch head as a new digest.
+# renovate: datasource=git-refs depName=anthropic-skills packageName=https://github.com/anthropics/skills branch=main
 SKILL_CREATOR_REF="${SKILL_CREATOR_REF:-683bc88e56f3e09ba94f7055977f3d3aa499f202}"
 
 readonly HOME_DIR="${HOME:-/home/dev}"

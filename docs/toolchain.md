@@ -14,23 +14,26 @@
 
 ## 📌 Pinned versions
 
-| Tool             | Version   | Installed as                                                           |
-| ---------------- | --------- | ---------------------------------------------------------------------- |
-| `herdr`          | `0.9.4`   | `/usr/local/bin/herdr`                                                 |
-| `node`           | `24.21.0` | nvm in `/opt/nvm`, symlinked into `/usr/local/bin`                     |
-| `pnpm`           | `12.11.2` | `npm install -g`, symlinked into `/usr/local/bin`                      |
-| `rustc`/`cargo`  | `1.99.1`  | rustup in `/opt/rustup` + `/opt/cargo`, wrapped into `/usr/local/bin`  |
-| `rustup`         | `1.29.2`  | `/opt/cargo/bin/rustup`, wrapped into `/usr/local/bin`                 |
-| `ruby`           | `4.0.9`   | built from source into `/opt/ruby`, symlinked into `/usr/local/bin`    |
-| `gh`             | `2.102.0` | pinned `.deb`                                                          |
-| `lazygit`        | `0.66.1`  | `/usr/local/bin/lazygit` (alias `lg`)                                  |
-| `wt` (worktrunk) | `0.80.0`  | `/usr/local/bin/wt` + `git-wt`                                         |
-| `terraform`      | `1.16.6`  | `/usr/local/bin/terraform`                                             |
-| `shellcheck`     | `0.11.0`  | `/usr/local/bin/shellcheck`                                            |
-| `nvm`            | `0.40.8`  | `/opt/nvm`                                                             |
-| Docker CLI       | `29.9.0`  | `docker-ce-cli` from Docker's signed apt repository, `/usr/bin/docker` |
-| Compose plugin   | `5.6.0`   | `/usr/local/lib/docker/cli-plugins/docker-compose`                     |
-| Buildx plugin    | `0.38.0`  | `/usr/local/lib/docker/cli-plugins/docker-buildx`                      |
+Each version lives in one place, the `ARG` named below; the `Dockerfile` is the source of truth, and
+[Renovate](#-updates) keeps it current.
+
+| Tool             | Pinned by                | Installed as                                                           |
+| ---------------- | ------------------------ | ---------------------------------------------------------------------- |
+| `herdr`          | `HERDR_VERSION`          | `/usr/local/bin/herdr`                                                 |
+| `node`           | `NODE_VERSION`           | nvm in `/opt/nvm`, symlinked into `/usr/local/bin`                     |
+| `pnpm`           | `PNPM_VERSION`           | `npm install -g`, symlinked into `/usr/local/bin`                      |
+| `rustc`/`cargo`  | `RUST_VERSION`           | rustup in `/opt/rustup` + `/opt/cargo`, wrapped into `/usr/local/bin`  |
+| `rustup`         | `RUSTUP_VERSION`         | `/opt/cargo/bin/rustup`, wrapped into `/usr/local/bin`                 |
+| `ruby`           | `RUBY_VERSION`           | built from source into `/opt/ruby`, symlinked into `/usr/local/bin`    |
+| `gh`             | `GH_VERSION`             | pinned `.deb`                                                          |
+| `lazygit`        | `LAZYGIT_VERSION`        | `/usr/local/bin/lazygit` (alias `lg`)                                  |
+| `wt` (worktrunk) | `WORKTRUNK_VERSION`      | `/usr/local/bin/wt` + `git-wt`                                         |
+| `terraform`      | `TERRAFORM_VERSION`      | `/usr/local/bin/terraform`                                             |
+| `shellcheck`     | `SHELLCHECK_VERSION`     | `/usr/local/bin/shellcheck`                                            |
+| `nvm`            | `NVM_VERSION`            | `/opt/nvm`                                                             |
+| Docker CLI       | `DOCKER_CLI_VERSION`     | `docker-ce-cli` from Docker's signed apt repository, `/usr/bin/docker` |
+| Compose plugin   | `DOCKER_COMPOSE_VERSION` | `/usr/local/lib/docker/cli-plugins/docker-compose`                     |
+| Buildx plugin    | `DOCKER_BUILDX_VERSION`  | `/usr/local/lib/docker/cli-plugins/docker-buildx`                      |
 
 Also from the Ubuntu archive: `git`, `git-lfs`, `starship`, `ripgrep`, `fd` (symlinked from `fdfind`), `jq`, `curl`,
 `rsync`, `build-essential`, `python3`, `openssh-server`/`-client`, `nano`, `less`, `procps`, `iproute2`, `socat` (backs
@@ -45,6 +48,25 @@ Check what's running — `doctor` fails on a tool's real exit code, not a blank 
 ```bash
 ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 ```
+
+### 🔄 Updates
+
+[Renovate](https://docs.renovatebot.com) (`renovate.json`, the Renovate GitHub App on the repository) opens one PR per
+new version, weekly, for:
+
+- every `ARG <TOOL>_VERSION` in the `Dockerfile` and the pins in `container/skills.sh` — each found through the
+  `# renovate: datasource=… depName=…` comment directly above it;
+- the `ubuntu:26.04` base image's digest — never its release, which matches the workstation's Ubuntu;
+- `mise.toml`'s repo tooling.
+
+Nothing automerges: merging changes no machine, and the build is the only test — the checksum steps fail on an asset
+upstream renamed. After a merge: `./bin/devbox deploy <workstation> --start` (then `./bin/devbox skills` there for the
+`container/skills.sh` pins). Two exceptions to the plain flow:
+
+- **Docker CLI** — waits for approval on the Dependency Dashboard issue, since `DOCKER_CLI_VERSION` must equal the host
+  daemon's version: upgrade the workstation's Docker first, then tick it.
+- **`skill-creator`** — `anthropics/skills` has no tags, so the PR proposes the branch head as a new commit. A skill is
+  instructions an agent follows; read its diff before merging.
 
 ## 📍 Why tools live where they do
 
@@ -331,19 +353,19 @@ Re-running `./bin/devbox skills` is safe: npm and `npx skills add` overwrite in 
 ## 📦 Node and pnpm
 
 ```bash
-node -v      # v24.21.0
-pnpm -v      # 12.11.2
+node -v      # v<NODE_VERSION>
+pnpm -v      # <PNPM_VERSION>
 ```
 
-pnpm installs via `npm install -g pnpm@12.11.2`, not `corepack prepare`: pnpm 12's JS wrapper loads a native binary from
+pnpm installs via `npm install -g pnpm@<PNPM_VERSION>`, not `corepack prepare`: pnpm 12's JS wrapper loads a native binary from
 its own `node_modules`, but corepack's cache held only the wrapper — every shimmed call re-downloaded it. `corepack`
 stays enabled for `yarn`, with `COREPACK_HOME` set so repos declaring `packageManager` still work.
 
 ## 🦀 Rust and Ruby
 
 ```bash
-rustc --version   # rustc 1.99.1
-ruby --version    # ruby 4.0.9
+rustc --version   # rustc <RUST_VERSION>
+ruby --version    # ruby <RUBY_VERSION>
 ```
 
 Rust comes from a pinned `rustup-init`, checked against the `.sha256` static.rust-lang.org publishes beside it; rustup
@@ -387,7 +409,9 @@ hooks run as usual. It is
 
 ### 1. Pin the version
 
-Add `ARG <TOOL>_VERSION=<version>` next to the others in the `Dockerfile`.
+Add `ARG <TOOL>_VERSION=<version>` next to the others in the `Dockerfile`, under a
+`# renovate: datasource=<datasource> depName=<tool> [packageName=<owner/repo>] [versioning=<scheme>]` line naming where
+it is released (usually `github-releases` and the upstream repository), so [Renovate](#-updates) bumps it.
 
 ### 2. Add one install block
 
