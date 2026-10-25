@@ -14,7 +14,7 @@
 ```mermaid
 flowchart LR
   L["laptop<br/>herdr client"] -->|" ssh devbox<br/>Tailnet only "| H["&lt;workstation&gt;<br/>BIND_ADDR:2223"]
-  L -->|" devbox deploy<br/>rsync "| R["~/devbox<br/>(the repo)"]
+  L -->|" devbox deploy<br/>rsync "| R["~/devbox<br/>(the runtime files)"]
   H -->|" DNAT "| C["container :2222<br/>sshd as dev"]
   C --> P["panes: OMP, Claude Code, node, gh, wt"]
   C --- V["/home/dev<br/>bind mount of DEVBOX_DATA_DIR"]
@@ -43,7 +43,7 @@ flowchart LR
 | `./bin/devbox`                 | `cli/` → generated `bin/devbox`                       | One CLI for workstation and laptop; see [CLI reference](cli.md)                                                                                                    |
 
 `network_mode: bridge` keeps the container on `docker0`, the one interface the project-port boundary admits, and which
-— unlike a compose-managed bridge — is not removed by `down`.
+— unlike a compose-managed bridge — is not removed by `docker compose down`.
 
 ## 🔀 Container startup
 
@@ -97,6 +97,11 @@ All four land as `dev` in `/home/dev`. Details: [Connecting](connecting.md).
 | `.agents/skills/`                             | Agent skills: `devbox-basics`, `devbox-setup`, `devbox-laptop`, `devbox-deploy`, `devbox-cli`                                                                                                  |
 | `.claude/skills/`                             | Symlinks to `.agents/skills/` — the one skills directory Claude Code reads                                                                                                                     |
 | `CLAUDE.md`                                   | Imports `AGENTS.md` for Claude Code                                                                                                                                                            |
+
+`devbox deploy` ships only what builds and runs the container and the CLI that drives it: `bin/`, `container/`, `home/`,
+`Dockerfile`, `docker-compose.yml` and `.env.example`. Everything else here — `docs/`, `.agents/`, `.claude/`, `cli/`,
+`Makefile` and the editor and formatter configs — stays on the laptop, and the workstation's checkout is pruned to match
+([CLI reference](cli.md#devbox-deploy)).
 
 ---
 

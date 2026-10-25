@@ -12,7 +12,7 @@ ssh_sessions() {
     tr -cd '0-9' || true
 }
 
-# `up` only drops sessions when compose decides to recreate; a no-op `up` is
+# `start` only drops sessions when compose decides to recreate; a no-op `start` is
 # safe, so ask compose instead of guessing. The plan is captured before it is
 # matched: piped into `grep -q`, compose takes SIGPIPE on the line after the
 # match, and under pipefail that 141 reads as "nothing to recreate" - which
@@ -83,7 +83,7 @@ preflight() {
 
   # The project Docker daemon is optional infrastructure: a devbox with no
   # project containers is perfectly usable, so a missing socket warns rather
-  # than blocking `up`. `docker` inside the container reports it precisely, and
+  # than blocking `start`. `docker` inside the container reports it precisely, and
   # `doctor` fails on it.
   local socket_dir
   socket_dir="$(env_get DEVBOX_DOCKER_SOCKET_DIR)"

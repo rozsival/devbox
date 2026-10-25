@@ -118,7 +118,7 @@ step_user() {
       log_error "uid ${DEV_UID} is already taken by $(getent passwd "${DEV_UID}" | cut -d: -f1)"
     log_info "Creating user ${DEV_USER} (uid ${DEV_UID}, home ${DEV_HOME})..."
     # --no-create-home: the home directory is the devbox bind mount and is
-    # either migrated below or created by ./bin/devbox up. A skeleton copied in
+    # either migrated below or created by ./bin/devbox start. A skeleton copied in
     # here would shadow the container's own bootstrap.
     useradd --uid "${DEV_UID}" --gid "${DEV_GROUP}" --home-dir "${DEV_HOME}" \
       --no-create-home --shell /bin/bash --comment 'devbox project docker' "${DEV_USER}"
@@ -229,7 +229,7 @@ step_data_dir() {
       [[ -e "${DEV_HOME}" ]] &&
         log_error "${DEV_HOME} already exists and ${current} is still in use; merge them by hand"
       grep -qx devbox <<<"$(docker ps --format '{{.Names}}' 2>/dev/null)" &&
-        log_error "the devbox container is running; stop it first: ./bin/devbox down"
+        log_error "the devbox container is running; stop it first: ./bin/devbox stop"
       log_info "Moving ${current} to ${DEV_HOME}..."
       mv "${current}" "${DEV_HOME}"
     fi
@@ -612,7 +612,7 @@ step_netfilter() {
 # sides. tmpfiles.d recreates it on every boot.
 #
 # 0711, not 0700: traverse-by-name for everyone so the deploying user can stat
-# the socket (`./bin/devbox up` reports a missing daemon) without being able to
+# the socket (`./bin/devbox start` reports a missing daemon) without being able to
 # list the directory. Using it still needs the socket's own 0660 dev:dev.
 step_socket_dir() {
   local want="d ${SOCKET_DIR} 0711 ${DEV_USER} ${DEV_GROUP} -"

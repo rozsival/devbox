@@ -1,75 +1,83 @@
 ---
 name: devbox-deploy
-description: Pushes repo changes out to the devbox and applies them - ./bin/devbox deploy, choosing between up, rebuild and bootstrap for the file you actually changed, ./bin/devbox sync identities for the identity registry, rehearsing the rsync, and verifying with doctor. Use this whenever someone wants to deploy, redeploy, sync or "push to the devbox", has edited the Dockerfile, docker-compose.yml, container/, home/, .env or identities.conf and wants it live, is bumping a pinned tool version, asks whether a redeploy will wipe their keys or projects, or needs to restart, roll back or back up the devbox.
+description: Pushes repo changes out to the devbox and applies them - ./bin/devbox deploy, choosing between start, rebuild and bootstrap for the file you actually changed, ./bin/devbox sync identities for the identity registry, rehearsing the rsync, and verifying with doctor. Use this whenever someone wants to deploy, redeploy, sync or "push to the devbox", has edited the Dockerfile, docker-compose.yml, container/, home/, .env or identities.conf and wants it live, is bumping a pinned tool version, asks whether a redeploy will wipe their keys or projects, or needs to restart, roll back or back up the devbox.
 ---
 
 # devbox deploy
 
 Deploying is two easily-conflated steps: **sync the repo** to the workstation (`devbox deploy`, laptop side), **apply
-it** to the running container (`devbox up` and friends, workstation side) - picking the wrong one is
+it** to the running container (`devbox start` and friends, workstation side) - picking the wrong one is
 usually why a change seems to do nothing. Syncing the _identity registry_ is a separate, third step
 (`devbox sync identities`): it never travels with `devbox deploy`, since `identities.conf` is gitignored,
-hand-held state, not repo content.
+hand-held state, not repo content. `devbox update` is none of these: it upgrades OMP, Claude Code and `moshi-hook`
+in the running container and applies no repo change.
 
 Full reference: `docs/cli.md` (flags), `docs/operations.md` (restart, backup, troubleshooting).
 
 ## The common case
 
 ```bash
-./bin/devbox deploy <workstation> --up     # rsync, then ./bin/devbox up on the host
+./bin/devbox deploy <workstation> --start  # rsync, then ./bin/devbox start on the host
 ```
 
-`devbox deploy` is `rsync -az --delete` excluding `.git`, `.env`, `data/`, `.DS_Store` - host defaults to
+`devbox deploy` syncs an allowlist, not the tree: only `bin/`, `container/`, `home/`, `Dockerfile`,
+`docker-compose.yml` and `.env.example` (`.DS_Store` excluded inside them), as `rsync -az --delete
+--delete-excluded`. Everything else on the workstation - `docs/`, `.agents/`, `.claude/`, `.idea/`, `Makefile`,
+prettier and editor configs, `README.md`, leftovers of earlier deploys - is removed, except the protected host state:
+`/.env`, `/data/`, `/docker-compose.override.yml`, `/.git/`. A new runtime path has to be added to the `filters`
+array in `cli/commands/deploy.sh`. It needs **GNU rsync** on the laptop (`brew install rsync`, Homebrew's bin ahead
+of `/usr/bin`): macOS's `/usr/bin/rsync` is openrsync, which silently ignores the protect rules and would delete the
+remote `.env`, `data/` and `.git`, so `deploy` refuses it with `... is not GNU rsync`. Host defaults to
 `$DEVBOX_HOST` (environment or `.push.env`), remote to `$DEVBOX_REMOTE_PATH` then `~/devbox`. After the sync it runs
 `bin/devbox install` there, keeping `devbox` and its bash completion on the workstation's PATH.
 
-`--up` runs remote `up` over `ssh -t` so the live-session prompt reaches a human; an agent has none, so
-`up` refuses instead - correct, not an obstacle. Check `./bin/devbox sessions` first; if connected, sync
+`--start` runs remote `start` over `ssh -t` so the live-session prompt reaches a human; an agent has none, so
+`start` refuses instead - correct, not an obstacle. Check `./bin/devbox sessions` first; if connected, sync
 files, report the pending step and whose session dies, let the user decide. `--force` needs an explicit
 go-ahead: it kills shells/panes with no client-side message.
 
-The workstation commands (`up`, `down`, `rebuild`, `bootstrap`, ...) only run on the workstation, driving the
+The workstation commands (`start`, `stop`, `rebuild`, `bootstrap`, ...) only run on the workstation, driving the
 local Docker daemon, and `deploy`/`sync`/`agent install` only on the laptop. From the laptop that's
-`ssh <workstation> 'cd ~/devbox && ./bin/devbox <cmd>'`, or just `deploy --up`.
+`ssh <workstation> 'cd ~/devbox && ./bin/devbox <cmd>'`, or just `deploy --start`.
 
 ## Which apply step does the change need
 
-| Changed                                                                           | Apply with                       | Why                                                                                                                                                              |
-| --------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docker-compose.yml`, `.env`                                                      | `up`                             | Config hash change recreates                                                                                                                                     |
-| `Dockerfile`, apt list, install block                                             | `up`                             | Rebuilds changed layers                                                                                                                                          |
-| A pinned `ARG <TOOL>_VERSION`                                                     | `up`, or `rebuild` for no cache  | `ARG` invalidates that layer                                                                                                                                     |
-| `container/*`, `home/*`                                                           | `up`                             | In build context, recreate                                                                                                                                       |
-| Re-apply user setup only                                                          | `bootstrap`                      | No restart, no lost panes                                                                                                                                        |
-| `bin/devbox` (regenerated from `cli/`)                                            | nothing                          | Read at invocation, on host                                                                                                                                      |
-| `container/skills.sh`                                                             | `up`, then `./bin/devbox skills` | Only run on demand                                                                                                                                               |
-| `home/.omp/agent/config.yml` (the OMP preset)                                     | `./bin/devbox sync omp`          | Live files are OMP-owned once seeded; `sync omp` replaces both, laptop and devbox                                                                                |
-| `home/.claude/settings.json` (the Claude Code preset)                             | `./bin/devbox sync claude`       | Merged, not copied: other tools write `hooks`/`statusLine` into the live files, which stay; rule lists are replaced whole                                        |
-| `~/.config/devbox/identities.conf`                                                | `./bin/devbox sync identities`   | Hand-held state, not repo content                                                                                                                                |
-| A new host needing project Docker                                                 | `sudo ./bin/devbox docker setup` | Host provisioning, needs sudo                                                                                                                                    |
-| `cli/lib/docker_setup.sh` (firewall, daemon unit, user manager and sshd drop-ins) | `sudo ./bin/devbox docker setup` | `doctor` flags a stale ruleset, firewall unit or drop-in, and sshd's effective `DenyUsers`; `docker setup --check` reports every piece, the daemon unit included |
+| Changed                                                                           | Apply with                          | Why                                                                                                                                                              |
+| --------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docker-compose.yml`, `.env`                                                      | `start`                             | Config hash change recreates                                                                                                                                     |
+| `Dockerfile`, apt list, install block                                             | `start`                             | Rebuilds changed layers                                                                                                                                          |
+| A pinned `ARG <TOOL>_VERSION`                                                     | `start`, or `rebuild` for no cache  | `ARG` invalidates that layer                                                                                                                                     |
+| `container/*`, `home/*`                                                           | `start`                             | In build context, recreate                                                                                                                                       |
+| Re-apply user setup only                                                          | `bootstrap`                         | No restart, no lost panes                                                                                                                                        |
+| `bin/devbox` (regenerated from `cli/`)                                            | nothing                             | Read at invocation, on host                                                                                                                                      |
+| `container/skills.sh`                                                             | `start`, then `./bin/devbox skills` | Only run on demand                                                                                                                                               |
+| `home/.omp/agent/config.yml` (the OMP preset)                                     | `./bin/devbox sync omp`             | Live files are OMP-owned once seeded; `sync omp` replaces both, laptop and devbox                                                                                |
+| `home/.claude/settings.json` (the Claude Code preset)                             | `./bin/devbox sync claude`          | Merged, not copied: other tools write `hooks`/`statusLine` into the live files, which stay; rule lists are replaced whole                                        |
+| `~/.config/devbox/identities.conf`                                                | `./bin/devbox sync identities`      | Hand-held state, not repo content                                                                                                                                |
+| A new host needing project Docker                                                 | `sudo ./bin/devbox docker setup`    | Host provisioning, needs sudo                                                                                                                                    |
+| `cli/lib/docker_setup.sh` (firewall, daemon unit, user manager and sshd drop-ins) | `sudo ./bin/devbox docker setup`    | `doctor` flags a stale ruleset, firewall unit or drop-in, and sshd's effective `DenyUsers`; `docker setup --check` reports every piece, the daemon unit included |
 
 `docker setup` restarts `dev`'s user manager - and with it the project daemon and every project container - when
 the `user@1001` drop-in changed or the running manager predates it. Ubuntu's 5 s stop timeout for `user@`
 SIGKILLs a slow container; one without a restart policy stays down until its `docker compose up -d`. The devbox
 itself (host root daemon) is untouched, and re-runs are no-ops once everything is current.
 
-`up` = `docker compose build` then `docker compose up -d` behind a preflight (`BIND_ADDR` non-empty,
+`start` = `docker compose build` then `docker compose up -d` behind a preflight (`BIND_ADDR` non-empty,
 `${DEVBOX_DATA_DIR}` present and owned by `HOST_UID:HOST_GID`); missing project Docker socket only warns -
 devbox works without it. `rebuild` = `docker compose build --no-cache && docker compose up -d`.
 
 A recreate kills every live SSH session instantly, no client-side reason - looks like `ssh devbox` closed
-itself. `up`/`down`/`rebuild` count sessions first: connected ones prompt on a terminal, refuse in a
+itself. `start`/`stop`/`rebuild` count sessions first: connected ones prompt on a terminal, refuse in a
 script - `--force` overrides, needing say-so. `./bin/devbox sessions` also shows sshd's recent
 `Accepted`/`Disconnected` lines. Only `bootstrap`, `skills`, `hook`, `update` are pane-safe: all `docker compose exec`
 into the container. `hook` restarts `moshi-hook` (after `moshi-hook pair`, or crashing) without
 costing anyone their session; `hook --update` upgrades it first, for a new release; `update` upgrades OMP and Claude
-Code too, then does the same.
+Code too, then does the same - in place, no rebuild or recreate, so it never applies a repo change (`start` does).
 
 `container/` and `home/` are bind-mounted `:ro` _and_ `COPY`d into the image (`COPY container/` / `COPY
 home/` in the `Dockerfile`, as fallback): the mount makes new bytes visible immediately; editing also
-changes the build context - `up` produces a new image id, compose recreates the container, re-running
-entrypoint and bootstrap. That's why `up` answers both; unchanged, it's idempotent: compose reports
+changes the build context - `start` produces a new image id, compose recreates the container, re-running
+entrypoint and bootstrap. That's why `start` answers both; unchanged, it's idempotent: compose reports
 `Container devbox Running`, nothing restarts.
 
 One caveat for `home/`: bootstrap rewrites several files unconditionally - `~/.bashrc.d/devbox.sh`,
@@ -87,7 +95,8 @@ create-if-absent: editing those templates doesn't reach an existing home - delet
 
 This matters: "will I lose my keys / repos / gh login" is a flat no, by construction:
 
-- `.env` is gitignored **and** rsync-excluded, so host-local config survives every deploy.
+- `.env` is gitignored **and** protected from the sync, so host-local config survives every deploy; so do
+  `docker-compose.override.yml`, `data/` and `.git/` on the workstation.
 - `${DEVBOX_DATA_DIR}` is a host bind mount, not the image: `~/.ssh/id_*.pub`,
   `~/.ssh/signing_*.pub` (public keys only - devbox holds no private key), sshd host key under
   `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/identities.conf`, `~/.config/devbox/secrets.env`,
@@ -95,9 +104,9 @@ This matters: "will I lose my keys / repos / gh login" is a flat no, by construc
   `~/.local/libexec/devbox-agent` (`agent-launch`, both launchers plus their `omp`/`claude` symlinks, `gh`
   shim, credential helper, fence), the OMP and Claude Code installs in `~/.local/bin` with the Claude login
   in `~/.claude`, `~/.gitconfig`, every project checkout, project daemon's images, build cache, named volumes under
-  `~/.local/share/docker` - all persist across `up`, `rebuild`, image changes.
-- `--delete` applies only to synced paths; it _will_ remove hand-added files from a tracked directory's
-  remote copy - the remote is a mirror, deliberately.
+  `~/.local/share/docker` - all persist across `start`, `rebuild`, image changes.
+- `--delete`/`--delete-excluded` apply to the workstation's checkout only; they _will_ remove anything there outside
+  the allowlist and hand-added files inside a synced directory - the remote is a runtime mirror, deliberately.
 
 What does **not** survive a recreate: anything in the container's writable layer, e.g.
 `npm install -g <pkg>` or `nvm install <version>`, landing in `/opt`. Pin those in `Dockerfile`.
@@ -105,7 +114,10 @@ What does **not** survive a recreate: anything in the container's writable layer
 ## Rehearse when unsure
 
 ```bash
-rsync -azni --delete --exclude .git --exclude .env --exclude 'data/' --exclude .DS_Store \
+rsync -azni --delete --delete-excluded \
+  --filter 'P /.env' --filter 'P /data/' --filter 'P /docker-compose.override.yml' --filter 'P /.git/' \
+  --exclude .DS_Store --include '/bin/***' --include '/container/***' --include '/home/***' \
+  --include /Dockerfile --include /docker-compose.yml --include /.env.example --exclude '*' \
   ./ <workstation>:devbox/
 ```
 
@@ -131,7 +143,7 @@ host's sshd effectively denying `dev` (each stale after a deploy that changed it
 host's own services - upgrade Tailscale and restart tailscaled).
 
 If `doctor` reports `BIND_ADDR is X but Tailscale reports Y`, the node's address changed:
-`./bin/devbox env && ./bin/devbox up`.
+`./bin/devbox env && ./bin/devbox start`.
 
 For a failed start, `./bin/devbox logs` (100 lines, `--follow`/`-f` follows) shows the entrypoint's output:
 host-key generation, `authorized_keys` assembly, bootstrap, then `Server listening on 0.0.0.0 port 2222`.
@@ -139,11 +151,11 @@ host-key generation, `authorized_keys` assembly, bootstrap, then `Server listeni
 ## Rolling back and backing up
 
 A rollback is just deploying an earlier commit - the image builds from the repo, no separate artifact to
-revert. `devbox deploy` syncs the working tree; commit or stash first, or in-flight edits ship instead:
+revert. `devbox deploy` syncs the working tree of its runtime paths; commit or stash first, or in-flight edits ship instead:
 
 ```bash
 git stash                                                      # or commit
-git switch --detach <good-commit> && ./bin/devbox deploy <workstation> --up
+git switch --detach <good-commit> && ./bin/devbox deploy <workstation> --start
 git switch - && git stash pop                                  # back to where you were
 ```
 
@@ -158,7 +170,7 @@ ssh -t <workstation> 'sudo rm -f /tmp/devbox-home.tar.gz'
 
 The exclusion drops the project daemon's images, cache, named volumes; dump a database you care about,
 don't tar its volume. Restore: extract into place, preserve `HOST_UID:HOST_GID` ownership, then
-`./bin/devbox up`. Copy the host's `.env` separately - in neither repo nor data dir. The sshd host
+`./bin/devbox start`. Copy the host's `.env` separately - in neither repo nor data dir. The sshd host
 key _is_ in the archive, so restore keeps the laptop's `known_hosts` valid.
 
 ## Repo conventions when the change is yours

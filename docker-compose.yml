@@ -62,8 +62,9 @@ services:
       retries: 3
       start_period: 20s
     # The default bridge, deliberately: docker0 exists whenever the host docker
-    # daemon does, while a compose-managed bridge disappears on `down` and is
-    # recreated on `up`. The rootless project daemon publishes onto this
-    # gateway, so a vanishing interface would leave project containers unable to
-    # bind their ports (docs/docker.md). One service, no compose DNS needed.
+    # daemon does, while a compose-managed bridge disappears on `docker compose
+    # down` and is recreated on `docker compose up`. The rootless project
+    # daemon publishes onto this gateway, so a vanishing interface would leave
+    # project containers unable to bind their ports (docs/docker.md). One
+    # service, no compose DNS needed.
     network_mode: bridge

@@ -26,7 +26,7 @@ upsert_env_key HOST_GID "${owner_gid}"
 addr="$(tailscale_addr)"
 if [[ -z "${addr}" ]]; then
   log_warn 'No Tailscale IPv4 address yet; BIND_ADDR left unset.'
-  log_warn "Run 'sudo tailscale up', then './bin/devbox env' again - 'up' refuses to start without it."
+  log_warn "Run 'sudo tailscale up', then './bin/devbox env' again - 'start' refuses to run without it."
 else
   log_info "Syncing BIND_ADDR to ${addr}..."
   upsert_env_key BIND_ADDR "${addr}"

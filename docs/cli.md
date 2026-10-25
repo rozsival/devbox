@@ -24,7 +24,7 @@
 ### Cheat sheet
 
 ```bash
-./bin/devbox deploy <workstation> --up   # deploy + start (keeps state; asks before killing SSH sessions)
+./bin/devbox deploy <workstation> --start   # deploy + start (keeps state; asks before killing SSH sessions)
 ssh devbox                           # shell in the container
 ssh -A devbox                        # + push, pull, sign as yourself (forwards the 1Password agent)
 herdr                                # attach panes; they survive client exit
@@ -47,11 +47,11 @@ it), **laptop** commands only on macOS, and `install`, `doctor` and `completions
 wrong side exits with a one-line message naming the right one. Log prefixes `[INFO]`, `[OK]`, `[WARN]`, `[ERROR]` are
 the same on both.
 
-| Group       | Commands                                                                                                                     | Side guard                                        |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Workstation | `env`, `up`, `down`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`, `logs`, `hook`, `update`, `keys`, `docker setup` | Linux host that runs the container, not inside it |
-| Laptop      | `deploy`, `sync omp`, `sync claude`, `sync identities`, `agent install`                                                      | macOS only                                        |
-| Both        | `install`, `doctor`, `completions`                                                                                           | Either side                                       |
+| Group       | Commands                                                                                                                        | Side guard                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Workstation | `env`, `start`, `stop`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`, `logs`, `hook`, `update`, `keys`, `docker setup` | Linux host that runs the container, not inside it |
+| Laptop      | `deploy`, `sync omp`, `sync claude`, `sync identities`, `agent install`                                                         | macOS only                                        |
+| Both        | `install`, `doctor`, `completions`                                                                                              | Either side                                       |
 
 `./bin/devbox --help` lists them, `./bin/devbox <command> --help` shows one command's flags, and `--version`/`-v` prints
 the version. `docker`, `sync` and `agent` are only groups: bare, they print their subcommands.
@@ -75,15 +75,16 @@ Run these on the workstation, from the repo (`~/devbox`); from the laptop, prefi
 env` and `.env.example`.
 
 > [!WARNING]
-> `up`, `down` and `rebuild` count established SSH sessions first: recreating or stopping kills them mid-keystroke with
-> no client output, so live sessions get a terminal prompt, or refusal in a script; `--force`/`-f` skips it. A `docker
-compose up` that changes nothing leaves the container running, so a no-op `up` never asks.
+> `start`, `stop` and `rebuild` count established SSH sessions first: recreating or stopping kills them mid-keystroke
+> with no client output, so live sessions get a terminal prompt, or refusal in a script; `--force`/`-f` skips it. A
+> `docker compose up` that changes nothing leaves the container running, so a no-op `start` never asks. `update` never
+> asks: it only execs into the running container.
 
 | Command                  | What it does                                                                                                                                                         |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `env`                    | Create `.env` from `.env.example` and sync `BIND_ADDR`, `HOST_UID` and `HOST_GID` — see [`devbox env`](#devbox-env)                                                  |
-| `up [--force\|-f]`       | Preflight, then build and start the container — see [`devbox up`](#devbox-up)                                                                                        |
-| `down [--force\|-f]`     | Stop and remove the container: `docker compose down`. Bind mount and `.env` untouched                                                                                |
+| `start [--force\|-f]`    | Preflight, then build and start the container, recreating it when the repo changed — see [`devbox start`](#devbox-start)                                             |
+| `stop [--force\|-f]`     | Stop and remove the container: `docker compose down`. Bind mount and `.env` untouched                                                                                |
 | `rebuild [--force\|-f]`  | Rebuild the image from scratch and restart: `docker compose build --no-cache && docker compose up -d`. Use after a `Dockerfile` change                               |
 | `bootstrap`              | Re-run the in-container user setup: `docker compose exec` of `container/bootstrap.sh`; idempotent, reprints the checklist                                            |
 | `skills`                 | Install the optional agent skills and agent-browser — see [`devbox skills`](#devbox-skills)                                                                          |
@@ -91,7 +92,7 @@ compose up` that changes nothing leaves the container running, so a no-op `up` n
 | `sessions`               | List the SSH sessions connected to the container: established sshd connections plus the last 10 `Accepted`/`Disconnected` lines, tracing a disconnect after the fact |
 | `logs [--follow\|-f]`    | Show the container logs (last 100 lines): `--tail 100` by default; `--follow`/`-f` follows                                                                           |
 | `hook [--update\|-u]`    | Restart the moshi-hook daemon in place, without touching SSH sessions — see [`devbox hook`](#devbox-hook)                                                            |
-| `update`                 | Update OMP, Claude Code and moshi-hook in the container, then restart the moshi-hook daemon — see [`devbox update`](#devbox-update)                                  |
+| `update`                 | Upgrade OMP, Claude Code and moshi-hook inside the running container, then restart the moshi-hook daemon; no rebuild — see [`devbox update`](#devbox-update)         |
 | `keys`                   | Print the installed identity public keys and the sshd host-key fingerprint — see [`devbox keys`](#devbox-keys)                                                       |
 | `docker setup [--check]` | Provision the rootless project Docker daemon (needs sudo) — see [`devbox docker setup`](#devbox-docker-setup)                                                        |
 
@@ -100,10 +101,10 @@ compose up` that changes nothing leaves the container running, so a no-op `up` n
 Never clobbers `.env`; sets `BIND_ADDR` from `tailscale ip -4` (left unset, with a warning, when Tailscale has no
 address yet), `HOST_UID`/`HOST_GID` from `dev` if present, else invoking user.
 
-### `devbox up`
+### `devbox start`
 
 ```
-Usage: ./bin/devbox up [--force|-f]
+Usage: ./bin/devbox start [--force|-f]
 ```
 
 Preflight, then `docker compose build` and `docker compose up -d`. The preflight checks:
@@ -112,7 +113,9 @@ Preflight, then `docker compose build` and `docker compose up -d`. The preflight
 - `DEVBOX_DATA_DIR` present, owned `HOST_UID:HOST_GID`, `install -d`'d if absent
 - a missing project Docker socket only _warns_, toward `sudo ./bin/devbox docker setup`
 
-Build precedes the session check — a fresh image alone justifies recreating.
+Build precedes the session check — a fresh image alone justifies recreating. `start` is how a repo change reaches the
+container (a new image or config recreates it); [`update`](#devbox-update) upgrades the agent tools in the running
+container instead and never rebuilds or recreates it.
 
 ### `devbox skills`
 
@@ -194,25 +197,26 @@ Finish with `./bin/devbox rebuild` as your own user.
 
 Run these on the macOS laptop, from the repo checkout. `deploy`, `sync omp`, `sync claude` and `sync identities` need
 `rsync` and `ssh` (`sync claude` also `jq`); a missing `rsync` fails up front with a `brew install rsync` remedy.
+`deploy` needs **GNU** rsync, not macOS's `/usr/bin/rsync` — see [the FAQ](#rsync-is-not-gnu-rsync-on-deploy).
 
-| Command                               | What it does                                                                                                                       |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `deploy [HOST] [--up] [--force\|-f]`  | Sync this repo to the workstation, optionally bringing the container up — see [`devbox deploy`](#devbox-deploy)                    |
-| `sync omp [HOST] [--allow-unguarded]` | Apply the repo's OMP preset to this laptop and the devbox — see [`devbox sync omp`](#devbox-sync-omp)                              |
-| `sync claude [HOST]`                  | Merge the repo's Claude Code preset into this laptop's and the devbox's settings — see [`devbox sync claude`](#devbox-sync-claude) |
-| `sync identities [HOST]`              | Copy the laptop's identity registry into the devbox and apply it — see [`devbox sync identities`](#devbox-sync-identities)         |
-| `agent install`                       | Install the agent git override on this laptop — see [`devbox agent install`](#devbox-agent-install)                                |
+| Command                                 | What it does                                                                                                                       |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy [HOST] [--start] [--force\|-f]` | Sync the runtime files of this repo to the workstation, optionally starting the container — see [`devbox deploy`](#devbox-deploy)  |
+| `sync omp [HOST] [--allow-unguarded]`   | Apply the repo's OMP preset to this laptop and the devbox — see [`devbox sync omp`](#devbox-sync-omp)                              |
+| `sync claude [HOST]`                    | Merge the repo's Claude Code preset into this laptop's and the devbox's settings — see [`devbox sync claude`](#devbox-sync-claude) |
+| `sync identities [HOST]`                | Copy the laptop's identity registry into the devbox and apply it — see [`devbox sync identities`](#devbox-sync-identities)         |
+| `agent install`                         | Install the agent git override on this laptop — see [`devbox agent install`](#devbox-agent-install)                                |
 
 ### `devbox deploy`
 
 ```
-Usage: ./bin/devbox deploy [HOST] [--up] [--force|-f]
+Usage: ./bin/devbox deploy [HOST] [--start] [--force|-f]
 
   HOST     Workstation SSH host (default: $DEVBOX_HOST, or DEVBOX_HOST in .push.env)
 
 Options:
-  --up     Run './bin/devbox up' on the workstation after syncing
-  --force  Pass --force to that 'up': recreate even with live SSH sessions (needs --up)
+  --start  Run './bin/devbox start' on the workstation after syncing
+  --force  Pass --force to that 'start': recreate even with live SSH sessions (needs --start)
 
 Environment:
   DEVBOX_HOST         default SSH host; may also be set in .push.env beside this
@@ -224,19 +228,29 @@ No default host ships in the repo — the workstation's SSH alias is per-laptop,
 `$DEVBOX_HOST`, or `DEVBOX_HOST=<alias>` in `.push.env` beside the repo (gitignored), in that order; none of the three
 set errors out naming all three ways to fix it.
 
-Sync: `rsync -az --delete` excluding `.git`, `.env`, `data/` and `.DS_Store`. Checks for `rsync` on the laptop (via the
-command's dependency check) and on the workstation first, printing the exact remedy if missing.
+Sync: only the runtime files travel — an allowlist, not the working tree: `bin/`, `container/`, `home/`, `Dockerfile`,
+`docker-compose.yml` and `.env.example` (`.DS_Store` excluded inside them). It is `rsync -az --delete
+--delete-excluded`, so anything else on the workstation — `docs/`, `.agents/`, `.claude/`, `.idea/`, `Makefile`,
+prettier and editor configs, `README.md`, leftovers of earlier deploys — is removed, except the host's own state, which
+is protected: `/.env`, `/data/`, `/docker-compose.override.yml` and `/.git/`. Uncommitted edits to the allowlisted paths
+still ship, since it syncs the working tree of those paths. A new runtime path must be added to the `filters` array in
+`cli/commands/deploy.sh`, or it never reaches the workstation.
+
+`deploy` refuses to run unless the laptop's `rsync` is GNU rsync: macOS's `/usr/bin/rsync` is openrsync, which accepts
+the protect rules and silently ignores them, so `--delete-excluded` would delete the workstation's `.env`, `data/` and
+`.git`. `brew install rsync`, with Homebrew's `bin` ahead of `/usr/bin` on the `PATH`. It also checks for `rsync` on the
+workstation first, printing the exact remedy if missing.
 
 After the sync it runs `bin/devbox install` on the workstation, so `devbox` and its completion stay on its PATH; a
-problem there is reported without failing the deploy. `--up` then runs the remote `up` over `ssh -t`, so a
+problem there is reported without failing the deploy. `--start` then runs the remote `start` over `ssh -t`, so a
 recreate-with-sessions prompt reaches your terminal instead of failing the deploy; `--force` answers it up front, and is
-rejected without `--up`.
+rejected without `--start`.
 
 ```bash
 echo 'DEVBOX_HOST=<workstation>' >.push.env   # once, so every bare ./bin/devbox deploy below resolves it
 ./bin/devbox deploy                            # sync only
-./bin/devbox deploy --up                       # sync, then build and start
-./bin/devbox deploy --up --force               # ... even if SSH sessions are connected
+./bin/devbox deploy --start                    # sync, then build and start
+./bin/devbox deploy --start --force            # ... even if SSH sessions are connected
 DEVBOX_REMOTE_PATH=~/devbox-test ./bin/devbox deploy <workstation>
 ```
 
@@ -413,7 +427,7 @@ container has no docker and no keys). Naming a side the machine is not is refuse
 | 8   | Agent git override intact: `omp` and `claude` each resolve through a symlink to their launcher (`omp-launcher`, `claude-launcher`), never a plain file an update could have replaced ([Git Identities](git.md#updates-omp-update-claude-update))                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 9   | `~/.config/devbox/identities.conf` passes `devbox-identities check` — a failing registry is reported here with the reader's own message, and skips every identity-derived check below rather than failing them individually                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 10  | `~/.config/devbox/git/agent.gitconfig` plus one `agent-<slug>.gitconfig` per registry identity that claims a `dir`, each matching a fresh render, in a directory still read-only — a `git config --global` in a session writes there, and once put the user's own identity on agent commits; an `agent-*.gitconfig` left over from a renamed or dropped identity is flagged too ([Git Identities](git.md#-agent-sessions))                                                                                                                                                                                                                                                              |
-| 11  | Agent context current, by `container/agent-context check devbox`: the image's `/etc/devbox-env` marker behind `DEVBOX_ENV=devbox` (missing until `up`/`rebuild` builds a new image), `~/.config/devbox/agent-context.md` matching the devbox template, the `@~/.config/devbox/agent-context.md` line in `~/.claude/CLAUDE.md`, the `devbox-runtime` skill and its `~/.claude/skills` link, `claude` in OMP's `enabledProviders` and no `~/.omp/agent/AGENTS.md` shadowing it ([Toolchain](toolchain.md#-which-machine-the-agent-context))                                                                                                                                               |
+| 11  | Agent context current, by `container/agent-context check devbox`: the image's `/etc/devbox-env` marker behind `DEVBOX_ENV=devbox` (missing until `start`/`rebuild` builds a new image), `~/.config/devbox/agent-context.md` matching the devbox template, the `@~/.config/devbox/agent-context.md` line in `~/.claude/CLAUDE.md`, the `devbox-runtime` skill and its `~/.claude/skills` link, `claude` in OMP's `enabledProviders` and no `~/.omp/agent/AGENTS.md` shadowing it ([Toolchain](toolchain.md#-which-machine-the-agent-context))                                                                                                                                            |
 | 12  | `moshi-hook` daemon installed and running — unpaired warns, doesn't fail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | 13  | Project Docker daemon reachable from the container, reporting `rootless`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | 14  | `host.docker.internal` resolves inside the container to the project daemon's published address (`--ip` in `/etc/systemd/user/docker.service`) — a mismatch strands every published project port                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -549,20 +563,30 @@ bashly to run it. The cost is the regenerate step — see [Maintainer workflow](
 macOS ships bash 3.2 as `/bin/bash`. `brew install bash`, and make sure Homebrew's `bin` is on the `PATH` ahead of
 `/bin` so `/usr/bin/env bash` finds it.
 
-### Can I run `up`, `shell` and the other workstation commands from the laptop?
+### Can I run `start`, `shell` and the other workstation commands from the laptop?
 
 No — they drive the local Docker daemon and refuse to run off the host. Use `ssh <workstation> 'cd ~/devbox &&
-./bin/devbox <cmd>'`, or `./bin/devbox deploy --up` for the common case.
+./bin/devbox <cmd>'`, or `./bin/devbox deploy --start` for the common case.
 
 ### Is `--delete` dangerous?
 
-Only applies to synced paths — `.env`, `data/` and `.git` are excluded. Files added to a _tracked_ directory's remote
-copy are removed; intentional, the remote is a mirror.
+Only the allowlisted paths (`bin/`, `container/`, `home/`, `Dockerfile`, `docker-compose.yml`, `.env.example`) are
+synced, and `--delete-excluded` also removes everything else on the workstation's copy — `docs/`, `.agents/`, editor
+configs, files left by older deploys. That is intentional: the remote is a runtime mirror, not a checkout. Host state is
+protected and never touched: `.env`, `data/`, `docker-compose.override.yml` and `.git/`. Hand-added files in a synced
+directory are removed too.
+
+### `rsync is not GNU rsync` on `deploy`.
+
+macOS's `/usr/bin/rsync` is openrsync. It accepts the protect rules `deploy` uses to keep the workstation's `.env`,
+`data/` and `.git`, then ignores them, so `--delete-excluded` would wipe them — hence the refusal. `brew install rsync`
+and put Homebrew's `bin` (`/opt/homebrew/bin`) ahead of `/usr/bin` on the `PATH`; `rsync --version` then reports `rsync
+version 3.x`.
 
 ### Why is it `--allow-unguarded` on `sync omp` and not `--force`?
 
-`--force` means exactly one thing across the CLI: go past the live-session prompt (`up`, `down`, `rebuild`, `deploy
---up`). Skipping the OMP guardrail check is a different decision and gets its own name.
+`--force` means exactly one thing across the CLI: go past the live-session prompt (`start`, `stop`, `rebuild`, `deploy
+--start`). Skipping the OMP guardrail check is a different decision and gets its own name.
 
 ### Why does `sync claude` merge instead of copy like `sync omp`?
 
@@ -573,10 +597,11 @@ replaced whole, so a rule removed from the preset disappears too. Unlike that fi
 with other writers, so `sync omp` copies it. A merge also cannot drop the live rules unless the preset itself sets an
 empty array, so `sync claude` needs no `--allow-unguarded`. See [Toolchain](toolchain.md#-claude-code).
 
-### `up` vs `rebuild` — which do I need?
+### `start` vs `rebuild` vs `update` — which do I need?
 
-`up` after a compose, `.env`, `container/` or `home/` change — rebuilds changed layers. `rebuild` for a cache-free
-image, e.g. after bumping a pinned version.
+`start` after a compose, `.env`, `Dockerfile`, `container/` or `home/` change — rebuilds changed layers and recreates the
+container. `rebuild` for a cache-free image, e.g. after bumping a pinned version. `update` neither: it upgrades OMP,
+Claude Code and moshi-hook inside the running container, so no session is dropped and no repo change is applied.
 
 ### Does `bootstrap` overwrite my dotfiles?
 
@@ -587,7 +612,7 @@ identity-registry values re-apply via `git config --global` each run.
 
 ### `doctor` says `BIND_ADDR is X but Tailscale reports Y`.
 
-The node's Tailscale address changed. `./bin/devbox env && ./bin/devbox up`.
+The node's Tailscale address changed. `./bin/devbox env && ./bin/devbox start`.
 
 ### How do I tell whether the project Docker daemon is provisioned?
 

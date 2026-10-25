@@ -17,7 +17,7 @@ rootless project Docker daemon - never the host filesystem or its root Docker da
 ```
 laptop                    <workstation> (host)              container "devbox"
 herdr client   --ssh-->   BIND_ADDR:2223  --DNAT-->          :2222  sshd running as dev
-devbox deploy  --rsync->  ~/devbox (the repo)                /home/dev  <- bind mount of
+devbox deploy  --rsync->  ~/devbox (runtime files)             /home/dev  <- bind mount of
                           ${DEVBOX_DATA_DIR}                 ${DEVBOX_DATA_DIR}
 ```
 
@@ -30,9 +30,9 @@ Four facts:
    surviving: installed packages, `/opt/nvm`, `/opt/cargo`, `/opt/ruby` gems (writable layer, lost on recreate).
 3. **The published port is the entire network boundary**: `${BIND_ADDR}:2223:2222` in `docker-compose.yml`
    plus `127.0.0.1:2223`. Docker's DNAT matches the bound address, so UFW can't restrict it - binding to the
-   Tailscale IP keeps devbox off the public internet. An empty `BIND_ADDR` makes `./bin/devbox up` - and
+   Tailscale IP keeps devbox off the public internet. An empty `BIND_ADDR` makes `./bin/devbox start` - and
    compose itself, via `${BIND_ADDR:?}` - refuse to start rather than publish on `0.0.0.0`; commands that
-   load the compose project (`up`, `down`, `logs`, `ps`) fail until `./bin/devbox env` fills it, while
+   load the compose project (`start`, `stop`, `logs`, `ps`) fail until `./bin/devbox env` fills it, while
    exec-based ones (`shell`, `bootstrap`, `hook`) still work, so the recovery shell stays available.
 4. **No root, no root socket.** `USER dev`, PID 1 `dev`, `cap_drop: [ALL]`, `no-new-privileges`; the host's
    root Docker socket is never mounted. Project containers come from a _second_ daemon: a rootless

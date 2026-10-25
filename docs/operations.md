@@ -11,12 +11,18 @@
 ## 🚀 Redeploy
 
 ```bash
-./bin/devbox deploy <workstation> --up
+./bin/devbox deploy <workstation> --start
 ```
 
-Repeatable and non-destructive: `.env`, `${DEVBOX_DATA_DIR}`, identity public keys and the sshd host key survive;
-`bootstrap` re-runs as a no-op. Verify with `./bin/devbox keys` — public keys and host-key fingerprint must match before
-and after.
+Repeatable and non-destructive: `.env`, `docker-compose.override.yml`, `data/`, `.git/`, `${DEVBOX_DATA_DIR}`, identity
+public keys and the sshd host key survive; `bootstrap` re-runs as a no-op. Verify with `./bin/devbox keys` — public keys
+and host-key fingerprint must match before and after.
+
+Only the runtime files travel (`bin/`, `container/`, `home/`, `Dockerfile`, `docker-compose.yml`, `.env.example`), and
+the workstation's copy is pruned to that list, so `docs/`, `.agents/` and the like are never there. `deploy` needs GNU
+rsync on the laptop (`brew install rsync`) — see the [CLI reference](cli.md#devbox-deploy). `--start` is `start` on the
+workstation: it applies the synced repo to the container. `./bin/devbox update` is the other direction — it upgrades OMP,
+Claude Code and moshi-hook inside the running container and applies no repo change.
 
 A deploy that changes `cli/lib/docker_setup.sh` — the boundary ruleset, the daemon's unit, its user manager's drop-in —
 also needs `ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'`: until then the host keeps the old
@@ -29,7 +35,7 @@ files. `doctor` flags a stale ruleset, firewall unit or drop-in and sshd's effec
 > a container slower to stop; one without a restart policy stays down until its `docker compose up -d`. The devbox
 > itself runs on the host's root daemon and keeps going. Re-runs are no-ops once everything is current.
 
-Use `rebuild` over `up` for a cache-free image after a pinned version changes:
+Use `rebuild` over `start` for a cache-free image after a pinned version changes:
 
 ```bash
 ssh <workstation> 'cd ~/devbox && ./bin/devbox rebuild && ./bin/devbox doctor'
@@ -53,7 +59,7 @@ everything, including the client's `known_hosts` entry.
 | -------------------------------- | ---------- | ------------- |
 | herdr client killed / lid closed | kept       | **kept**      |
 | `docker compose restart`         | kept       | lost          |
-| `./bin/devbox down` + `up`       | kept       | lost          |
+| `./bin/devbox stop` + `start`    | kept       | lost          |
 | `./bin/devbox rebuild`           | kept       | lost          |
 | `${DEVBOX_DATA_DIR}` deleted     | lost       | lost          |
 
@@ -82,7 +88,7 @@ it restores every registered identity — no re-running the manual checklist per
 > (`docker compose exec db pg_dump …`), which is the portable copy anyway.
 
 **Restore:** extract into place with ownership preserved (`HOST_UID:HOST_GID`, i.e. `dev:devbox`), then
-`./bin/devbox up`. Copy the host's `.env` separately — it's in neither the repo nor the data dir.
+`./bin/devbox start`. Copy the host's `.env` separately — it's in neither the repo nor the data dir.
 
 ## 🩺 Health
 
@@ -110,9 +116,9 @@ The 1Password agent serving the devbox key is locked or hasn't approved it for h
 prompts. Unlock and approve; if it persists, use the documented file-key exception — see
 [Installation](installation.md#1-create-the-laptop-key).
 
-### `up` fails with `BIND_ADDR is empty`
+### `start` fails with `BIND_ADDR is empty`
 
-Preflight working as intended — every command that loads the compose project (`up`, `down`, `logs`, `ps`) fails until
+Preflight working as intended — every command that loads the compose project (`start`, `stop`, `logs`, `ps`) fails until
 it's set; the exec-based ones (`shell`, `bootstrap`, `hook`) still work, so the recovery shell stays available. Run
 `./bin/devbox env` (Tailscale must be up first); a box already published on `0.0.0.0` goes with
 `docker rm -f devbox`.
@@ -122,7 +128,7 @@ it's set; the exec-based ones (`shell`, `bootstrap`, `hook`) still work, so the 
 > [!CAUTION]
 > A `ports` entry lost its address scope — the devbox is internet-exposed until fixed.
 
-Correct `docker-compose.yml`, then `up`.
+Correct `docker-compose.yml`, then `start`.
 
 ### Container is `unhealthy`
 
@@ -139,7 +145,7 @@ Data dir was recreated, so the host key is new. Run `ssh-keygen -R '[<workstatio
 
 ### A globally installed package "disappeared"
 
-The container's writable layer is lost on recreate (`rebuild`, or `down`/`up` onto a new image) — `npm install -g <pkg>`
+The container's writable layer is lost on recreate (`rebuild`, or `stop`/`start` onto a new image) — `npm install -g <pkg>`
 and `nvm install <version>` write to `/opt`, not the bind mount. Pin it in the `Dockerfile` instead — see
 [Toolchain](toolchain.md#-adding-a-tool).
 
@@ -162,9 +168,9 @@ bind-mount sources on the host. `sudo ./bin/devbox docker setup --check` reports
 The container went away under the session, killing sshd with it — nothing sent a disconnect, so the client just sees the
 socket close. Three things do that:
 
-1. **A deploy.** `./bin/devbox up` after an `.env`, `docker-compose.yml` or `Dockerfile` change recreates the container;
-   `rebuild`/`down` always do. All three count live sessions and prompt first; `./bin/devbox sessions` shows who's
-   connected before deploying.
+1. **A deploy.** `./bin/devbox start` after an `.env`, `docker-compose.yml` or `Dockerfile` change recreates the
+   container; `rebuild`/`stop` always do. All three count live sessions and prompt first; `./bin/devbox sessions` shows
+   who's connected before deploying.
 2. **A Docker restart on the host.** A manual `sudo apt upgrade` pulling `docker-ce` or `containerd.io` restarts the
    daemon and every container — `grep -h Upgrade /var/log/apt/history.log | grep -E 'docker|containerd'` dates it.
    `unattended-upgrades` alone won't: `Allowed-Origins` in `/etc/apt/apt.conf.d/50unattended-upgrades` lists only Ubuntu
@@ -181,12 +187,12 @@ A session that merely _hangs_ is the opposite — the network; `ClientAliveInter
 
 ### Does the container come back after a host reboot?
 
-Yes — `restart: unless-stopped`. Tailscale must be up for the published address to bind; boot without it, run `up` again
+Yes — `restart: unless-stopped`. Tailscale must be up for the published address to bind; boot without it, run `start`
 once it is.
 
 ### How do I stop everything without losing state?
 
-`./bin/devbox down`. State is on the bind mount; only running processes end.
+`./bin/devbox stop`. State is on the bind mount; only running processes end.
 
 ### Can I run two devboxes on one host?
 
@@ -196,10 +202,14 @@ name. A second checkout needs a `docker-compose.override.yml` changing `containe
 
 ### How do I see what changed before deploying?
 
-Rehearse the sync with `-n`:
+Rehearse the sync with `-n`, using the same filters as `cli/commands/deploy.sh` (GNU rsync, as `deploy` itself):
 
 ```bash
-rsync -azni --delete --exclude .git --exclude .env --exclude 'data/' --exclude .DS_Store ./ <workstation>:devbox/
+rsync -azni --delete --delete-excluded \
+  --filter 'P /.env' --filter 'P /data/' --filter 'P /docker-compose.override.yml' --filter 'P /.git/' \
+  --exclude .DS_Store --include '/bin/***' --include '/container/***' --include '/home/***' \
+  --include /Dockerfile --include /docker-compose.yml --include /.env.example --exclude '*' \
+  ./ <workstation>:devbox/
 ```
 
 ### Is `bootstrap` safe to run while I am working in a pane?
@@ -214,5 +224,5 @@ failures appear there.
 ### How do I move the devbox to another workstation?
 
 `./bin/devbox deploy <new-workstation>`, then `./bin/devbox env` there, restore the data tarball (or start fresh,
-re-running the [manual checklist](secrets.md#-manual-checklist)), then `./bin/devbox up`. The SSH host key comes from
+re-running the [manual checklist](secrets.md#-manual-checklist)), then `./bin/devbox start`. The SSH host key comes from
 the data dir, so a restore keeps the laptop's `known_hosts` valid.

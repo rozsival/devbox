@@ -65,14 +65,15 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox env'
 `env` creates `.env` from `.env.example` (never clobbers an existing), filling `BIND_ADDR` from
 `tailscale ip -4` plus `HOST_UID`/`HOST_GID` - the dedicated `dev` host user if it exists, else the invoking
 user. Tailscale must be up first: down means no address to write, and every command that loads the compose
-project (`up`, `down`, `logs`, `ps`) refuses the empty value - exec-based ones (`shell`, `bootstrap`,
+project (`start`, `stop`, `logs`, `ps`) refuses the empty value - exec-based ones (`shell`, `bootstrap`,
 `hook`) still work, so the recovery shell stays available. Then edit `~/devbox/.env` on the workstation -
 at minimum, `devbox.pub`
 in `DEVBOX_EXTRA_AUTHORIZED_KEYS` (newline-separated).
 
-`.env` is gitignored **and** excluded from `devbox deploy`, so later deploys never touch it.
+`.env` is gitignored **and** protected from `devbox deploy`, so later deploys never touch it. `deploy` ships only the
+runtime files and needs GNU rsync on the laptop (`brew install rsync`, ahead of macOS's openrsync on the `PATH`).
 
-Next is phase 4, not `up`: project Docker moves the data directory and refuses while the container runs.
+Next is phase 4, not `start`: project Docker moves the data directory and refuses while the container runs.
 
 ## Phase 4 - project Docker (on the workstation, once)
 
@@ -101,7 +102,7 @@ predates it.
 
 Two caveats (`docs/docker.md`):
 
-- **Run it before the first `up`, or after `./bin/devbox down`.** It refuses while the container runs - it
+- **Run it before the first `start`, or after `./bin/devbox stop`.** It refuses while the container runs - it
   moves the bind mount out from under it. Nothing's destroyed - just `mv` plus `chown`; keys, repos, `gh`
   login survive.
 - **`DEVBOX_DATA_DIR` must end up as `/home/dev`.** The daemon resolves a project's bind mounts as host
@@ -110,7 +111,7 @@ Two caveats (`docs/docker.md`):
 Then start the container:
 
 ```bash
-ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
+ssh <workstation> 'cd ~/devbox && ./bin/devbox start && ./bin/devbox doctor'
 ```
 
 `doctor` is the acceptance test for phases 3 and 4: compose; `BIND_ADDR` vs Tailscale; running tailscaled at
@@ -119,7 +120,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
 active and current; toolchain probes - exits non-zero on any failure. Then `ssh devbox 'docker run --rm hello-world'`.
 
 If the node's Tailscale address changes later, `doctor` reports `BIND_ADDR is X but Tailscale reports Y`;
-re-run `./bin/devbox env && ./bin/devbox up`.
+re-run `./bin/devbox env && ./bin/devbox start`.
 
 ## Phase 5 - attach herdr and finish the identity steps
 
@@ -145,7 +146,7 @@ register on GitHub - already your normal, registered laptop keys.
    it would give agent commits the placeholder author) - then fill it in: one `[slug]` block per account, `pubkey`/
    `signing_pubkey` set to
    the public keys `git config user.signingkey` prints for that account on the laptop, then
-   `./bin/devbox up` - until then, manual git over a forwarded agent (`ssh -A devbox`) can't pick a key,
+   `./bin/devbox start` - until then, manual git over a forwarded agent (`ssh -A devbox`) can't pick a key,
    commits sign with nothing. A prior bootstrap's private key is deleted this run, fingerprint printed to
    revoke.
 2. Put one fine-grained, **read-only** GitHub token per identity in `~/.config/devbox/secrets.env`:
@@ -190,14 +191,14 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # agent skills + agent-
 `skills` installs `skill-creator` and `find-skills` into `~/.agents/skills` (OMP's skills dir) and symlinks each into
 `~/.claude/skills` (Claude Code's), plus the `agent-browser` CLI and Chrome build. Separate from bootstrap
 since the first run downloads ~180 MB, needs
-Chrome shared libraries the `Dockerfile` provides - run after an `up` on the current image, not stale. Both
+Chrome shared libraries the `Dockerfile` provides - run after a `start` on the current image, not stale. Both
 idempotent; details: `docs/toolchain.md#-agent-skills-and-browser-automation`.
 
 ## When setup does not work
 
 | Symptom                                 | Cause and fix                                                                                                                                                                    |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `up` aborts on empty `BIND_ADDR`        | Preflight by design - Tailscale up, then `env`                                                                                                                                   |
+| `start` aborts on empty `BIND_ADDR`     | Preflight by design - Tailscale up, then `env`                                                                                                                                   |
 | `Too many authentication failures`      | `IdentitiesOnly yes` missing from that `Host` block (which names exactly one key: `devbox.pub` / `id_<slug>.pub`)                                                                |
 | `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS`; restart (never register `devbox.pub` on GitHub)                                                                                       |
 | herdr machine stuck `offline`           | `~/.ssh/config` no longer parses (`ssh -G devbox` names the line; herdr's system `ssh -o BatchMode=yes` logs only `connection was lost`), or 1Password locked / key not approved |

@@ -13,16 +13,16 @@ commands:
     help: Create .env from .env.example and sync BIND_ADDR, HOST_UID and HOST_GID
     filters: [host]
 
-  - name: up
+  - name: start
     group: Workstation
-    help: Preflight, then build and start the container
+    help: Build the image and start the container, recreating it when the repo changed
     filters: [host]
     flags: &force
       - long: --force
         short: -f
         help: Skip the prompt when live SSH sessions would be killed
 
-  - name: down
+  - name: stop
     group: Workstation
     help: Stop and remove the container
     filters: [host]
@@ -74,7 +74,7 @@ commands:
 
   - name: update
     group: Workstation
-    help: Update OMP, Claude Code and moshi-hook in the container, then restart the moshi-hook daemon
+    help: Update OMP, Claude Code and moshi-hook in the running container and restart the hook daemon; no rebuild
     filters: [host]
 
   - name: keys
@@ -114,7 +114,7 @@ commands:
   # -- Laptop -------------------------------------------------------------------
   - name: deploy
     group: Laptop
-    help: Sync this repo to the workstation, optionally bringing the container up
+    help: Sync the runtime files of this repo to the workstation, optionally starting the container
     filters: [laptop]
     dependencies:
       rsync: brew install rsync
@@ -125,12 +125,12 @@ commands:
         completions:
           dynamic: [completion_ssh_hosts]
     flags:
-      - long: --up
-        help: Run './bin/devbox up' on the workstation after syncing
+      - long: --start
+        help: Run './bin/devbox start' on the workstation after syncing
       - long: --force
         short: -f
-        help: Pass --force to that 'up' - recreate even with live SSH sessions
-        needs: [--up]
+        help: Pass --force to that 'start' - recreate even with live SSH sessions
+        needs: [--start]
     environment_variables:
       - name: devbox_host
         help: Default workstation SSH host; may also be set in .push.env (gitignored)

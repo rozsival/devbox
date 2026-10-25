@@ -61,9 +61,13 @@ There is no CI and no test suite: `make check` proves the source, and a change i
 
 ## 🚚 Shipping a change
 
-There are no releases: `./bin/devbox deploy` rsyncs the working tree to `~/devbox` on the workstation (excluding
-`.git`, `.env`, `data/` and `.DS_Store`), and `--up` applies it. What a change needs after the sync — `up`,
-`rebuild`, `bootstrap` or nothing — is in [Operations](operations.md#-redeploy) and the `devbox-deploy` skill.
+There are no releases: `./bin/devbox deploy` rsyncs the runtime files of the working tree to `~/devbox` on the
+workstation — an allowlist (`bin/`, `container/`, `home/`, `Dockerfile`, `docker-compose.yml`, `.env.example`), with
+everything else on the remote removed except `.env`, `data/`, `docker-compose.override.yml` and `.git/` — and `--start`
+applies it. A new runtime path must be added to the `filters` array in `cli/commands/deploy.sh`, or it never ships. It
+needs GNU rsync on the laptop (`brew install rsync`): macOS's openrsync would ignore the protect rules. What a change
+needs after the sync — `start`, `rebuild`, `bootstrap` or nothing — is in [Operations](operations.md#-redeploy) and the
+`devbox-deploy` skill.
 
 ## 🤖 Agent assets
 
@@ -109,5 +113,6 @@ stays in `AGENTS.md` or a skill.
 
 ### How do I test a change before committing it?
 
-`./bin/devbox deploy <workstation> --up`, then `./bin/devbox doctor` on the workstation and `./bin/devbox doctor
-laptop` on the laptop for laptop-side changes. `deploy` syncs the working tree, so nothing needs committing first.
+`./bin/devbox deploy <workstation> --start`, then `./bin/devbox doctor` on the workstation and `./bin/devbox doctor
+laptop` on the laptop for laptop-side changes. `deploy` syncs the working tree of the runtime paths, so nothing needs
+committing first; docs and skills never reach the workstation.

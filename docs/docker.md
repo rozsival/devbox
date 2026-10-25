@@ -207,7 +207,7 @@ restart's `nft -f` replaces it atomically. Deleting it on stop opened a gap on e
 therefore takes both: `sudo systemctl disable --now devbox-docker-firewall && sudo nft delete table inet devbox`.
 
 The devbox deliberately sits on the _default_ bridge (`network_mode: bridge`): `docker0` exists whenever the host
-daemon does, while a compose-managed bridge is removed by `./bin/devbox down` and recreated with a new address — both
+daemon does, while a compose-managed bridge is removed by `docker compose down` (`./bin/devbox stop`) and recreated with a new address — both
 the publish address and the boundary table's interface are keyed to it.
 
 ## 📁 Path identity

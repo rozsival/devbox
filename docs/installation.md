@@ -10,14 +10,16 @@
 
 ## 🧰 Prerequisites
 
-| Where       | Requirement                                                                         |
-| ----------- | ----------------------------------------------------------------------------------- |
-| Workstation | Ubuntu 26.04, Docker with compose v2, Tailscale ≥ 1.98 up, `rsync`, a known UID/GID |
-| Laptop      | `rsync`, `jq`, an SSH client, and a [herdr](https://herdr.dev) client               |
-|             | bash ≥ 4.2 (`brew install bash`) — macOS's 3.2 can't run `./bin/devbox`             |
+| Where       | Requirement                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------ |
+| Workstation | Ubuntu 26.04, Docker with compose v2, Tailscale ≥ 1.98 up, `rsync`, a known UID/GID              |
+| Laptop      | GNU `rsync` (`brew install rsync`), `jq`, an SSH client, and a [herdr](https://herdr.dev) client |
+|             | bash ≥ 4.2 (`brew install bash`) — macOS's 3.2 can't run `./bin/devbox`                          |
 
 `./bin/devbox` is bashly-generated and refuses older bash; Homebrew's bash, first on the `PATH`, is the one
-`#!/usr/bin/env bash` finds. The workstation's Ubuntu bash is new enough.
+`#!/usr/bin/env bash` finds. The workstation's Ubuntu bash is new enough. The same goes for `rsync`: macOS's
+`/usr/bin/rsync` is openrsync, which `devbox deploy` refuses (it ignores the rules that protect the workstation's
+`.env`, `data/` and `.git`), so Homebrew's GNU rsync must come first on the `PATH` too.
 
 Tailscale before 1.98 relays its LocalAPI `dial` to any address as root, the host's sshd and loopback services
 included, for anything that can reach `/run/tailscale/tailscaled.sock` — a project container can bind-mount it. 1.98
@@ -134,7 +136,8 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox env'
 
 `install` symlinks `~/.local/bin/devbox` onto this checkout and installs its bash completion; every `deploy` does the
 same on the workstation, so from then on `devbox <TAB>` works in any new shell on either machine. See
-[`devbox install`](cli.md#-devbox-install).
+[`devbox install`](cli.md#-devbox-install). `deploy` ships only the runtime files (`bin/`, `container/`, `home/`,
+`Dockerfile`, `docker-compose.yml`, `.env.example`), not `docs/` or the agent skills.
 
 `.push.env` (gitignored) holds `DEVBOX_HOST`, the default for `deploy`'s `<workstation>` argument, and optionally
 `DEVBOX_SSH_HOST`, the `~/.ssh/config` host `sync omp`, `sync claude` and `sync identities` use for the container (default
@@ -144,7 +147,7 @@ same on the workstation, so from then on `devbox <TAB>` works in any new shell o
 current user). Edit `~/devbox/.env`, at minimum `DEVBOX_EXTRA_AUTHORIZED_KEYS` with `devbox.pub`.
 
 Provision the project Docker daemon once: needs `.env` present, moves `DEVBOX_DATA_DIR` to `/home/dev` under `dev`,
-refusing while the container runs (before the first `up`):
+refusing while the container runs (before the first `start`):
 
 ```bash
 ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'
@@ -153,7 +156,7 @@ ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'
 `--check` reports what's missing, unchanged otherwise; see [Docker](docker.md). Then start the container:
 
 ```bash
-ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
+ssh <workstation> 'cd ~/devbox && ./bin/devbox start && ./bin/devbox doctor'
 ```
 
 First boot leaves `~/.config/devbox/identities.conf` absent and prints the command that creates it:
@@ -168,7 +171,7 @@ agent gitconfigs and `allowed_signers` from it. It lives on the bind mount, so i
 [Git Identities](git.md).
 
 > [!NOTE]
-> `.env` is gitignored **and** excluded from `devbox deploy` — deploys leave it untouched.
+> `.env` is gitignored **and** protected from `devbox deploy` — deploys leave it untouched.
 
 ### 4. Attach herdr
 
@@ -248,7 +251,7 @@ fixes. Details: [CLI Reference](cli.md#-devbox-doctor).
 
 | Variable                       | Default                | Purpose                                                         |
 | ------------------------------ | ---------------------- | --------------------------------------------------------------- |
-| `BIND_ADDR`                    | _(empty)_              | Publish address; empty = `up`, `down`, `logs`, `ps` refuse      |
+| `BIND_ADDR`                    | _(empty)_              | Publish address; empty = `start`, `stop`, `logs`, `ps` refuse   |
 | `DEVBOX_SSH_PORT`              | `2223`                 | Host port (container always uses `2222`)                        |
 | `DEVBOX_DATA_DIR`              | `/home/dev`            | Host path; must equal container home (path identity)            |
 | `HOST_UID` / `HOST_GID`        | `1001`                 | Dedicated `dev` host user; owns the data dir and project daemon |
@@ -282,7 +285,7 @@ rotating a key is a restart, not an edit. Narrow trust: clear `DEVBOX_GITHUB_USE
 ### How do I authorize another client — a phone, a second laptop?
 
 Append its public key to `DEVBOX_EXTRA_AUTHORIZED_KEYS` in `.env` **on the workstation** (`<workstation>:~/devbox/.env`;
-never synced by `devbox deploy`), run `./bin/devbox up`. Values newline-separate in one quoted pair — compose passes
+never synced by `devbox deploy`), run `./bin/devbox start`. Values newline-separate in one quoted pair — compose passes
 them intact:
 
 ```bash
@@ -290,7 +293,7 @@ DEVBOX_EXTRA_AUTHORIZED_KEYS="ssh-ed25519 AAAA…O/L+ laptop-devbox
 ssh-ed25519 AAAA…a0iNF iphone"
 ```
 
-`up` recreates the container, re-reading `.env` — `docker restart` keeps the old environment. Confirm with
+`start` recreates the container, re-reading `.env` — `docker restart` keeps the old environment. Confirm with
 `docker compose exec devbox ssh-keygen -lf /home/dev/.ssh/authorized_keys`. Client still needs the tailnet: port
 publishes only on `BIND_ADDR`.
 
@@ -300,10 +303,10 @@ No. Every key — devbox key, every GitHub identity — is a 1Password item; `~/
 file key: herdr's background connection failing while 1Password is locked ([step 1](#1-create-the-laptop-key)) —
 serving the `devbox` block only.
 
-### `up` failed with an empty `BIND_ADDR`. Is that a bug?
+### `start` failed with an empty `BIND_ADDR`. Is that a bug?
 
 No — the preflight is working as intended. Every command that loads the compose project fails while `BIND_ADDR` is
-empty — `up`, `down`, `logs` and `ps` — and a bare `docker compose` stops with `required variable BIND_ADDR is missing a
+empty — `start`, `stop`, `logs` and `ps` — and a bare `docker compose` stops with `required variable BIND_ADDR is missing a
 value` for the same reason. The exec-based ones (`shell`, `bootstrap`, `hook`) still work, so the recovery shell stays
 available. Run `./bin/devbox env` (Tailscale up first), or set the address by hand. A box already
 published on `0.0.0.0` can't wait for that: `docker rm -f devbox` removes it without compose. `0.0.0.0` as fallback
@@ -311,7 +314,9 @@ would expose devbox publicly.
 
 ### Does `devbox deploy` overwrite my host configuration?
 
-No — excludes `.git`, `.env`, `data/`, `.DS_Store`; `--delete` hits only synced paths.
+No — it never touches `.env`, `data/`, `docker-compose.override.yml` or `.git/`, and it only syncs the runtime files
+(`bin/`, `container/`, `home/`, `Dockerfile`, `docker-compose.yml`, `.env.example`). Anything else in `~/devbox` on the
+workstation is removed by the next deploy.
 
 ### Do I need to re-run `env` after a redeploy?
 
@@ -319,7 +324,7 @@ Only if the Tailscale address changed; `doctor` compares `BIND_ADDR` to `tailsca
 
 ### I already have a devbox at the old data path. What does `sudo ./bin/devbox docker setup` do to it?
 
-Nothing while the container runs — it refuses, pointing to `./bin/devbox down` first. Stopped, it `mv`s the old
+Nothing while the container runs — it refuses, pointing to `./bin/devbox stop` first. Stopped, it `mv`s the old
 `DEVBOX_DATA_DIR` to `/home/dev`, chowned to `dev`. Keys, cloned repos, `~/.config/devbox/secrets.env` survive — a move,
 not a recreate. Finish with `./bin/devbox rebuild`.
 

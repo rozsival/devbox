@@ -34,9 +34,9 @@ ports:
 
 > [!IMPORTANT]
 > `BIND_ADDR` is **mandatory**. Empty, the first mapping would degrade to `:2223:2222` — `0.0.0.0`, every interface — so
-> compose itself refuses it (`required variable BIND_ADDR is missing a value`), not just `./bin/devbox up`'s preflight:
-> a bare `docker compose up` skips the CLI. Every command that loads the compose project interpolates the file, so while
-> it's empty `up`, `down`, `logs` and `ps` fail; exec-based ones — `shell`, `bootstrap`, `hook` — still work, so the
+> compose itself refuses it (`required variable BIND_ADDR is missing a value`), not just `./bin/devbox start`'s
+> preflight: a bare `docker compose up` skips the CLI. Every command that loads the compose project interpolates the
+> file, so while it's empty `start`, `stop`, `logs` and `ps` fail; exec-based ones — `shell`, `bootstrap`, `hook` — still work, so the
 > recovery shell stays available. `./bin/devbox env` fills it; `docker rm -f devbox` stops a box already
 > published on `0.0.0.0`.
 
@@ -130,12 +130,12 @@ the key.
 
 ### What if the Tailscale address changes?
 
-`up` binds to whatever `BIND_ADDR` says: a stale value fails to bind, or binds a dead address. Re-run `./bin/devbox env`
-and `up`; `doctor` flags the mismatch.
+`start` binds to whatever `BIND_ADDR` says: a stale value fails to bind, or binds a dead address. Re-run
+`./bin/devbox env` and `start`; `doctor` flags the mismatch.
 
 ### Can I publish a dev server properly instead of tunnelling?
 
-Possible, not recommended: needs a second address-scoped `ports` entry and a container recreate (`./bin/devbox up`) — a
+Possible, not recommended: needs a second address-scoped `ports` entry and a container recreate (`./bin/devbox start`) — a
 new boundary to audit each time. SSH forwarding needs no configuration and inherits existing auth.
 
 ### Does the container get its own IP on the Tailnet?

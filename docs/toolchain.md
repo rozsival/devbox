@@ -225,7 +225,7 @@ rather than edit that file:
 > Enabling the `claude` provider loads more than `CLAUDE.md` into OMP: skills in `~/.claude/skills` (identical copies of
 > the `~/.agents/skills` ones are dropped; `moshi-hook`'s `moshi-visuals` is new to OMP) and Claude Code's user plugins.
 
-`DEVBOX_ENV=devbox` needs an image built after the marker was added: until `./bin/devbox up` or `rebuild` runs,
+`DEVBOX_ENV=devbox` needs an image built after the marker was added: until `./bin/devbox start` or `rebuild` runs,
 sessions on the devbox get `laptop`, and `doctor host` and `bootstrap` say so. To change what agents are told, edit the
 templates or the skill, commit, deploy, and re-run `bootstrap` and `agent install`; `doctor host` and `doctor laptop`
 fail while either machine's copy is stale.
@@ -264,7 +264,7 @@ rebuilds under the bind-mounted home like other credentials.
 
 No systemd means `moshi-hook service install` can't be used — `container/entrypoint.sh` starts the daemon, tying its
 lifetime to the container's. Restart a crashed/hand-killed one with `./bin/devbox hook` (a detached
-`docker compose exec`: no recreate, no dropped SSH sessions); `./bin/devbox up` alone won't revive it unless compose
+`docker compose exec`: no recreate, no dropped SSH sessions); `./bin/devbox start` alone won't revive it unless compose
 recreates the container. A new release is `./bin/devbox hook --update`: `moshi-hook update`, every agent's hooks
 rewritten (`moshi-hook install`), then the same restart — `update` alone leaves the old version serving.
 `./bin/devbox update` does the same after updating OMP and Claude Code, and reinstalls the hooks even when the

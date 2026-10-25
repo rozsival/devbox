@@ -93,7 +93,7 @@ the host's root Docker daemon.
   reason as `.env.example`. `${DEVBOX_DOCKER_SOCKET_DIR:-/run/devbox}` mounts the *directory* because
   rootlesskit recreates the socket inode on every daemon restart, and `network_mode: bridge` keeps the
   container on `docker0`, the one interface the project-port boundary admits, and which - unlike a
-  compose-managed bridge - is not removed by `down`
+  compose-managed bridge - is not removed by `docker compose down`
 - `container/entrypoint.sh` - PID 1 as `dev`: home skeleton, host key, `authorized_keys`, bootstrap, the
   project-port mirror, the `moshi-hook` daemon, then `exec sshd`. The order is load-bearing; the mirror
   comes last of the setup steps because forwards live in this container's netns and are lost on every
@@ -231,7 +231,7 @@ the host's root Docker daemon.
   bashly at `cli/` and writes `bin/`; `cli/bashly.yml` declares the commands, `cli/commands/` holds their
   bodies, `cli/lib/` the shared functions, `cli/initialize.sh` the shared constants; `bin/devbox` is the
   generated, committed result. Commands by group:
-  - **Workstation** (Linux host outside a container only): `env`, `up`, `down`, `rebuild`, `bootstrap`,
+  - **Workstation** (Linux host outside a container only): `env`, `start`, `stop`, `rebuild`, `bootstrap`,
     `skills`, `shell`, `sessions`, `logs`, `hook`, `update`, `keys`, `docker setup`
   - **Laptop** (macOS only): `deploy`, `sync omp`, `sync claude`, `sync identities`, `agent install`
   - **Both**: `install`, `doctor` (`host` or `laptop`, defaulting to the side the machine is), `completions
@@ -244,7 +244,8 @@ the host's root Docker daemon.
     `devbox_command_checks` (`cli/lib/devbox_command.sh`, also run by both doctors) probes a *fresh* login
     shell under `env -i`, because the calling one proves nothing: `deploy` runs `install` over a
     non-interactive `ssh`. `cli/initialize.sh` resolves `REPO_ROOT` through `readlink -f` for the symlink
-  - `up`/`down`/`rebuild` refuse to drop live SSH sessions without `--force`; `hook` restarts the `moshi-hook`
+  - `start`/`stop`/`rebuild` refuse to drop live SSH sessions without `--force`; `start` applies repo changes to the
+    container (build, recreate), where `update` only upgrades the agent tools in place; `hook` restarts the `moshi-hook`
     daemon with a detached `exec` precisely so it does not have to (`--update` runs `moshi-hook update` and
     rewrites every agent's hooks first, aborting before the old daemon is stopped if the update
     fails); `update` runs `omp update` and `claude update` (through the launchers' `update` passthrough), then
@@ -365,9 +366,15 @@ the host's root Docker daemon.
     container the same way.
     `file_mode` (`cli/lib/machine.sh`) uses perl because BSD and GNU `stat` disagree and both can be on a macOS
     PATH
-  - `devbox deploy` - rsync deploy; excludes `.git`, `.env`, `data/` and `.DS_Store`, then runs `bin/devbox
-    install` on the workstation (a failure there warns, never aborts). `--up` runs the remote
-    `up` over `ssh -t` so the live-session prompt is answerable; `--force` (which needs `--up`) forwards past
+  - `devbox deploy` - rsync of an allowlist, not the tree: only `bin/`, `container/`, `home/`, `Dockerfile`,
+    `docker-compose.yml` and `.env.example` (`.DS_Store` excluded inside them), with `--delete --delete-excluded`, so
+    anything else on the workstation (`docs/`, `.agents/`, `Makefile`, editor configs, leftovers of earlier deploys)
+    is removed and only the protected host state survives: `/.env`, `/data/`, `/docker-compose.override.yml`,
+    `/.git/`. A new runtime path must be added to the `filters` array in `cli/commands/deploy.sh`. Needs GNU rsync on
+    the laptop (`brew install rsync`, Homebrew's bin ahead of `/usr/bin`): macOS's `/usr/bin/rsync` is openrsync, which
+    ignores the protect rules and would delete the remote `.env`, `data/` and `.git`, so `deploy` refuses it. It then
+    runs `bin/devbox install` on the workstation (a failure there warns, never aborts). `--start` runs the remote
+    `start` over `ssh -t` so the live-session prompt is answerable; `--force` (which needs `--start`) forwards past
     it. No default host: it takes the argument, then `DEVBOX_HOST` from the environment or `.push.env`
     (gitignored), then fails - a repo going public must not ship one machine's alias as everyone's default
 - `.agents/skills/` - five skills mirroring the docs for agents: `devbox-basics` (architecture, boundaries,

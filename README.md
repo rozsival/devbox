@@ -54,7 +54,7 @@ From the laptop:
 ssh <workstation> 'cd ~/devbox && ./bin/devbox env'                   # .env from .env.example, BIND_ADDR from Tailscale
 ssh -t <workstation> 'nano ~/devbox/.env'                             # DEVBOX_EXTRA_AUTHORIZED_KEYS: ~/.ssh/devbox.pub
 ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'  # once: project Docker, asks for a password
-ssh <workstation> 'cd ~/devbox && ./bin/devbox up && ./bin/devbox doctor'
+ssh <workstation> 'cd ~/devbox && ./bin/devbox start && ./bin/devbox doctor'
 herdr machine add devbox --label "Devbox"                             # once the ~/.ssh/config blocks exist
 ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'                # optional: agent skills + browser automation
 ./bin/devbox sync omp                                                 # optional: repo OMP preset → laptop and devbox
@@ -67,8 +67,8 @@ ssh -t devbox claude                                                  # once, if
 Then run `herdr` and open panes on the **Devbox** machine, or `ssh devbox` for a plain shell.
 
 > [!WARNING]
-> `up`, `down` and `rebuild` recreate the container and drop every live SSH session and herdr pane; they ask first
-> unless `--force` is given.
+> `start`, `stop` and `rebuild` recreate or stop the container and drop every live SSH session and herdr pane; they ask
+> first unless `--force` is given. `update` upgrades the agent tools in place and never does.
 
 ## 📚 Documentation
 

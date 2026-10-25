@@ -27,8 +27,8 @@ devbox_usage() {
 
   printf "%s\n" "Workstation Commands:"
   printf "  %s   Create .env from .env.example and sync BIND_ADDR, HOST_UID and HOST_GID\n" "env            "
-  printf "  %s   Preflight, then build and start the container\n" "up             "
-  printf "  %s   Stop and remove the container\n" "down           "
+  printf "  %s   Build the image and start the container, recreating it when the repo changed\n" "start          "
+  printf "  %s   Stop and remove the container\n" "stop           "
   printf "  %s   Rebuild the image from scratch and restart\n" "rebuild        "
   printf "  %s   Re-run the in-container user setup\n" "bootstrap      "
   printf "  %s   Install the optional agent skills and agent-browser\n" "skills         "
@@ -36,13 +36,13 @@ devbox_usage() {
   printf "  %s   List the SSH sessions connected to the container\n" "sessions       "
   printf "  %s   Show the container logs (last 100 lines)\n" "logs           "
   printf "  %s   Restart the moshi-hook daemon in place, without touching SSH sessions\n" "hook           "
-  printf "  %s   Update OMP, Claude Code and moshi-hook in the container, then restart the moshi-hook daemon\n" "update         "
+  printf "  %s   Update OMP, Claude Code and moshi-hook in the running container and restart the hook daemon; no rebuild\n" "update         "
   printf "  %s   Print the installed identity public keys and the sshd host-key fingerprint\n" "keys           "
   printf "  %s   The rootless project Docker daemon\n" "docker         "
   printf "  %s   Provision the rootless project Docker daemon (needs sudo)\n" "docker setup   "
   echo
   printf "%s\n" "Laptop Commands:"
-  printf "  %s   Sync this repo to the workstation, optionally bringing the container up\n" "deploy         "
+  printf "  %s   Sync the runtime files of this repo to the workstation, optionally starting the container\n" "deploy         "
   printf "  %s   Copy laptop configuration into the devbox container\n" "sync           "
   printf "  %s   Apply the repo's OMP preset to this laptop and the devbox\n" "sync omp       "
   printf "  %s   Apply the repo's Claude Code preset to this laptop and the devbox\n" "sync claude    "
@@ -92,12 +92,12 @@ devbox_env_usage() {
   fi
 }
 
-devbox_up_usage() {
-  printf "devbox up - Preflight, then build and start the container\n\n"
+devbox_start_usage() {
+  printf "devbox start - Build the image and start the container, recreating it when the repo changed\n\n"
 
   printf "%s\n" "Usage:"
-  printf "  devbox up [OPTIONS]\n"
-  printf "  devbox up --help | -h\n"
+  printf "  devbox start [OPTIONS]\n"
+  printf "  devbox start --help | -h\n"
   echo
 
   if [[ -n "$long_usage" ]]; then
@@ -115,12 +115,12 @@ devbox_up_usage() {
   fi
 }
 
-devbox_down_usage() {
-  printf "devbox down - Stop and remove the container\n\n"
+devbox_stop_usage() {
+  printf "devbox stop - Stop and remove the container\n\n"
 
   printf "%s\n" "Usage:"
-  printf "  devbox down [OPTIONS]\n"
-  printf "  devbox down --help | -h\n"
+  printf "  devbox stop [OPTIONS]\n"
+  printf "  devbox stop --help | -h\n"
   echo
 
   if [[ -n "$long_usage" ]]; then
@@ -284,7 +284,7 @@ devbox_hook_usage() {
 }
 
 devbox_update_usage() {
-  printf "devbox update - Update OMP, Claude Code and moshi-hook in the container, then restart the moshi-hook daemon\n\n"
+  printf "devbox update - Update OMP, Claude Code and moshi-hook in the running container and restart the hook daemon; no rebuild\n\n"
 
   printf "%s\n" "Usage:"
   printf "  devbox update\n"
@@ -378,7 +378,7 @@ devbox_docker_setup_usage() {
 }
 
 devbox_deploy_usage() {
-  printf "devbox deploy - Sync this repo to the workstation, optionally bringing the container up\n\n"
+  printf "devbox deploy - Sync the runtime files of this repo to the workstation, optionally starting the container\n\n"
 
   printf "%s\n" "Usage:"
   printf "  devbox deploy [HOST] [OPTIONS]\n"
@@ -389,13 +389,13 @@ devbox_deploy_usage() {
 
     printf "%s\n" "Options:"
 
-    printf "  %s\n" "--up"
-    printf "    Run './bin/devbox up' on the workstation after syncing\n"
+    printf "  %s\n" "--start"
+    printf "    Run './bin/devbox start' on the workstation after syncing\n"
     echo
 
     printf "  %s\n" "--force, -f"
-    printf "    Pass --force to that 'up' - recreate even with live SSH sessions\n"
-    printf "    %s\n" "Needs: --up"
+    printf "    Pass --force to that 'start' - recreate even with live SSH sessions\n"
+    printf "    %s\n" "Needs: --start"
     echo
 
     printf "  %s\n" "--help, -h"
@@ -831,7 +831,7 @@ ssh_sessions() {
     tr -cd '0-9' || true
 }
 
-# `up` only drops sessions when compose decides to recreate; a no-op `up` is
+# `start` only drops sessions when compose decides to recreate; a no-op `start` is
 # safe, so ask compose instead of guessing. The plan is captured before it is
 # matched: piped into `grep -q`, compose takes SIGPIPE on the line after the
 # match, and under pipefail that 141 reads as "nothing to recreate" - which
@@ -902,7 +902,7 @@ preflight() {
 
   # The project Docker daemon is optional infrastructure: a devbox with no
   # project containers is perfectly usable, so a missing socket warns rather
-  # than blocking `up`. `docker` inside the container reports it precisely, and
+  # than blocking `start`. `docker` inside the container reports it precisely, and
   # `doctor` fails on it.
   local socket_dir
   socket_dir="$(env_get DEVBOX_DOCKER_SOCKET_DIR)"
@@ -1118,7 +1118,7 @@ step_user() {
       log_error "uid ${DEV_UID} is already taken by $(getent passwd "${DEV_UID}" | cut -d: -f1)"
     log_info "Creating user ${DEV_USER} (uid ${DEV_UID}, home ${DEV_HOME})..."
     # --no-create-home: the home directory is the devbox bind mount and is
-    # either migrated below or created by ./bin/devbox up. A skeleton copied in
+    # either migrated below or created by ./bin/devbox start. A skeleton copied in
     # here would shadow the container's own bootstrap.
     useradd --uid "${DEV_UID}" --gid "${DEV_GROUP}" --home-dir "${DEV_HOME}" \
       --no-create-home --shell /bin/bash --comment 'devbox project docker' "${DEV_USER}"
@@ -1229,7 +1229,7 @@ step_data_dir() {
       [[ -e "${DEV_HOME}" ]] &&
         log_error "${DEV_HOME} already exists and ${current} is still in use; merge them by hand"
       grep -qx devbox <<<"$(docker ps --format '{{.Names}}' 2>/dev/null)" &&
-        log_error "the devbox container is running; stop it first: ./bin/devbox down"
+        log_error "the devbox container is running; stop it first: ./bin/devbox stop"
       log_info "Moving ${current} to ${DEV_HOME}..."
       mv "${current}" "${DEV_HOME}"
     fi
@@ -1612,7 +1612,7 @@ step_netfilter() {
 # sides. tmpfiles.d recreates it on every boot.
 #
 # 0711, not 0700: traverse-by-name for everyone so the deploying user can stat
-# the socket (`./bin/devbox up` reports a missing daemon) without being able to
+# the socket (`./bin/devbox start` reports a missing daemon) without being able to
 # list the directory. Using it still needs the socket's own 0660 dev:dev.
 step_socket_dir() {
   local want="d ${SOCKET_DIR} 0711 ${DEV_USER} ${DEV_GROUP} -"
@@ -2922,7 +2922,7 @@ devbox_env_command() {
   addr="$(tailscale_addr)"
   if [[ -z "${addr}" ]]; then
     log_warn 'No Tailscale IPv4 address yet; BIND_ADDR left unset.'
-    log_warn "Run 'sudo tailscale up', then './bin/devbox env' again - 'up' refuses to start without it."
+    log_warn "Run 'sudo tailscale up', then './bin/devbox env' again - 'start' refuses to run without it."
   else
     log_info "Syncing BIND_ADDR to ${addr}..."
     upsert_env_key BIND_ADDR "${addr}"
@@ -2932,7 +2932,7 @@ devbox_env_command() {
 
 }
 
-devbox_up_command() {
+devbox_start_command() {
 
   preflight
   # Build before asking compose what it would do: a fresh image is itself a
@@ -2942,16 +2942,16 @@ devbox_up_command() {
     guard_ssh_sessions 'Recreating the container'
   fi
   compose up -d
-  log_success "devbox is up on $(env_get BIND_ADDR):$(env_get DEVBOX_SSH_PORT)."
+  log_success "devbox is running on $(env_get BIND_ADDR):$(env_get DEVBOX_SSH_PORT)."
 
 }
 
-devbox_down_command() {
+devbox_stop_command() {
 
   require_env_file
   guard_ssh_sessions 'Stopping the container'
   compose down
-  log_success 'devbox is down.'
+  log_success 'devbox is stopped.'
 
 }
 
@@ -3178,6 +3178,12 @@ devbox_docker_setup_command() {
 
 devbox_deploy_command() {
 
+  # GNU rsync only. macOS ships openrsync as /usr/bin/rsync, which accepts the
+  # protect rules below and then ignores them: under --delete-excluded it deletes
+  # the workstation's .env, data/ and .git.
+  [[ "$(rsync --version 2>&1)" =~ ^rsync\ +version\ [3-9] ]] ||
+    log_error "$(command -v rsync) is not GNU rsync (macOS ships openrsync) - run: brew install rsync, and put Homebrew's bin ahead of /usr/bin on the PATH"
+
   load_push_env
   host="${args[host]:-${DEVBOX_HOST:-}}"
   [[ -n "${host}" ]] ||
@@ -3187,13 +3193,29 @@ devbox_deploy_command() {
   ssh "${host}" 'command -v rsync >/dev/null 2>&1' ||
     log_error "rsync is missing on ${host} - run: ssh ${host} 'sudo apt-get install -y rsync'"
 
-  log_info "Syncing ${REPO_ROOT}/ to ${host}:${remote_path}/..."
-  rsync -az --delete \
-    --exclude '.git' \
-    --exclude '.env' \
-    --exclude 'data/' \
-    --exclude '.DS_Store' \
-    "${REPO_ROOT}/" "${host}:${remote_path}/"
+  # An allowlist, not a blocklist: the workstation needs only what builds and
+  # runs the container plus the CLI driving it. Docs, agent skills, IDE and
+  # formatter configs stay on the laptop, and a new dev file stays there by
+  # default. --delete-excluded also removes anything outside the list left by an
+  # older deploy; the protect rules keep the host's own state, which no deploy
+  # ever writes.
+  filters=(
+    --filter 'P /.env'
+    --filter 'P /data/'
+    --filter 'P /docker-compose.override.yml'
+    --filter 'P /.git/'
+    --exclude '.DS_Store'
+    --include '/bin/***'
+    --include '/container/***'
+    --include '/home/***'
+    --include '/Dockerfile'
+    --include '/docker-compose.yml'
+    --include '/.env.example'
+    --exclude '*'
+  )
+
+  log_info "Syncing the runtime files of ${REPO_ROOT}/ to ${host}:${remote_path}/..."
+  rsync -az --delete --delete-excluded "${filters[@]}" "${REPO_ROOT}/" "${host}:${remote_path}/"
   log_success "Synced to ${host}:${remote_path}."
 
   # Keeps `devbox` and its completion on the workstation's PATH; idempotent, and
@@ -3203,13 +3225,13 @@ devbox_deploy_command() {
   ssh "${host}" "${remote_path}/bin/devbox install" ||
     log_warn "devbox install on ${host} reported problems - see above"
 
-  if [[ -n "${args[--up]:-}" ]]; then
+  if [[ -n "${args[--start]:-}" ]]; then
     force="${args[--force]:+ --force}"
-    log_info "Bringing the devbox up on ${host}..."
-    # -t so the container's session guard can prompt: an `up` that recreates the
-    # container kills every live SSH session without telling the client.
+    log_info "Starting the devbox on ${host}..."
+    # -t so the container's session guard can prompt: a `start` that recreates
+    # the container kills every live SSH session without telling the client.
     # shellcheck disable=SC2029 # remote_path and force are meant to expand locally
-    ssh -t "${host}" "cd ${remote_path} && ./bin/devbox up${force}"
+    ssh -t "${host}" "cd ${remote_path} && ./bin/devbox start${force}"
   fi
 
 }
@@ -3660,17 +3682,17 @@ parse_requirements() {
     shift $#
     ;;
 
-  up)
-    action="up"
+  start)
+    action="start"
     shift
-    devbox_up_parse_requirements "$@"
+    devbox_start_parse_requirements "$@"
     shift $#
     ;;
 
-  down)
-    action="down"
+  stop)
+    action="stop"
     shift
-    devbox_down_parse_requirements "$@"
+    devbox_stop_parse_requirements "$@"
     shift $#
     ;;
 
@@ -3891,7 +3913,7 @@ devbox_env_parse_requirements() {
 
 }
 
-devbox_up_parse_requirements() {
+devbox_start_parse_requirements() {
   local key
 
   while [[ $# -gt 0 ]]; do
@@ -3899,7 +3921,7 @@ devbox_up_parse_requirements() {
     case "$key" in
     --help | -h)
       long_usage=yes
-      devbox_up_usage
+      devbox_start_usage
       exit
       ;;
 
@@ -3910,7 +3932,7 @@ devbox_up_parse_requirements() {
     esac
   done
 
-  action="up"
+  action="start"
 
   while [[ $# -gt 0 ]]; do
     key="$1"
@@ -3957,7 +3979,7 @@ devbox_up_parse_requirements() {
 
 }
 
-devbox_down_parse_requirements() {
+devbox_stop_parse_requirements() {
   local key
 
   while [[ $# -gt 0 ]]; do
@@ -3965,7 +3987,7 @@ devbox_down_parse_requirements() {
     case "$key" in
     --help | -h)
       long_usage=yes
-      devbox_down_usage
+      devbox_stop_usage
       exit
       ;;
 
@@ -3976,7 +3998,7 @@ devbox_down_parse_requirements() {
     esac
   done
 
-  action="down"
+  action="stop"
 
   while [[ $# -gt 0 ]]; do
     key="$1"
@@ -4767,9 +4789,9 @@ devbox_deploy_parse_requirements() {
     key="$1"
     case "$key" in
 
-    --up)
+    --start)
 
-      args['--up']=1
+      args['--start']=1
       shift
       ;;
 
@@ -4816,8 +4838,8 @@ devbox_deploy_parse_requirements() {
     esac
   done
 
-  if [[ -n ${args['--force']+x} ]] && [[ -z "${args[--up]:-}" ]]; then
-    printf "%s\n" "--force needs --up" >&2
+  if [[ -n ${args['--force']+x} ]] && [[ -z "${args[--start]:-}" ]]; then
+    printf "%s\n" "--force needs --start" >&2
     exit 1
   fi
 
@@ -5751,14 +5773,14 @@ devbox_completion() {
       devbox_env_completion "$completion_current" "$@"
       return
       ;;
-    up)
+    start)
       shift
-      devbox_up_completion "$completion_current" "$@"
+      devbox_start_completion "$completion_current" "$@"
       return
       ;;
-    down)
+    stop)
       shift
-      devbox_down_completion "$completion_current" "$@"
+      devbox_stop_completion "$completion_current" "$@"
       return
       ;;
     rebuild)
@@ -5854,7 +5876,7 @@ devbox_completion() {
       ;;
     esac
   done
-  completion_candidates "$completion_current" env up down rebuild bootstrap skills shell sessions logs hook update keys docker deploy sync agent install doctor completions
+  completion_candidates "$completion_current" env start stop rebuild bootstrap skills shell sessions logs hook update keys docker deploy sync agent install doctor completions
 
   if [[ $completion_current == -* ]]; then
     completion_flag_candidates --help "$completion_current" --help -h
@@ -5885,7 +5907,7 @@ devbox_env_completion() {
 
 }
 
-devbox_up_completion() {
+devbox_start_completion() {
   local completion_current="$1"
   shift
 
@@ -5913,7 +5935,7 @@ devbox_up_completion() {
 
 }
 
-devbox_down_completion() {
+devbox_stop_completion() {
   local completion_current="$1"
   shift
 
@@ -6224,8 +6246,8 @@ devbox_deploy_completion() {
       completion_blocked_flags["--help"]=1
       shift
       ;;
-    --up)
-      completion_blocked_flags["--up"]=1
+    --start)
+      completion_blocked_flags["--start"]=1
 
       shift
       ;;
@@ -6247,7 +6269,7 @@ devbox_deploy_completion() {
 
   if [[ $completion_current == -* ]]; then
     completion_flag_candidates --help "$completion_current" --help -h
-    completion_flag_candidates --up "$completion_current" --up
+    completion_flag_candidates --start "$completion_current" --start
     completion_flag_candidates --force "$completion_current" --force -f
   fi
 
@@ -6614,8 +6636,8 @@ run() {
 
   case "$action" in
   "env") devbox_env_command ;;
-  "up") devbox_up_command ;;
-  "down") devbox_down_command ;;
+  "start") devbox_start_command ;;
+  "stop") devbox_stop_command ;;
   "rebuild") devbox_rebuild_command ;;
   "bootstrap") devbox_bootstrap_command ;;
   "skills") devbox_skills_command ;;

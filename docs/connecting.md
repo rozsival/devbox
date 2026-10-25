@@ -74,7 +74,7 @@ Moshi's an SSH client: host `<workstation>`, port `2223`, user `dev`, container-
 > [!IMPORTANT]
 > Add the phone's key to `DEVBOX_EXTRA_AUTHORIZED_KEYS` in `.env` on the workstation, not via Easy Pair — the
 > entrypoint rebuilds `authorized_keys` from GitHub plus that variable each start, erasing direct edits at the next
-> `./bin/devbox up`.
+> `./bin/devbox start`.
 
 Notifications, lock-screen approvals, and transcript view need `moshi-hook`, which `bootstrap` installs and the
 entrypoint starts. One pairing step activates it — [Toolchain](toolchain.md#-moshi-and-moshi-hook).
