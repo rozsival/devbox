@@ -40,31 +40,23 @@ agents inside — the container is the agent sandbox.
 
 ## 🚀 Quick start
 
-**Requires** a workstation running Ubuntu 26.04 LTS with Docker and Tailscale ≥ 1.98, two **1Password SSH keys** — the Devbox
-Laptop key and your default identity's key, with only `~/.ssh/devbox.pub` and `~/.ssh/id_<slug>.pub` on disk — the two
-**`~/.ssh/config` blocks**, a non-empty **`BIND_ADDR`** and **bash >= 4.2 on the laptop** (`brew install bash`; macOS
-ships 3.2, which the generated `bin/devbox` refuses) — see [Installation](docs/installation.md). A laptop set up with
-[dotfiles](https://github.com/rozsival/dotfiles) has the keys, the blocks and bash already.
+Setup spans the laptop, the workstation and 1Password, so let an agent drive it. You need a workstation running
+Ubuntu 26.04 LTS with Docker and Tailscale ≥ 1.98, and a laptop with 1Password and
+[OMP](https://github.com/can1357/oh-my-pi) or [Claude Code](https://claude.com/claude-code).
 
-From the laptop:
+Clone this repo on the laptop, start the agent in the checkout (both load the repo's `devbox-setup` and
+`devbox-laptop` skills) and paste:
 
-```bash
-./bin/devbox install                                                  # devbox + bash completion on this laptop's PATH
-./bin/devbox deploy <workstation>                                     # sync the repo to ~/devbox (and `devbox` there too)
-ssh <workstation> 'cd ~/devbox && ./bin/devbox env'                   # .env from .env.example, BIND_ADDR from Tailscale
-ssh -t <workstation> 'nano ~/devbox/.env'                             # DEVBOX_EXTRA_AUTHORIZED_KEYS: ~/.ssh/devbox.pub
-ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'  # once: project Docker, asks for a password
-ssh <workstation> 'cd ~/devbox && ./bin/devbox start && ./bin/devbox doctor'
-herdr machine add devbox --label "Devbox"                             # once the ~/.ssh/config blocks exist
-ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'                # optional: agent skills + browser automation
-./bin/devbox sync omp                                                 # optional: repo OMP preset → laptop and devbox
-./bin/devbox sync claude                                              # optional: repo Claude Code preset → laptop and devbox
-ssh -t devbox claude                                                  # once, if you use Claude Code: /login
-./bin/devbox agent install                                            # laptop: the same agent git override
-./bin/devbox doctor laptop                                            # laptop: acceptance test
+```text
+Set up the devbox from this checkout. My workstation is <workstation>, reachable over Tailscale.
+Follow the devbox-setup skill phase by phase and run each phase's check before moving on, then set up
+the laptop side with the devbox-laptop skill. Stop and hand me every step that needs me: 1Password
+items and approvals, sudo passwords, interactive logins, tokens and identities.conf values.
+Done means `./bin/devbox doctor` passes on the workstation and `./bin/devbox doctor laptop` here.
 ```
 
-Then run `herdr` and open panes on the **Devbox** machine, or `ssh devbox` for a plain shell.
+Then run `herdr` and open panes on the **Devbox** machine, or `ssh devbox` for a plain shell. Prefer doing it by hand?
+Every step is in [Installation](docs/installation.md).
 
 > [!WARNING]
 > `start`, `stop` and `rebuild` recreate or stop the container and drop every live SSH session and herdr pane; they ask
