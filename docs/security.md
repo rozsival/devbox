@@ -161,7 +161,7 @@ database-password read ([Toolchain](toolchain.md#-omp)).
 
 `home/.claude/settings.json` is the Claude Code counterpart: `permissions.deny` and `permissions.ask` rules, written
 `Bash(<pattern>)`, that mirror the OMP list with the same deny/prompt split (bare `op`/`gcloud`/`vercel` and
-`*vercel* token` folded into their `Bash(… *)` or `Bash(*vercel)` rule). Seeded or merged by
+`*vercel token` folded into their `Bash(… *)` or `Bash(*vercel)` rule). Seeded or merged by
 `bootstrap` and `./bin/devbox agent install` when `~/.claude/settings.json` has no `permissions.deny`, re-applied by
 `./bin/devbox sync claude`; merge, not copy, because other tools write that file ([Toolchain](toolchain.md#-claude-code)).
 Claude Code differs from OMP in four ways that matter here:

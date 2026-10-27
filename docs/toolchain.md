@@ -120,17 +120,21 @@ of `bootstrap`.
 theme and feature flags, `secrets: { enabled: true }` obfuscating an API key in the environment
 (`~/.config/devbox/secrets.env` or a project `.env`) before it reaches a provider, and a `bash.patterns` guardrail:
 
-| Action   | Commands                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deny`   | Reaching past the agent's scoped tokens: `gh auth token\|login\|…`, an absolute-path `gh`, `env -u`, unsetting or reassigning `GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND`, `GH_CONFIG_DIR`, `GIT_TERMINAL_PROMPT`, keychain reads, `gh secret`/`variable`/`repo delete`. History rewrites: `--no-verify`, force push. Vercel/Neon project deletion, `api -X DELETE`, `vercel tokens create`, `neon api-keys create`.                                                        |
-| `prompt` | `env -i` (this repo's smoke tests use it), `op`, `gcloud`, `terraform apply`. Every Vercel/Neon write: deploys (bare `vercel`, `vercel <path>`, `--prod`, `deploy`), `promote`/`rollback`, `env add\|rm\|pull`, `link`, `login`, `sandbox`, `api` with a method or body, and the rest by verb (`add`, `create`, `delete`, `update`, `set`, `reset`, …); plus the Neon commands that hand out the database password (`connection-string`, `psql`, `credentials reveal`) |
+| Action   | Commands                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deny`   | Reaching past the agent's scoped tokens: `gh auth token\|login\|…`, an absolute-path `gh`, `env -u`, unsetting or reassigning `GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND`, `GH_CONFIG_DIR`, `GIT_TERMINAL_PROMPT`, keychain reads, `gh secret`/`variable`/`repo delete`. History rewrites: `--no-verify`, force push. Vercel/Neon project deletion, `api -X DELETE`, `vercel tokens create`, `neon api-keys create`.                                                                                 |
+| `prompt` | `env -i` (this repo's smoke tests use it), `op`, `gcloud`, `terraform apply`. Every Vercel/Neon write: deploys (bare `vercel`, `vercel <path>`, any pinned `vercel@<v>`, `--prod`, `deploy`), `promote`/`rollback`, `env add\|rm\|pull`, `link`, `login`, `sandbox`, `api` with a method or body, and the rest by verb (`add`, `create`, `delete`, `update`, `set`, `reset`, …); plus the Neon commands that hand out the database password (`connection-string`, `psql`, `credentials reveal`) |
 
 Vercel and Neon reads — `ls`, `inspect`, `logs`, `env ls`, `branches list`, `api` GETs — match nothing and stay with the
-session's mode. Each of their rules is `*<cli>* <verb>*`, so the global binary, `npx`/`pnpx`/`pnpm dlx`/`bunx`, a pinned
-`vercel@<v>`, `neonctl` and global flags before the subcommand all match; every Vercel rule is repeated for its `vc`
-alias. The cost is a prompt on an unrelated command naming the CLI before such a word (for `vc`, any word containing it,
-such as `svc`), on `--help` for a write subcommand and on `sandbox list`. Writes are matched by verb rather than per
-resource, so a new resource is covered and a new verb is not; a bare `npx vercel@<v>` still deploys unprompted.
+session's mode. Each of their rules comes in two forms, `*<cli> <verb>*` and `*<cli> * <verb>*`, so the global binary, a
+path to it, `npx`/`pnpx`/`pnpm dlx`/`bunx` and global flags before the subcommand all match; every Vercel rule is
+repeated for its `vc` alias and every Neon rule for both `neon` and `neonctl`. The CLI name must be followed by a space,
+so a host that only contains it — `plachetky-pr-1.vercel.app`, `ep-x.neon.tech` — never prompts, whatever words come
+after it. A pinned `vercel@<v>` (or `vc@`, `neon@`, `neonctl@`) prompts whatever follows it, reads included, and a deny
+rule also has its `*<cli>@* <verb>*` form. The cost is a prompt on an unrelated command naming the CLI as a word before
+such a word (`grep -rn vercel . | grep -v settings.json`; for `vc`, any word ending in it, such as `svc start`), on
+`--help` for a write subcommand and on `sandbox list`. Writes are matched by verb rather than per resource, so a new
+resource is covered and a new verb is not.
 
 The installers never overwrite your edits; an existing file without a `bash:` block is reported by both so you can
 copy the block in. A project's own `bash.patterns` replaces this list entirely — arrays don't merge across settings
@@ -180,8 +184,8 @@ laptop. The one exception is `settings.json`, below.
 `home/.claude/settings.json` is the Claude Code counterpart of the OMP preset: `model` (`opus`) and `permissions.deny`
 / `permissions.ask` rules that mirror the OMP `bash.patterns` guardrail, with the same deny/prompt split
 as [the table above](#-omp), written as `Bash(<pattern>)`. OMP's `op *` plus bare `op` and `gcloud *` plus bare
-`gcloud` are one rule each, because Claude's `Bash(op *)` also matches bare `op`; for the same reason `*vercel* token *`
-covers `*vercel* token`, and `Bash(*vercel)` covers bare `vercel` (likewise for `vc`).
+`gcloud` are one rule each, because Claude's `Bash(op *)` also matches bare `op`; for the same reason `*vercel token *`
+covers `*vercel token`, and `Bash(*vercel)` covers bare `vercel` (likewise for `vc`).
 
 Unlike OMP's `config.yml`, `~/.claude/settings.json` has other writers — `moshi-hook` and IDE integrations add `hooks`
 and `statusLine`, Claude itself writes `model` (`/model`) and rules (`/permissions`) — so the preset is _merged_, never
