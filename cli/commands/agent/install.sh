@@ -5,10 +5,10 @@ local -r AGENTS=(omp claude)
 # the PATH, so the `gh` shim (tokens per directory) never intercepts your own
 # gh, which keeps its OAuth login.
 install -d -m 755 "${AGENT_DIR}"
-for tool in omp-launcher claude-launcher gh devbox-git-credential devbox-git-no-ssh; do
+for tool in omp-launcher claude-launcher claude-session-env gh devbox-git-credential devbox-git-no-ssh; do
   install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${AGENT_DIR}/${tool}"
 done
-# Sourced by both launchers, never run.
+# Sourced by both launchers and claude-session-env, never run.
 install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${AGENT_DIR}/agent-launch"
 
 # The resolver is a user-facing command (`devbox-gh-token --account`), same
@@ -170,6 +170,21 @@ created) log_success "Claude Code preset installed at ${claude_settings}." ;;
 updated) log_success "Claude Code preset merged into ${claude_settings} (previous copy: ${claude_settings}.bak)." ;;
 esac
 
+# The launcher's fence for Claude sessions no launcher starts - the desktop
+# app above all: a SessionStart hook that writes agent-launch's exports and
+# unsets into the session's CLAUDE_ENV_FILE (claude-session-env). Appended to
+# whatever SessionStart entries the file holds, on every run. When the preset
+# merge just changed the file, its .bak (your original) is kept.
+if [[ ${claude_settings_state} != invalid ]]; then
+  keep_bak=''
+  [[ ${claude_settings_state} != updated ]] || keep_bak=1
+  case "$(claude_session_hook_apply "${claude_settings}" "${CLAUDE_SESSION_HOOK}" "${keep_bak}")" in
+  created | updated) log_success "Claude Code SessionStart hook added to ${claude_settings}: sessions the desktop app starts get the launcher's fence." ;;
+  unchanged) ;;
+  *) claude_settings_state=invalid ;;
+  esac
+fi
+
 # Which machine this is, for every agent session: the laptop template as
 # ~/.config/devbox/agent-context.md, one import line appended to your
 # ~/.claude/CLAUDE.md (Claude Code reads it, and OMP with `claude` in its
@@ -184,7 +199,7 @@ fi
 agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_DIR}" 2>&1 || true)"
 
 # -- Report ---------------------------------------------------------------------
-log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
+log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,claude-session-env,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
 path_fix=${legacy_kept}
 for agent in "${AGENTS[@]}"; do
   # Same rule as the launcher: the real binary is the first PATH entry that does

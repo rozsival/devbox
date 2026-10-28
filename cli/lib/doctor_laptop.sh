@@ -277,7 +277,7 @@ doctor_laptop() {
   fi
   stale=()
   for rel in .local/libexec/devbox-agent/agent-launch .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/claude-launcher \
-    .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
+    .local/libexec/devbox-agent/claude-session-env .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
     .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .local/bin/wt-herdr .local/libexec/devbox-identities; do
     cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
   done
@@ -320,7 +320,14 @@ doctor_laptop() {
   if ((${#stale[@]})); then
     fail "differ from the repo templates: ${stale[*]} - run ./bin/devbox agent install"
   else
-    log_success 'launchers, shim, helper, fence, devbox-identities, wt-herdr and agent gitconfigs match the repo templates'
+    log_success 'launchers, Claude session hook, shim, helper, fence, devbox-identities, wt-herdr and agent gitconfigs match the repo templates'
+  fi
+  # Claude sessions no launcher starts (the desktop app) get the fence only
+  # from this SessionStart hook; without it they run git and gh as you.
+  if claude_session_hook_present "${HOME}/.claude/settings.json" "${CLAUDE_SESSION_HOOK}"; then
+    log_success 'Claude Code SessionStart hook fences sessions the desktop app starts'
+  else
+    fail "${HOME}/.claude/settings.json has no SessionStart hook running ${CLAUDE_SESSION_HOOK} - Claude desktop sessions run git and gh as you; run ./bin/devbox agent install"
   fi
   # The gitconfigs must also be unwritable, directory included: GIT_CONFIG_GLOBAL
   # points in there, so `git config --global` in a session rewrites them - that is

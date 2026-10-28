@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Installed by `devbox agent install` (laptop) - edit
+# home/.local/libexec/devbox-agent/claude-session-env in the repo.
+#
+# Claude Code SessionStart hook: the launcher's fence for a session no launcher
+# started - the Claude desktop app, whose sessions inherit launchd's
+# environment and would otherwise run git under ~/.gitconfig with your SSH
+# keys, and gh under your own login. Claude Code runs the file named by
+# CLAUDE_ENV_FILE as shell code before every Bash command of the session, so
+# the lines written here re-apply agent-launch's unsets and exports each time.
+# They cover Bash commands only: Claude Code's own process, its other hooks and
+# its MCP servers keep the app's environment.
+#
+# What it writes must parse in every shell Claude Code may run those commands
+# under - zsh on macOS, the login shell, as well as bash - so plain `unset` and
+# `export` lines, single-quoted values and a POSIX `case`, nothing bash-only.
+#
+# Harmless under a launcher: the values it writes are the ones the session
+# already has. Bash 3.2 compatible, since the desktop app's PATH finds macOS's
+# /bin/bash.
+set -euo pipefail
+
+[[ -n ${CLAUDE_ENV_FILE:-} ]] || exit 0
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+agent_dir="${self%/*}"
+# shellcheck source=agent-launch
+. "${agent_dir}/agent-launch"
+
+# Single-quoted for any POSIX shell or zsh.
+sh_quote() {
+  local q="'"
+  printf "'%s'" "${1//${q}/${q}\\${q}${q}}"
+}
+
+# Named now, before agent_fence clears them here: the session's commands
+# inherit the same environment this hook does.
+unset_names="${AGENT_FENCE_UNSET[*]}"
+for name in ${!VSCODE_GIT_@}; do
+  unset_names+=" ${name}"
+done
+
+# Nothing is written when agent.gitconfig is missing: DEVBOX_ENV then stays
+# empty, which the agent context reads as "not fenced - stop before any git
+# push or gh write", the launcher's refusal to start in a form a hook can give.
+# Exit 1 shows the reason to the user without blocking the session.
+agent_fence "${agent_dir}" || exit 1
+
+{
+  printf '# devbox: agent git fence (%s)\n' "${self}"
+  printf 'unset %s\n' "${unset_names}"
+  for name in "${AGENT_FENCE_EXPORT[@]}"; do
+    printf 'export %s=%s\n' "${name}" "$(sh_quote "${!name}")"
+  done
+  # A guarded prepend: the file runs before every command, the PATH it sees is
+  # whatever the previous command left.
+  # shellcheck disable=SC2016 # expanded by the session's shell, not here
+  printf 'case ":${PATH}:" in *:%s:*) ;; *) export PATH=%s:"${PATH}" ;; esac\n' \
+    "$(sh_quote "${agent_dir}")" "$(sh_quote "${agent_dir}")"
+} >>"${CLAUDE_ENV_FILE}"

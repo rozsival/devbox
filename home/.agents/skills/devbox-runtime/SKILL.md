@@ -5,8 +5,9 @@ description: How to work in the machine this agent session runs on - the devbox 
 
 # Working in the devbox and on the laptop
 
-`DEVBOX_ENV` (set by the `omp`/`claude` launcher) says where this session runs: `devbox` or `laptop`. Your context
-already holds a short summary for this machine. This skill covers what to do about it.
+`DEVBOX_ENV` (set by the `omp`/`claude` launcher, or on the laptop by the Claude desktop app's `SessionStart` hook) says
+where this session runs: `devbox` or `laptop`. Your context already holds a short summary for this machine. This skill
+covers what to do about it.
 
 ```
 laptop (macOS)                         workstation (Ubuntu host)            container "devbox"

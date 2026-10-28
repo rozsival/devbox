@@ -218,6 +218,21 @@ can't follow the repo tree like `agent.gitconfig`'s `includeIf`. Pointing `GIT_C
 > A repository's own `.git/config` `user.email` wins over `GIT_CONFIG_GLOBAL` — local always outranks global in git.
 > Stock git behavior.
 
+### Claude desktop app
+
+The Claude desktop app starts its sessions itself, from launchd's environment, so no launcher runs and git and `gh`
+would act as you. On the laptop `./bin/devbox agent install` therefore also adds a `SessionStart` hook to
+`~/.claude/settings.json`: `~/.local/libexec/devbox-agent/claude-session-env` sources `agent-launch`, runs the same
+`agent_fence` the launchers run, and writes its exports and unsets (plus `DEVBOX_ENV=laptop` and a guarded `PATH`
+prepend for the `gh` shim) into the session's `CLAUDE_ENV_FILE`, which Claude Code runs before every Bash command. The
+entry is appended next to the herdr, `moshi-hook` and IDE ones, never in the preset: `sync claude` replaces arrays
+whole. Under a launcher it writes the values the session already has.
+
+It covers Bash commands only — git, `gh`, `wt` run by the agent. Claude Code's own process, its other hooks and MCP
+servers keep the app's environment, and so does anything the app itself runs outside the Bash tool. Without a readable
+`agent.gitconfig` the hook writes nothing and fails, so `DEVBOX_ENV` stays empty and the agent stops before any push.
+`devbox doctor laptop` fails while the entry is missing.
+
 ### Read-only by install
 
 `~/.config/devbox/git/` is a directory of mode 500 holding both gitconfigs at 444, because `GIT_CONFIG_GLOBAL` points
@@ -568,8 +583,9 @@ author.
 
 `command -v claude` prints `~/.local/bin/claude`: the launchers directory is not ahead of it on the `PATH`. Add the
 `export PATH=…/launchers:$PATH` line from [Laptop install](#-laptop-install) after whatever puts `~/.local/bin` first,
-then open a new shell. A `claude` started from an app or IDE that ignores your shell `PATH` bypasses the launcher the
-same way; start agent sessions from a terminal.
+then open a new shell. A `claude` started from an IDE that ignores your shell `PATH` bypasses the launcher the same way;
+start agent sessions from a terminal. The Claude desktop app is the exception: its sessions get the fence from a
+`SessionStart` hook instead ([Claude desktop app](#claude-desktop-app)).
 
 ### Why did an agent commit under my own name and email?
 

@@ -15,6 +15,10 @@ readonly LAUNCHER_DIR="${AGENT_DIR}/launchers"
 readonly BIN_DIR="${HOME}/.local/bin"
 readonly CONFIG_DIR="${HOME}/.config/devbox"
 readonly SSH_DIR="${HOME}/.ssh"
+# The laptop's Claude Code SessionStart hook (claude-session-env), as it appears
+# in ~/.claude/settings.json - `agent install` writes it, `doctor laptop` looks
+# for exactly this string.
+readonly CLAUDE_SESSION_HOOK="'${AGENT_DIR}/claude-session-env'"
 
 # `fail` counts instead of exiting, so a doctor or a --check reports everything
 # that is wrong before the exit status says so; CHECK_ONLY turns the provisioning

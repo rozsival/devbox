@@ -157,12 +157,19 @@ the preset to the laptop and the devbox on purpose. Claude Code applies deny/ask
 command and merges permission arrays across settings scopes, so a repository's own `.claude/settings.json` cannot drop
 these rules; it is the same guardrail, not a boundary - `docs/security.md`.
 
+The Claude desktop app starts sessions no launcher wraps, so the same run appends a `SessionStart` hook to
+`~/.claude/settings.json` (beside the herdr, `moshi-hook` and IDE entries; never part of the preset, since the preset
+merge replaces arrays whole): `~/.local/libexec/devbox-agent/claude-session-env` runs `agent-launch`'s `agent_fence` and
+writes its exports and unsets into the session's `CLAUDE_ENV_FILE`, which Claude Code runs before every Bash command.
+Bash commands only - Claude's own process, other hooks and MCP servers keep the app's environment. `devbox doctor
+laptop` fails while the entry is missing.
+
 And it tells laptop agents where they run (`container/agent-context apply laptop`). It installs the laptop template as
 `~/.config/devbox/agent-context.md`, plus the `devbox-runtime` skill in `~/.agents/skills` with a link in
 `~/.claude/skills`, and appends one `@~/.config/devbox/agent-context.md` line to `~/.claude/CLAUDE.md`. Claude Code reads
 that file natively. OMP reads it only with `claude` in `enabledProviders`, which the shared preset sets and
 `./bin/devbox sync omp` applies to an existing config, and only while no `~/.omp/agent/AGENTS.md` shadows it. Launcher
-sessions also get `DEVBOX_ENV=laptop`. On a dotfiles laptop where `~/.claude/CLAUDE.md` is a symlink, the line lands in
+and Claude desktop app sessions also get `DEVBOX_ENV=laptop`. On a dotfiles laptop where `~/.claude/CLAUDE.md` is a symlink, the line lands in
 the dotfiles repo: commit it there.
 
 A session's git config is the file `GIT_CONFIG_GLOBAL` names, so any `git config --global …` in its

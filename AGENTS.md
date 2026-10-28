@@ -331,7 +331,7 @@ the host's root Docker daemon.
     sides, so a broken registry never becomes the one the devbox boots from. `sync` host: argument, then
     `DEVBOX_SSH_HOST` (environment or `.push.env`), then `devbox`
   - `devbox agent install` - idempotent: installs the same agent git override the devbox bootstraps (`agent-launch`,
-    `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence,
+    `omp-launcher`, `claude-launcher`, `claude-session-env`, `gh` shim, credential helper, fence,
     `devbox-gh-token`, `wt-herdr`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin` symlink so it answers
     by name, the read-only *rendered* `git/agent*.gitconfig`, and `omp`/`claude` symlinks to the launchers in
     `~/.local/libexec/devbox-agent/launchers` - removing the pre-Claude `~/.local/bin/omp` symlink only once
@@ -341,8 +341,12 @@ the host's root Docker daemon.
     shell rc; seeds `~/.omp/agent/config.yml` (the same shared preset) only when absent, reporting an
     existing one without a `bash:` block, and merges the Claude Code preset into `~/.claude/settings.json` when
     that file is missing or has no `permissions.deny` (`settings.json.bak` kept when it changed an existing file;
-    invalid JSON listed as a manual step; one already holding `permissions.deny` left alone; needs `jq`); reports
-    whether `omp` and `claude` resolve to their launchers -
+    invalid JSON listed as a manual step; one already holding `permissions.deny` left alone; needs `jq`); appends,
+    on every run and beside whatever entries are there (never through the preset, whose merge replaces arrays whole),
+    a `SessionStart` hook running `claude-session-env` to `~/.claude/settings.json`: it sources `agent-launch`, runs
+    the `agent_fence` both launchers run and writes its exports and unsets into the session's `CLAUDE_ENV_FILE`, which
+    Claude Code runs before every Bash command - the fence and `DEVBOX_ENV=laptop` for Claude desktop app sessions no
+    launcher starts (Bash commands only); reports whether `omp` and `claude` resolve to their launchers -
     printing the one `PATH` line for the user's shell rc until they do - and the remaining manual steps (PATs,
     App credentials); also runs `container/agent-context apply laptop` and lists its `check` failures as
     manual steps
@@ -360,7 +364,8 @@ the host's root Docker daemon.
     identity's), the agent override installed - the static files
     byte-identical to `home/`'s templates, the agent gitconfigs byte-identical to a fresh
     `devbox-identities render agent-gitconfig` - with `omp` and `claude` resolving through
-    `devbox-agent/launchers` symlinks (a plain file is an `omp update` takeover) and
+    `devbox-agent/launchers` symlinks (a plain file is an `omp update` takeover), the `claude-session-env`
+    `SessionStart` hook present in `~/.claude/settings.json`, and
     `~/.local/bin/devbox-identities` still a symlink onto the libexec reader (the only hop that makes
     `devbox-identities` resolve by name), `~/.config/devbox/git` still unwritable and no login shell writing a
     git identity into it, no agent token in the macOS keychain (a system `credential.helper` running ahead of

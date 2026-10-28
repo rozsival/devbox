@@ -770,6 +770,47 @@ claude_settings_apply() {
     rm -f "${merged}"
     return 1
   fi
+  claude_settings_replace "${live}" "${merged}"
+}
+
+# The SessionStart hook that fences sessions no launcher started (the desktop
+# app, see home/.local/libexec/devbox-agent/claude-session-env). Not part of
+# the preset: .hooks.SessionStart already holds herdr's, moshi-hook's and IDE
+# entries, and the preset merge replaces arrays whole. Appended when no entry
+# runs <command> yet, nothing else touched. Prints and fails as
+# claude_settings_apply; with <keep bak> set, an existing <live>.bak is left
+# as is (a step earlier in the same run already saved the user's original).
+# $1 live file (absent counts as {}), $2 hook command, $3 keep bak (optional).
+claude_session_hook_apply() {
+  local live="$1" command="$2" keep_bak="${3:-}" merged
+  install -d -m 755 "${live%/*}"
+  merged="$(mktemp "${live}.XXXXXX")"
+  # Spelled out rather than `.hooks.SessionStart += [...]`: jaq, which some
+  # laptops put on the PATH as `jq`, cannot assign through a null path.
+  # shellcheck disable=SC2016 # jq variables
+  if ! { if [[ -f ${live} ]]; then cat "${live}"; else echo '{}'; fi; } |
+    jq --arg cmd "${command}" '
+      if any(.hooks.SessionStart[]?; any(.hooks[]?; .command == $cmd)) then .
+      else .hooks = ((.hooks // {}) | .SessionStart = ((.SessionStart // []) + [{hooks: [{type: "command", command: $cmd, timeout: 10}]}]))
+      end' >"${merged}"; then
+    rm -f "${merged}"
+    return 1
+  fi
+  claude_settings_replace "${live}" "${merged}" "${keep_bak}"
+}
+
+# claude_session_hook_present <live file> <hook command>
+claude_session_hook_present() {
+  # shellcheck disable=SC2016 # jq variables
+  jq -e --arg cmd "$2" 'any(.hooks.SessionStart[]?; any(.hooks[]?; .command == $cmd))' "$1" >/dev/null 2>&1
+}
+
+# Moves <merged> over <live> unless they are equal; prints created, unchanged
+# or updated (previous copy kept as <live>.bak, unless <keep bak> is set and
+# one exists).
+# $1 live file, $2 merged file, $3 keep bak (optional).
+claude_settings_replace() {
+  local live="$1" merged="$2" keep_bak="${3:-}"
   chmod 644 "${merged}"
   if [[ ! -f ${live} ]]; then
     mv -f "${merged}" "${live}"
@@ -778,7 +819,7 @@ claude_settings_apply() {
     rm -f "${merged}"
     echo unchanged
   else
-    cp -p "${live}" "${live}.bak"
+    [[ -n ${keep_bak} && -f ${live}.bak ]] || cp -p "${live}" "${live}.bak"
     mv -f "${merged}" "${live}"
     echo updated
   fi
@@ -2453,7 +2494,7 @@ doctor_laptop() {
   fi
   stale=()
   for rel in .local/libexec/devbox-agent/agent-launch .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/claude-launcher \
-    .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
+    .local/libexec/devbox-agent/claude-session-env .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
     .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .local/bin/wt-herdr .local/libexec/devbox-identities; do
     cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
   done
@@ -2496,7 +2537,14 @@ doctor_laptop() {
   if ((${#stale[@]})); then
     fail "differ from the repo templates: ${stale[*]} - run ./bin/devbox agent install"
   else
-    log_success 'launchers, shim, helper, fence, devbox-identities, wt-herdr and agent gitconfigs match the repo templates'
+    log_success 'launchers, Claude session hook, shim, helper, fence, devbox-identities, wt-herdr and agent gitconfigs match the repo templates'
+  fi
+  # Claude sessions no launcher starts (the desktop app) get the fence only
+  # from this SessionStart hook; without it they run git and gh as you.
+  if claude_session_hook_present "${HOME}/.claude/settings.json" "${CLAUDE_SESSION_HOOK}"; then
+    log_success 'Claude Code SessionStart hook fences sessions the desktop app starts'
+  else
+    fail "${HOME}/.claude/settings.json has no SessionStart hook running ${CLAUDE_SESSION_HOOK} - Claude desktop sessions run git and gh as you; run ./bin/devbox agent install"
   fi
   # The gitconfigs must also be unwritable, directory included: GIT_CONFIG_GLOBAL
   # points in there, so `git config --global` in a session rewrites them - that is
@@ -3347,10 +3395,10 @@ devbox_agent_install_command() {
   # the PATH, so the `gh` shim (tokens per directory) never intercepts your own
   # gh, which keeps its OAuth login.
   install -d -m 755 "${AGENT_DIR}"
-  for tool in omp-launcher claude-launcher gh devbox-git-credential devbox-git-no-ssh; do
+  for tool in omp-launcher claude-launcher claude-session-env gh devbox-git-credential devbox-git-no-ssh; do
     install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${AGENT_DIR}/${tool}"
   done
-  # Sourced by both launchers, never run.
+  # Sourced by both launchers and claude-session-env, never run.
   install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${AGENT_DIR}/agent-launch"
 
   # The resolver is a user-facing command (`devbox-gh-token --account`), same
@@ -3512,6 +3560,21 @@ devbox_agent_install_command() {
   updated) log_success "Claude Code preset merged into ${claude_settings} (previous copy: ${claude_settings}.bak)." ;;
   esac
 
+  # The launcher's fence for Claude sessions no launcher starts - the desktop
+  # app above all: a SessionStart hook that writes agent-launch's exports and
+  # unsets into the session's CLAUDE_ENV_FILE (claude-session-env). Appended to
+  # whatever SessionStart entries the file holds, on every run. When the preset
+  # merge just changed the file, its .bak (your original) is kept.
+  if [[ ${claude_settings_state} != invalid ]]; then
+    keep_bak=''
+    [[ ${claude_settings_state} != updated ]] || keep_bak=1
+    case "$(claude_session_hook_apply "${claude_settings}" "${CLAUDE_SESSION_HOOK}" "${keep_bak}")" in
+    created | updated) log_success "Claude Code SessionStart hook added to ${claude_settings}: sessions the desktop app starts get the launcher's fence." ;;
+    unchanged) ;;
+    *) claude_settings_state=invalid ;;
+    esac
+  fi
+
   # Which machine this is, for every agent session: the laptop template as
   # ~/.config/devbox/agent-context.md, one import line appended to your
   # ~/.claude/CLAUDE.md (Claude Code reads it, and OMP with `claude` in its
@@ -3526,7 +3589,7 @@ devbox_agent_install_command() {
   agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_DIR}" 2>&1 || true)"
 
   # -- Report ---------------------------------------------------------------------
-  log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
+  log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,claude-session-env,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
   path_fix=${legacy_kept}
   for agent in "${AGENTS[@]}"; do
     # Same rule as the launcher: the real binary is the first PATH entry that does
@@ -6616,6 +6679,10 @@ initialize() {
   readonly BIN_DIR="${HOME}/.local/bin"
   readonly CONFIG_DIR="${HOME}/.config/devbox"
   readonly SSH_DIR="${HOME}/.ssh"
+  # The laptop's Claude Code SessionStart hook (claude-session-env), as it appears
+  # in ~/.claude/settings.json - `agent install` writes it, `doctor laptop` looks
+  # for exactly this string.
+  readonly CLAUDE_SESSION_HOOK="'${AGENT_DIR}/claude-session-env'"
 
   # `fail` counts instead of exiting, so a doctor or a --check reports everything
   # that is wrong before the exit status says so; CHECK_ONLY turns the provisioning

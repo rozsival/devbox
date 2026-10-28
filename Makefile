@@ -33,10 +33,18 @@ fmt: ## Format shell (shfmt), Markdown and YAML (prettier)
 	$(SHFMT) -w $(SH_SRC)
 	$(PRETTIER) --write $(PRETTIER_SRC)
 
-lint: ## Lint shell (shellcheck) and parse the laptop-side scripts with /bin/bash
+lint: ## Lint shell (shellcheck), parse the laptop-side scripts with /bin/bash and the Claude env file with sh/bash/zsh
 	shellcheck $(SH_LINT)
 	for f in $(SH_BASH32); do /bin/bash -n "$$f"; done
 	@! grep -rnE 'args\[--[a-z0-9]+( - [a-z0-9]+)+' cli || { echo 'cli/: shfmt split these flag keys; quote them (AGENTS.md rule 2)' >&2; exit 1; }
+	@# claude-session-env writes shell code Claude Code runs before every Bash command, under the login shell
+	@# (zsh on macOS): render it against a throwaway HOME and parse it with each shell present.
+	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	mkdir -p "$$tmp/.config/devbox/git" && : >"$$tmp/.config/devbox/git/agent.gitconfig"; \
+	HOME="$$tmp" CLAUDE_ENV_FILE="$$tmp/env" VSCODE_GIT_IPC_HANDLE=x /bin/bash home/.local/libexec/devbox-agent/claude-session-env; \
+	for sh in sh bash zsh; do \
+	  ! command -v "$$sh" >/dev/null || "$$sh" -n "$$tmp/env" || { echo "claude-session-env output does not parse in $$sh" >&2; exit 1; }; \
+	done
 
 check: fmt-check lint build-check ## Everything CI would run; changes nothing
 

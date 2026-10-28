@@ -215,7 +215,7 @@ Agents run on the laptop too — OMP and Claude Code, same launchers, same mecha
 
 `devbox agent install` installs:
 
-- `agent-launch`, `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence in
+- `agent-launch`, `omp-launcher`, `claude-launcher`, `claude-session-env`, `gh` shim, credential helper, fence in
   `~/.local/libexec/devbox-agent`
 - `omp` and `claude` symlinks to their launchers in `~/.local/libexec/devbox-agent/launchers`
 - `devbox-gh-token` and `wt-herdr` (`wt herdr <branch>`) in `~/.local/bin`
@@ -224,6 +224,8 @@ Agents run on the laptop too — OMP and Claude Code, same launchers, same mecha
 - `~/.config/devbox/secrets.env` from template if missing
 - the agent presets: `~/.omp/agent/config.yml` from template if missing, and the Claude Code preset merged into
   `~/.claude/settings.json` when that has no `permissions.deny` (needs `jq`; see [Toolchain](toolchain.md#-claude-code))
+- a `SessionStart` hook in `~/.claude/settings.json` that fences Claude desktop app sessions the way the launcher fences
+  terminal ones ([Git Identities](git.md#claude-desktop-app))
 
 `identities.conf` is never created for you — it prints the `cp` command instead, so placeholder values can never become
 your agent's author. Idempotent: regenerates generated files, keeps `secrets.env` and `identities.conf`, touches nothing
