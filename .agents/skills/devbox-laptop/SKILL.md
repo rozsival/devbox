@@ -108,7 +108,7 @@ signature for <email>` with the _signing_ key's fingerprint.
 
 Installs the devbox's bootstrap override, from `home/` templates: `agent-launch` with `omp-launcher` and
 `claude-launcher` (`~/.local/libexec/devbox-agent/launchers/{omp,claude}` → their launcher), `gh`
-shim, `devbox-git-credential`, `devbox-git-no-ssh`, `devbox-gh-token`, `wt-herdr` (`wt herdr [-n] <branch>`: a
+shim, `devbox-git-credential`, `devbox-git-no-ssh`, the `devbox-safe-rm` Claude Code hook, `devbox-gh-token`, `wt-herdr` (`wt herdr [-n] <branch>`: a
 worktree from the freshly pulled default branch, opened in herdr, focused unless `-n`/`--no-focus`), and `devbox-identities` - the
 registry reader, in `~/.local/libexec` with a `~/.local/bin` symlink, since only the latter is on the PATH
 and every checklist tells you to run `devbox-identities check` (`devbox doctor laptop` checks that hop too).
@@ -149,9 +149,10 @@ a boundary: on the laptop an agent runs as you and can
 still reach your `gh` login or 1Password by other means - `docs/security.md`, accepted limit 7.
 
 It also merges the Claude Code counterpart, `home/.claude/settings.json` (`model` plus `permissions.deny`/`ask` rules
-mirroring the OMP guardrail, written `Bash(<pattern>)`), into `~/.claude/settings.json` when that file is missing or
+mirroring the OMP guardrail, written `Bash(<pattern>)`, plus a `PermissionRequest` hook running `devbox-safe-rm`, which
+approves recoverable deletes - `docs/security.md`, Recoverable deletes), into `~/.claude/settings.json` when that file is missing or
 has no `permissions.deny` - a merge (`jq`, needed on the laptop), because `moshi-hook` and IDE integrations write
-`hooks`/`statusLine` there too, with one `settings.json.bak` kept when it changed an existing file. A file that already
+`hooks`/`statusLine` there too (their hook entries stay beside the preset's), with one `settings.json.bak` kept when it changed an existing file. A file that already
 has `permissions.deny` is left alone; invalid JSON is listed as a manual step. `./bin/devbox sync claude` re-applies
 the preset to the laptop and the devbox on purpose. Claude Code applies deny/ask to every subcommand of a compound
 command and merges permission arrays across settings scopes, so a repository's own `.claude/settings.json` cannot drop

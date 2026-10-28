@@ -298,10 +298,14 @@ Environment:
   CLAUDE_SETTINGS   source file (default: home/.claude/settings.json in this checkout)
 ```
 
-Applies the repo's Claude Code preset to both machines by _merging_ it, not copying it: `jq -s '.[0] * .[1]'` of the live
-`~/.claude/settings.json` and the preset, so every key the preset does not set stays (the `hooks` `moshi-hook` and IDE
-integrations write, `statusLine`), and the ones it sets (`model`, `permissions.deny`, `permissions.ask`) take its value,
-the rule lists replaced whole. A top-level key removed from the preset entirely stays in the live files. This laptop's
+Applies the repo's Claude Code preset to both machines by _merging_ it, not copying it, through
+`container/claude-settings-merge.jq` (the filter `bootstrap` uses too): every key the preset does not set stays
+(`statusLine`, the keys Claude writes), and the ones it sets (`model`, `permissions.deny`, `permissions.ask`) take its
+value, the rule lists replaced whole. `hooks` is merged per event instead: the entries `moshi-hook` and IDE integrations
+wrote stay, and the preset's own commands (the `devbox-safe-rm` `PermissionRequest` hook,
+[Security](security.md#-recoverable-deletes)) are removed from every event before the preset's entries are appended,
+so they replace any earlier copy of themselves and a hook dropped from the preset is uninstalled. A top-level key removed from the preset entirely stays in the live files. This
+laptop's
 file goes first (created if absent, else the previous copy kept as `settings.json.bak` when it changed); the devbox's is
 then fetched over `ssh`, merged locally and copied back, keeping one `settings.json.bak` there too, and left untouched
 when it already holds the preset. Needs `jq`, `rsync` and `ssh`. Restart any running Claude Code session on either
@@ -345,13 +349,13 @@ Usage: ./bin/devbox agent install
 Idempotent: installs the same agent git override the devbox bootstraps. All of it is regenerated every run; nothing else
 of yours is touched.
 
-| Installed                                                                                                                                                             | Where                                                                                                                                                        |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `agent-launch` (the shared launcher body), `omp-launcher`, `claude-launcher`, `gh` shim, credential helper (`devbox-git-credential`), SSH fence (`devbox-git-no-ssh`) | `~/.local/libexec/devbox-agent`                                                                                                                              |
-| `devbox-gh-token`, `wt-herdr` (`wt herdr <branch>`, [Toolchain](toolchain.md#new-worktree-in-herdr))                                                                  | `~/.local/bin`                                                                                                                                               |
-| `omp` and `claude` symlinks to their launchers                                                                                                                        | `~/.local/libexec/devbox-agent/launchers` (the pre-Claude `~/.local/bin/omp` symlink is removed once `omp` resolves through that directory, kept until then) |
-| `agent*.gitconfig`                                                                                                                                                    | `~/.config/devbox/git/` — directory left read-only (mode 500, files 444) so a `git config --global` in a session cannot rewrite the agent identity           |
-| `devbox-identities` reader                                                                                                                                            | `~/.local/libexec`, symlinked into `~/.local/bin` so it answers by name                                                                                      |
+| Installed                                                                                                                                                                                                              | Where                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent-launch` (the shared launcher body), `omp-launcher`, `claude-launcher`, `gh` shim, credential helper (`devbox-git-credential`), SSH fence (`devbox-git-no-ssh`), the Claude Code safe-rm hook (`devbox-safe-rm`) | `~/.local/libexec/devbox-agent`                                                                                                                              |
+| `devbox-gh-token`, `wt-herdr` (`wt herdr <branch>`, [Toolchain](toolchain.md#new-worktree-in-herdr))                                                                                                                   | `~/.local/bin`                                                                                                                                               |
+| `omp` and `claude` symlinks to their launchers                                                                                                                                                                         | `~/.local/libexec/devbox-agent/launchers` (the pre-Claude `~/.local/bin/omp` symlink is removed once `omp` resolves through that directory, kept until then) |
+| `agent*.gitconfig`                                                                                                                                                                                                     | `~/.config/devbox/git/` — directory left read-only (mode 500, files 444) so a `git config --global` in a session cannot rewrite the agent identity           |
+| `devbox-identities` reader                                                                                                                                                                                             | `~/.local/libexec`, symlinked into `~/.local/bin` so it answers by name                                                                                      |
 
 > [!NOTE]
 > `~/.config/devbox/identities.conf` is _not_ created for you — the example is a valid file, so seeding it would render
@@ -592,8 +596,9 @@ version 3.x`.
 
 `~/.claude/settings.json` has other writers: `moshi-hook` and IDE integrations add `hooks` and `statusLine`, Claude
 itself writes `model` (`/model`) and permission rules (`/permissions`). A copy would drop all of them, so the preset is
-merged in (`jq -s '.[0] * .[1]'`): keys it does not set stay, keys it sets take its value, and the rule lists are
-replaced whole, so a rule removed from the preset disappears too. Unlike that file, OMP's `config.yml` is not shared
+merged in (`container/claude-settings-merge.jq`): keys it does not set stay, keys it sets take its value, and the rule
+lists are replaced whole, so a rule removed from the preset disappears too — except the `hooks` event arrays, where
+other writers' entries stay beside the preset's. Unlike that file, OMP's `config.yml` is not shared
 with other writers, so `sync omp` copies it. A merge also cannot drop the live rules unless the preset itself sets an
 empty array, so `sync claude` needs no `--allow-unguarded`. See [Toolchain](toolchain.md#-claude-code).
 

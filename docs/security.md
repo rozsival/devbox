@@ -164,7 +164,8 @@ database-password read ([Toolchain](toolchain.md#-omp)).
 `*vercel token` folded into their `Bash(… *)` or `Bash(*vercel)` rule). Seeded or merged by
 `bootstrap` and `./bin/devbox agent install` when `~/.claude/settings.json` has no `permissions.deny`, re-applied by
 `./bin/devbox sync claude`; merge, not copy, because other tools write that file ([Toolchain](toolchain.md#-claude-code)).
-Claude Code differs from OMP in four ways that matter here:
+The same preset also approves recoverable deletes without a prompt ([below](#-recoverable-deletes)). Claude Code
+differs from OMP in four ways that matter here:
 
 - It splits compound commands (`&&`, `;`, `|`, subshells, `$(...)`) and applies `deny` and `ask` to every subcommand,
   strips wrappers (`timeout`, `nice`, `command`, …) before matching, and matches past leading environment assignments.
@@ -176,6 +177,151 @@ Claude Code differs from OMP in four ways that matter here:
 
 The limits are otherwise the same: rules match command text, so an interpreter one-liner or a script file walks past
 them — accepted limit 7 still applies on the laptop.
+
+## ♻️ Recoverable deletes
+
+Deleting a file in a temp directory loses nothing that was meant to last, and deleting one git holds unchanged at
+`HEAD` loses nothing at all: `git restore` brings it back. The Claude Code preset therefore ships a `PermissionRequest`
+hook (matcher `Bash`), `~/.local/libexec/devbox-agent/devbox-safe-rm` from `home/.local/libexec/devbox-agent/`, that
+answers such a delete's prompt with `allow` — and stays silent, leaving Claude's normal prompt, for everything else. It
+never denies and never runs in plan mode. It runs whenever Claude is about to ask, whatever raised the prompt, so its
+`allow` also answers an `ask` rule of your own that matches such an `rm` — that is the intent; a `deny` rule still wins
+over it. The preset runs it as `/bin/bash -p` and then exits 0 whatever happened, because Claude Code reads exit 2 from
+this hook as a blocking deny: privileged mode ignores `BASH_ENV`, `SHELLOPTS`, `BASHOPTS`, `CDPATH` and `GLOBIGNORE`
+from the environment, and the script turns posix mode (`POSIXLY_CORRECT`) off, clears every `GIT_*` and `PERL5*`
+variable, sets `GIT_NO_LAZY_FETCH=1` and `GIT_NO_REPLACE_OBJECTS=1` (a replace ref would make a deleted object look
+present, and checkout would restore the replacement), forces `core.excludesFile=/dev/null` and `core.fsmonitor=false`
+on every git call (`GIT_CONFIG_COUNT`), and drops every relative `PATH` entry. The preset gives it 30 s; one that runs
+out of time leaves the normal prompt (95,000 tracked files take about 7–12 s). It trusts the request's JSON — the command
+and above all its `cwd`, which every relative path is resolved against. Every unexpected input, error or oversized walk ends in silence: a missed approval costs a prompt, a wrong one
+costs data. It approves a command only if **all** of the following hold.
+
+**The command is only `rm`, optionally after `cd`.** Simple commands separated by `;`, newline or `&&`, each one `rm`
+with nothing but `-r -R -f -v -d`, `--recursive --force --verbose --dir` and `--`, all before the first target (BSD rm
+reads a later `-x` as a file name), or `cd <dir>` with one argument that is absolute, `~`-based, `.` or `./…`, with no
+`..` anywhere: a bare name may resolve through a `CDPATH` the session's shell sets unseen, and `..` resolves logically
+or physically depending on shell options (`set -P`, zsh's `chase_links`) the hook cannot see. After a `cd`, every later
+command must hang on `&&`, since behind `;` it would also run where the `cd` failed. Anything the shell would expand,
+substitute or redirect is refused: `$`, backticks, backslashes anywhere (inside double quotes the shell keeps some and
+drops others), `<`, `>`, `|`, `||`, a lone `&`, `(`, `)`, `{`, `}`, unquoted `[`, `]`, `?`, `!`, `#`, `^`, `=`,
+`~user` and any `~` but a leading `~` or `~/`, and a `'` straight after a closing `'` (zsh's `rcquotes` reads `''`
+inside quotes as one quote). So is any blank but space, tab and newline — a form feed, a vertical tab, U+00A0, U+2028,
+U+3000 and their kin read as a gap but are part of a word to the shell — and any control character. Quoted text is
+literal, so `rm -rf 'app/[locale]'` qualifies.
+
+**One glob form, judged without expanding it.** Shells disagree on what a pattern matches — by locale (`?` and
+brackets byte- or character-wise; the Kelvin sign and the dotted `İ` fold to `k` and `i`), by option (zsh's `**` from
+`*""*`, `NO_CASE_GLOB` folding a pattern's literal segments even on a case-sensitive file system) and by version (bash
+up to 5.1 and dash expand `.*` to `.` and `..`). So a word with an unquoted `*`, `?` or `[` gets no decision, with one
+exception: `*` as the whole word, or `<literal path>/*` with the `*` the entire last segment and nothing after it. That
+form is judged as `rm -r` of every entry of the literal directory, dotfiles included, never the directory itself — at
+least what any shell can make of it. The literal path must be plain ASCII, hold no `.` or empty component (`link//*`,
+`link/./*`) and be a real directory, not a symlink; none of
+its typed components may have a sibling spelled the same in another case (or exist only in another case), on any file
+system; and the directory must not be empty. Every entry is then checked as a target of its own; one starting with `-`
+before any `--` is refused, since rm would take it as an option, and so is one that is a symlink to a directory, which
+zsh's `mark_dirs` would hand to rm as `link/`.
+
+**Every target is recoverable.** A target is resolved as rm sees it: relative to the working directory, its directory
+part through symlinks, its last component not followed — a symlink is itself the target, and `link/` with a trailing
+slash, which rm follows, is refused. Nothing inside a git directory under any name passes: every directory from the
+target's up to `/` is checked for `HEAD` with `objects/` and `refs/` (a repository, bare or `--separate-git-dir`),
+`HEAD` with `commondir` or a `gitdir` file (a linked worktree's admin directory), and `pack/` with `info/` (an object
+store, such as another repository's alternate), and git is asked `rev-parse --is-inside-git-dir` too. Then the target
+must be either
+
+- **inside a git work tree, below its toplevel** — any directory in or above the target's that holds a `.git`, looked up
+  on disk rather than asked of git, which refuses a repository it distrusts. This comes first, so a checkout inside
+  `/tmp` gets these rules too (a work tree with no `.git` of its own, reached through another repository's
+  `core.worktree`, is not found and counts as whatever its location is), and the target must exist: a missing one has
+  nothing to be checked against, so a parse that ever diverged from the shell's fails safe. The repository is the one
+  found from the target's directory (a submodule or linked worktree being its own), with a commit at `HEAD`, the index
+  identical to it under the target, no filter driver in the repository's own config, and no alternates
+  (`objects/info/alternates`: borrowed objects restore only while their store lives, and that store may be a temp
+  directory the same line deletes). It must not be the main checkout of a repository that has a linked worktree
+  (`--git-dir` equal to `--git-common-dir`, and anything under its `worktrees/`): a repository worked on through
+  worktrees keeps its main checkout for the person, and an approval there would also override a project hook that
+  refuses edits in it — with two `PermissionRequest` hooks, either one's `allow` wins. Every enclosing repository up to
+  `/` (the nearest `.git` above each toplevel: a submodule's superproject, the repository a nested clone sits in) is
+  held to the same test. A plain clone with no linked worktree is judged like any other. The object store must be
+  physically where it belongs: `--git-path objects` resolves to the common directory's own `objects/`, neither
+  `objects/` nor `objects/pack/` is a symlink and no pack file is, since a store moved out of `.git` is plain data to
+  every other check. Every index entry must also be in `HEAD`'s tree, so an intent-to-add entry (`git add -N`), which
+  `diff --cached` does not show, gets no decision. Every index entry under the
+  target must be a plain stage-0 file or symlink with a printable ASCII path — no assume-unchanged, skip-worktree or
+  conflict, which hide changes, and no gitlink, since an uninitialised submodule restores nothing — present in the work
+  tree with that type and exec bit (so a chmod hidden by `core.fileMode=false` counts), a symlink's target printable
+  ASCII, and with content that `git hash-object --no-filters` hashes to the index's blob — each path passed as an
+  argument, since `--stdin-paths` strips a trailing carriage return and unquotes a line starting with `"` — so neither a
+  clean filter, `ident` nor end-of-line conversion hides a change. The blob must be in the object store itself
+  (`cat-file` with `GIT_NO_LAZY_FETCH`): a partial clone may hold only its id. No filter or fsmonitor program runs: git
+  runs with `core.fsmonitor=false`, without its untracked cache and with literal pathspecs, and nothing here makes it
+  apply a filter. Empty git output proves nothing by itself, so the walk decides what is there: every file and symlink
+  `find` reaches must be tracked, or have among its directories one whose whole name is `node_modules`, `.turbo`,
+  `.next`, `dist`, `build`, `coverage`, `target` or `tmp` and that git reports as wholly ignored
+  (`git ls-files --others --ignored --directory`, which never collapses a directory holding a tracked file) — by a rule
+  of the repository's own, as committed. Every `.gitignore` from the toplevel down to the directory's parent, and the
+  directory's own, that exists must be tracked, a plain stage-0 entry, byte for byte its index blob and that blob the
+  one at `HEAD` — so an untracked `.gitignore`, or a `build/` line appended and not committed, makes nothing
+  regenerable. The matching rule (`git check-ignore -v --no-index`) must come from one of those files in the
+  directory's parent or above (its own `.gitignore` speaks only for what lies inside it) and not be a negation, never
+  from `.git/info/exclude` or `core.excludesFile`, which are per machine (a global ignore of `tmp` would otherwise
+  approve every repository's `tmp/`); `core.excludesFile` is forced to `/dev/null` besides, so even one naming a
+  nested `.gitignore` cannot spread its rules over the whole repository. No directory above it may be ignored by any source, asked in the same
+  `check-ignore` call: git descends into an ignored `private/` to find a force-added file and then lists `private/tmp/`
+  as ignored by `private/`'s rule, which says nothing about `tmp/` being regenerable. A path with any component starting
+  with `:` is refused, since `check-ignore` reads its input as pathspecs (`:/tmp` is the toplevel's `tmp`) and refuses
+  `--literal-pathspecs`. This catches accidents, not intent: an agent that commits a `.gitignore` change first still
+  passes. And no index entry may lie under it,
+  compared case-insensitively (with `core.ignorecase` off, a tracked `Dist/keep.txt` is the same directory as an
+  ignored `dist/` on macOS). Being merely below an ignored directory is not enough (an ignored `private/` holding `tmp/`
+  is not regenerable), nor is being below a regenerable name that is not itself ignored (a tracked `build/` holding an
+  ignored `private/`). Any other untracked or ignored file — work in progress, a local database, a `*.local` config, a
+  secret — keeps the prompt; or
+- **inside `/tmp`, outside any work tree**, never `/tmp` itself (on macOS `/private/tmp`, resolved physically). Not
+  temp: any per-user temp directory (macOS's `getconf DARWIN_USER_TEMP_DIR`, `$TMPDIR`), where running apps keep live
+  state such as SQLite `-wal` and `-shm` files, and which anything can point elsewhere; and `/var/tmp`, which survives
+  reboots, so programs keep things there meant to last. Claude Code keeps every session's files under `claude-<uid>/<project>/<session>/` in a temp root;
+  any top-level directory there whose name starts with `claude` in any case (macOS file systems ignore case, and the
+  path is compared as typed) passes only as `claude*/<project>/<this session>/scratchpad/<something>`, the session
+  and `scratchpad` spelled exactly, so another session's files, Claude's own state beside them and the scratchpad
+  itself keep the prompt.
+
+**Nothing protected is touched.** No target may be, contain, or lie anywhere below (on its whole physical path, so a
+clone under `~/.claude/plugins/` counts) a `.git` — a nested one inside `node_modules` included — a `.env` or `.env.*`
+file (`.env.example` passes), a `.claude`, a `.omp` or a `.github` (workflows that run with the repository's
+credentials), or another version control system's metadata (`.hg`, `.svn`,
+`.jj`, `.bzr`, `_darcs`, `CVS`, `.sl`, `.pijul`, `_MTN`, `.fslckout`, `_FOSSIL_`, `RCS`, `SCCS`), compared
+case-insensitively. The whole physical path must be printable ASCII: `pwd -P` keeps a name as typed and APFS folds more
+than ASCII case (`.ſvn`, with U+017F, opens `.svn`), so a non-ASCII spelling could reach a protected name unseen. Nor
+may it contain or lie inside a git directory or object store under another name — loose objects in two-hex fan-out
+directories, `pack-*.pack`/`.idx`/`.rev`/`.bitmap`/`.keep` files, any `*.idx` or `*.pack` in a directory named
+`pack` (git loads those whatever their name), `multi-pack-index`, `commit-graph` — anything but
+files, directories
+and symlinks (a FIFO, socket or device is not restorable), or a name with anything but printable ASCII (a newline or
+carriage return would break the hook's line-based lists, and a name that is not valid UTF-8 could be mangled on its way
+through them). Nor may it involve a mount: the target and every entry below it must lie on the device of its temp root
+or toplevel, so a volume mounted anywhere below `/tmp` or inside a repository — the target itself, a directory above
+it, or an empty mount point inside it — gets no decision, since `rm -r` would empty a mounted file system too. A walk
+that fails or passes 100,000 entries is refused.
+
+What it does not cover: the check reads the file system when the prompt would appear, and anything that changes
+between then and the moment rm runs — a file created, a commit, a checkout — is not seen; `rm` and `cd` are trusted to
+be the commands their names say — aliases and functions in the session's shell are invisible to the hook — so an
+alias or function of that name in your shell profile, a zsh global alias
+(`alias -g`, which can rewrite any word of the line) or a `chpwd` hook running on `cd` is your own configuration and can
+change what the line does; and "restorable" means from the local `.git` (never itself approved), not from a pushed
+branch. `test/devbox-safe-rm.sh`, run by `make check`, holds the cases.
+
+### OMP has no equivalent
+
+OMP's preset is unchanged, for three reasons found in OMP 18.13 itself. `bash.patterns` does accept `approval: allow`,
+but a pattern matches the whole command line with `*` spanning spaces, so `rm /tmp/*` would also approve
+`rm /tmp/x ~/y`: no glob can be narrow enough. Extensions cannot approve either — a `tool_call` handler can only block
+a call or rewrite its input, and `tool_approval_requested`/`resolved` are notifications. And the preset leaves
+`tools.approvalMode` at OMP's default, `yolo`, where a bash command no `prompt` or `deny` pattern matches — any `rm`,
+recoverable or not — already runs without a prompt; in the other modes OMP's built-in critical pattern
+(`rm -rf /<path>`) prompts ahead of any `allow` pattern.
 
 ## 🚫 Deliberate boundaries
 
@@ -246,3 +392,17 @@ The SSH keys are 1Password items, not files, so the laptop carries no key — bu
 agent's own credentials: one `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env`, and each configured
 identity's App pem under its own `app` directory. Revoke every identity's PAT, rotate every App private key — same list
 as a container compromise above.
+
+### Why does Claude still ask before this `rm`?
+
+Because `devbox-safe-rm` could not prove the delete recoverable, and it says nothing rather than guess
+([Recoverable deletes](#-recoverable-deletes)). The usual reasons: an untracked or modified file under the target, an
+ignored file outside the regenerable directories, a `.env`, `.git` or `.claude` inside it, a `$VAR` or a second command
+on the line, a `cd` to a bare directory name or through `..`, any glob but `<dir>/*`, another session's temp files, or more than
+100,000 entries to walk. Run the hook by hand to check one
+command; it prints the `allow` decision or nothing:
+
+```bash
+jq -n '{hook_event_name: "PermissionRequest", tool_name: "Bash", tool_input: {command: "rm -rf dist"}, cwd: env.PWD}' |
+  ~/.local/libexec/devbox-agent/devbox-safe-rm
+```

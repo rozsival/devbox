@@ -1,0 +1,842 @@
+#!/usr/bin/env bash
+# Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
+# edit home/.local/libexec/devbox-agent/devbox-safe-rm in the repo.
+#
+# Claude Code PermissionRequest hook (matcher `Bash`, wired in by the preset,
+# home/.claude/settings.json): approves an `rm` whose every target can be had
+# back - a file in a temp directory, or one git can restore from HEAD - and
+# says nothing about anything else, so Claude shows its normal prompt. It never
+# denies. The rules, and why each one is there, are in docs/security.md
+# (Recoverable deletes). Every unexpected input, error or oversized walk ends
+# in silence: a missed approval costs a prompt, a wrong one costs data.
+#
+# Bash 3.2 compatible (macOS's /bin/bash); needs jq, git, find, awk, xargs and
+# perl (no modules), all present on both machines. The preset runs it as
+# `/bin/bash -p` and turns any exit status into 0 (see below).
+set +o posix
+unset POSIXLY_CORRECT
+set -uo pipefail
+set -f
+export LC_ALL=C
+
+# Entries walked per target before it counts as too large to check.
+readonly WALK_LIMIT=100000
+# Ignored directories whose contents a build or an install recreates. Short on
+# purpose: package installs (node_modules), build output (dist, build, .next,
+# target - Rust and Maven), tool caches (.turbo), test reports (coverage) and a
+# project's own scratch directory (tmp, e.g. Rails' tmp/cache, tmp/pids).
+readonly REGENERABLE='node_modules .turbo .next dist build coverage target tmp'
+
+silent() { exit 0; }
+
+# Nothing from the session may redirect git (every GIT_* variable goes), load
+# code into perl, or change how this script's own cd and globbing behave.
+# BASH_ENV, SHELLOPTS, BASHOPTS and POSIXLY_CORRECT act at startup: the preset
+# runs the script as `bash -p`, whose privileged mode ignores the first three
+# (and CDPATH and GLOBIGNORE), and `set +o posix` above undoes the last; the
+# unset and shopt below cover a plain `bash` run.
+for var in $(compgen -e); do
+  case "${var}" in GIT_* | PERL5* | PERLLIB | PERLIO*) unset "${var}" ;; esac
+done
+unset CDPATH GLOBIGNORE BASH_ENV
+shopt -u nullglob failglob dotglob nocaseglob extglob nocasematch 2>/dev/null
+shopt -u globstar 2>/dev/null
+# git never fetches a missing object on the hook's behalf (a partial clone's
+# promisor remote), and no PATH entry relative to wherever the hook runs can
+# put another git, jq or perl in front.
+export GIT_NO_LAZY_FETCH=1
+# Nor does a replace ref stand in for a missing object (cat-file would call it
+# present, checkout would restore the replacement), nor does a per-machine
+# excludes file - which could even name a nested .gitignore - shape the ignore
+# rules; and no fsmonitor program runs. Through GIT_CONFIG_COUNT, which every
+# git call below reads with command-line precedence.
+export GIT_NO_REPLACE_OBJECTS=1
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.excludesFile GIT_CONFIG_VALUE_0=/dev/null \
+  GIT_CONFIG_KEY_1=core.fsmonitor GIT_CONFIG_VALUE_1=false
+abs_path=''
+IFS=: read -r -a path_entries <<<"${PATH:-/usr/bin:/bin}"
+for entry in ${path_entries[@]+"${path_entries[@]}"}; do
+  [[ ${entry} == /* ]] && abs_path+="${abs_path:+:}${entry}"
+done
+export PATH="${abs_path:-/usr/bin:/bin}"
+
+command -v jq >/dev/null 2>&1 || silent
+command -v git >/dev/null 2>&1 || silent
+command -v perl >/dev/null 2>&1 || silent
+input="$(cat)" || silent
+# Only a Bash permission prompt outside plan mode, and only a command made of
+# tab, newline, printable ASCII and non-blank non-ASCII: no control character
+# (a NUL would end the string the shell runs early) and no Unicode space or
+# invisible separator (U+00A0, U+2028, U+3000, ...), which a reader takes for a
+# blank and the shell for part of a word.
+# shellcheck disable=SC2016 # jq program, not shell
+cmd="$(jq -r '
+  def odd_blank: . == 160 or . == 5760 or . == 6158 or (. >= 8192 and . <= 8205) or . == 8232 or . == 8233
+    or . == 8239 or . == 8287 or . == 8288 or . == 12288 or . == 65279;
+  select(.hook_event_name == "PermissionRequest" and .tool_name == "Bash"
+    and (.permission_mode // "") != "plan")
+  | .tool_input.command | strings
+  | select(explode | all(. == 9 or . == 10 or (. >= 32 and . < 127) or (. >= 160 and (odd_blank | not))))' \
+  <<<"${input}" 2>/dev/null)" || silent
+[[ -n ${cmd} ]] || silent
+# Most prompts are not about rm at all: leave them before the tokenizer runs.
+rm_word='(^|[[:space:];&])rm[[:space:]]'
+[[ ${cmd} =~ ${rm_word} ]] || silent
+start="$(jq -r '.cwd | strings' <<<"${input}" 2>/dev/null)" || silent
+[[ ${start} == /* ]] || silent
+session="$(jq -r '.session_id | strings' <<<"${input}" 2>/dev/null)" || session=''
+[[ -n ${HOME:-} && ${HOME} == /* ]] || silent
+
+# Physical path of an existing directory, or failure.
+physical_dir() { (cd -P -- "$1" 2>/dev/null && pwd -P); }
+
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+# Whether a name is one of the regenerable directory names (whole names only).
+regenerable() {
+  local n
+  n="$(lower "$1")"
+  case " ${REGENERABLE} " in *" ${n} "*) [[ ${n} != *' '* ]] ;; *) return 1 ;; esac
+}
+
+# A name no approval may touch: git's own data, an environment file holding
+# secrets (`.env.example` is a template and passes), an agent's configuration.
+# Lowercased, since macOS file systems are case-insensitive (on Linux too: a
+# stricter match only costs a prompt).
+forbidden_name() {
+  case "$(lower "$1")" in
+  .git | .github | .claude | .omp | .env | .hg | .svn | .jj | .bzr | _darcs | cvs | .sl | .pijul | _mtn | \
+    .fslckout | _fossil_ | rcs | sccs) return 0 ;;
+  .env.example) return 1 ;;
+  .env.*) return 0 ;;
+  esac
+  return 1
+}
+
+# Every component of a path relative to its temp root or git toplevel.
+forbidden_components() {
+  local IFS=/ part
+  for part in $1; do
+    forbidden_name "${part}" && return 0
+  done
+  return 1
+}
+
+# The device number of a path itself (lstat), via perl because BSD and GNU
+# stat disagree on flags and both can be on a macOS PATH.
+device() { perl -e '@s = lstat($ARGV[0]) or exit 1; print $s[0]' "$1" 2>/dev/null; }
+
+# Whether a directory, or any directory above it up to /, is a git directory
+# under any name: HEAD with objects/ and refs/ (a repository, bare or
+# --separate-git-dir), HEAD with commondir (a linked worktree's), or a gitdir
+# file (the same). Also whatever git itself says is inside a git directory.
+in_git_dir() {
+  local d="$1"
+  [[ "$(git -C "${d}" -c core.fsmonitor=false rev-parse --is-inside-git-dir 2>/dev/null)" == true ]] && return 0
+  while :; do
+    [[ -f ${d}/HEAD && -d ${d}/objects && -d ${d}/refs ]] && return 0
+    [[ -f ${d}/HEAD && -e ${d}/commondir ]] && return 0
+    [[ -e ${d}/gitdir ]] && return 0
+    # An object store of its own (another repository's alternate): pack/ and info/.
+    [[ -d ${d}/pack && -d ${d}/info ]] && return 0
+    [[ -e ${d}/multi-pack-index || -e ${d}/commit-graph || -e ${d}/commit-graphs ]] && return 0
+    # A pack directory on its own (an object store without info/): pack-*
+    # files, or any *.idx or *.pack in a directory named pack - git loads
+    # those whatever their name.
+    # shellcheck disable=SC2016 # perl program, not shell
+    perl -e 'my $d = $ARGV[0]; opendir(my $dh, $d) or exit 1; my ($base) = $d =~ m{([^/]*)\z};
+      my $pack = lc($base) eq "pack";
+      exit((grep { /^pack-[0-9a-f]+\.(pack|idx|rev|bitmap|keep|promisor|mtimes)\z/ || ($pack && /\.(idx|pack)\z/i) }
+        readdir $dh) ? 0 : 1)' "${d}" 2>/dev/null && return 0
+    [[ ${d} == / ]] && return 1
+    d="${d%/*}"
+    [[ -n ${d} ]] || d=/
+  done
+}
+
+# Walks an existing target and refuses it when a walk fails or passes
+# WALK_LIMIT entries; when it meets a forbidden name anywhere (a nested .git
+# inside node_modules included), a git directory under another name (HEAD with
+# objects and refs, or with commondir, or a gitdir file), a name with anything
+# but printable ASCII (a newline or carriage return would break the line-based
+# lists below, and a name that is not valid UTF-8 could be mangled on its way
+# through them), or anything but files, directories and symlinks (FIFOs,
+# sockets, devices: nothing restores them); and when any entry, the target
+# included, lies on another device than $2, the temp root or the repository's
+# toplevel - a mount, which rm -r would empty too.
+walk_ok() {
+  local odd dev_root
+  dev_root="$(device "$2")" || return 1
+  # shellcheck disable=SC2016 # awk program, not shell
+  local prog='{ if (++n > lim) exit 2; k = split($0, part, "/"); b = tolower(part[k])
+    if (b == ".git" || b == ".github" || b == ".claude" || b == ".omp" || b == ".env" || b == "gitdir" ||
+        b == ".hg" || b == ".svn" || b == ".jj" || b == ".bzr" || b == "_darcs" || b == "cvs" ||
+        b == ".sl" || b == ".pijul" || b == "_mtn" || b == ".fslckout" || b == "_fossil_" || b == "rcs" ||
+        b == "sccs" || b == "multi-pack-index" || b == "commit-graph" || b == "commit-graphs" ||
+        b ~ /^pack-[0-9a-f]+\.(pack|idx|rev|bitmap|keep|promisor|mtimes)$/ ||
+        (substr(b, 1, 5) == ".env." && b != ".env.example")) exit 3
+    if (b == "head" || b == "objects" || b == "refs" || b == "commondir" || b == "pack" || b == "info") {
+      parent = substr($0, 1, length($0) - length(part[k]) - 1); seen[parent, b] = 1
+      if (seen[parent, "head"] && ((seen[parent, "objects"] && seen[parent, "refs"]) || seen[parent, "commondir"]))
+        exit 4
+      if (seen[parent, "pack"] && seen[parent, "info"]) exit 4 }
+    # Any *.idx or *.pack in a directory named pack: git loads it whatever its name.
+    if (k > 1 && tolower(part[k - 1]) == "pack" && b ~ /\.(idx|pack)$/) exit 4
+    # A loose object: a 38- or 62-hex name in a two-hex fan-out directory.
+    if (k > 1 && (length(b) == 38 || length(b) == 62) && b !~ /[^0-9a-f]/ &&
+        length(part[k - 1]) == 2 && tolower(part[k - 1]) !~ /[^0-9a-f]/) exit 4 }'
+  odd="$(find "$1" \( \( ! -type f ! -type d ! -type l \) -o -name '*[![:print:]]*' \) -print 2>/dev/null |
+    head -c 1)" || return 1
+  [[ -z ${odd} ]] || return 1
+  find "$1" -print 2>/dev/null | awk -v lim="${WALK_LIMIT}" "${prog}" || return 1
+  # Every entry on the root's device, empty mount points included. Plain perl,
+  # no modules: Ubuntu's perl-base has no File::Find.
+  # shellcheck disable=SC2016 # perl program, not shell
+  perl -e 'my ($lim, $dev, $root) = @ARGV; my ($n, @todo) = (0, $root);
+    while (@todo) { my $p = pop @todo; my @s = lstat $p or exit 1; exit 2 if $s[0] != $dev || ++$n > $lim;
+      next unless -d _; opendir(my $dh, $p) or exit 1;
+      push @todo, map { "$p/$_" } grep { $_ ne "." && $_ ne ".." } readdir $dh; closedir $dh }' \
+    "${WALK_LIMIT}" "${dev_root}" "$1" 2>/dev/null
+}
+
+# The temp roots: the shared /tmp, resolved to its physical path (macOS's
+# /private/tmp). A root itself is never a target; only what lies inside one
+# is. Left out: /var/tmp, which survives reboots, so programs keep things there
+# that are meant to last, and any per-user temp directory (macOS's
+# DARWIN_USER_TEMP_DIR, $TMPDIR), where running apps keep live state such as
+# SQLite -wal and -shm files.
+temp_roots=()
+add_root() {
+  local r
+  r="$(physical_dir "$1")" || return 0
+  [[ ${r} != / ]] && temp_roots+=("${r}")
+  return 0
+}
+for root in /tmp /private/tmp; do
+  add_root "${root}"
+done
+
+# -- Tokenizer ---------------------------------------------------------------
+# A deliberately small shell subset: words, single and double quotes, `;`,
+# newline and `&&` between commands, a leading `~` or `~/`, and one glob form.
+# Everything else that the shell would expand, redirect, substitute or treat
+# as an operator - `$`, backticks, backslashes (anywhere: inside double quotes
+# the shell keeps some and drops others), `<`, `>`, `|`, a lone `&`, `(`, `)`,
+# `{`, `}`, `[`, `]`, `?`, `!`, `#`, `^`, `=` - ends in silence. Quoted, those
+# characters are literal and allowed, except `$`, backticks and `!` inside
+# double quotes.
+#
+# The glob form: an unquoted `*` that is the whole last segment of its word -
+# `*` alone or `<literal path>/*` - with nothing after it and no other `*`.
+# Every other glob is refused, because shells disagree on what it matches:
+# locales (`?` and brackets byte- or character-wise, Kelvin sign and dotted I
+# under case folding), zsh's `**` from `*""*`, bash <= 5.1 and dash expanding
+# `.*` to `.` and `..`, and zsh's NO_CASE_GLOB folding the literal segments of a
+# pattern even on a case-sensitive file system.
+words=()     # each word's text
+word_glob=() # 1 for the glob form
+word_cmd=()  # the command it belongs to
+seps=()      # seps[c]: the operator after command c (`;` or `&&`), empty for the last
+ncmd=0
+cur='' in_word=0 glob=0 nonascii=0 cmd_words=0
+lit() {
+  ((glob)) && silent # anything after the glob's `*`
+  cur+="$1"
+  case "$1" in [[:print:]]) ;; *) nonascii=1 ;; esac
+}
+end_word() {
+  if ((in_word)); then
+    # The glob's literal path must be plain ASCII (case folding beyond ASCII
+    # differs between shells and file systems).
+    ((glob && nonascii)) && silent
+    words+=("${cur}")
+    word_glob+=("${glob}")
+    word_cmd+=("${ncmd}")
+    cmd_words=$((cmd_words + 1))
+  fi
+  cur='' in_word=0 glob=0 nonascii=0
+}
+end_cmd() {
+  end_word
+  ((cmd_words)) || silent
+  ncmd=$((ncmd + 1))
+  seps+=("$1")
+  cmd_words=0
+}
+len=${#cmd}
+i=0
+quote=''
+while ((i < len)); do
+  ch="${cmd:i:1}"
+  if [[ ${quote} == "'" ]]; then
+    case "${ch}" in
+    "'")
+      # zsh's rcquotes reads '' inside single quotes as one quote: 'it''s'.
+      [[ ${cmd:i+1:1} == "'" ]] && silent
+      quote=''
+      ;;
+    \\ | [[:cntrl:]]) silent ;;
+    *) lit "${ch}" ;;
+    esac
+  elif [[ ${quote} == '"' ]]; then
+    case "${ch}" in
+    '"') quote='' ;;
+    '$' | '`' | \\ | '!' | [[:cntrl:]]) silent ;;
+    *) lit "${ch}" ;;
+    esac
+  else
+    case "${ch}" in
+    ' ' | $'\t') end_word ;;
+    ';' | $'\n') end_cmd ';' ;;
+    '&')
+      [[ ${cmd:i+1:1} == '&' ]] || silent
+      end_cmd '&&'
+      i=$((i + 1))
+      ;;
+    "'" | '"')
+      ((glob)) && silent
+      quote="${ch}"
+      in_word=1
+      ;;
+    '*')
+      ((glob)) && silent
+      case "${cur}" in '' | */) ;; *) silent ;; esac
+      case "${cmd:i+1:1}" in '' | ' ' | $'\t' | $'\n' | ';' | '&') ;; *) silent ;; esac
+      glob=1 in_word=1
+      cur+='*'
+      ;;
+    '~')
+      # Only `~` alone or `~/...` at the start of a word: $HOME. `~user`,
+      # `a~b` and zsh's `~` pattern operator are refused.
+      ((in_word)) && silent
+      case "${cmd:i+1:1}" in '' | / | ' ' | $'\t' | $'\n' | ';' | '&') ;; *) silent ;; esac
+      in_word=1
+      j=0
+      while ((j < ${#HOME})); do
+        lit "${HOME:j:1}"
+        j=$((j + 1))
+      done
+      ;;
+    '$' | '`' | \\ | '<' | '>' | '|' | '(' | ')' | '{' | '}' | '[' | ']' | '?' | '!' | '#' | '^' | '=' | [[:cntrl:]])
+      silent
+      ;;
+    *)
+      lit "${ch}"
+      in_word=1
+      ;;
+    esac
+  fi
+  i=$((i + 1))
+done
+[[ -z ${quote} ]] || silent
+end_word
+if ((cmd_words)); then
+  ncmd=$((ncmd + 1))
+  seps+=('')
+elif ((ncmd == 0)) || [[ ${seps[ncmd - 1]} == '&&' ]]; then
+  # Nothing at all, or a line ending in `&&`.
+  silent
+fi
+# Otherwise a trailing `;` or newline, which closed nothing: harmless.
+# seps[c] above is the operator *after* command c; turn it into the one before.
+before=('')
+c=0
+while ((c + 1 < ncmd)); do
+  before+=("${seps[c]}")
+  c=$((c + 1))
+done
+
+# -- Targets -----------------------------------------------------------------
+# Whether a directory lies in a git work tree: it or an ancestor holds a .git.
+# Looked up on disk rather than asked of git, which refuses a repository it
+# distrusts (safe.directory) and would leave its files looking like plain temp.
+# A work tree with no .git at all (core.worktree pointing at it from elsewhere)
+# is not found and counts as whatever its location is.
+in_work_tree() {
+  local d="$1"
+  while :; do
+    [[ -e ${d}/.git || -L ${d}/.git ]] && return 0
+    [[ ${d} == / ]] && return 1
+    d="${d%/*}"
+    [[ -n ${d} ]] || d=/
+  done
+}
+
+# Inside a temp root, Claude Code keeps every session's files under
+# claude-<uid>/<project>/<session>/: only this session's own scratchpad passes,
+# never another session's state or scratchpad. The first component is compared
+# lowercased - on a case-insensitive file system /tmp/CLAUDE-501 is the same
+# directory, and `pwd -P` keeps the case as typed - and refused when it holds
+# non-ASCII, which such a file system may also fold; the session and
+# `scratchpad` components must match exactly, so any other spelling fails safe.
+temp_ok() {
+  local rel="$1" r first proj sess pad rest
+  forbidden_components "${rel}" && return 1
+  first="${rel%%/*}"
+  case "${first}" in *[![:print:]]*) return 1 ;; esac
+  case "$(lower "${first}")" in
+  claude*)
+    [[ ${session} =~ ^[A-Za-z0-9_-]+$ ]] || return 1
+    r="${rel#*/}"
+    [[ ${r} != "${rel}" ]] || return 1
+    proj="${r%%/*}" r="${r#*/}"
+    sess="${r%%/*}" r="${r#*/}"
+    pad="${r%%/*}" rest="${r#*/}"
+    [[ ${sess} == "${session}" && ${pad} == scratchpad && -n ${proj} && -n ${rest} && ${rest} != "${r}" ]] ||
+      return 1
+    ;;
+  esac
+  return 0
+}
+
+# Whether directory d (relative to top) is a regenerable directory git ignores
+# by a rule of the repository's own: the rule `git check-ignore -v` reports
+# must come from a .gitignore inside the work tree - not .git/info/exclude or
+# core.excludesFile, which are per machine and could ignore `tmp` everywhere -
+# and must not be a negation; and no index entry may lie under it, compared
+# case-insensitively (with core.ignorecase off, `Dist/keep.txt` in the index is
+# the same directory on a case-insensitive file system).
+regen_dir_ok() {
+  local top="$1" d="$2" source line pattern path gi prefix='' chain='' rest part
+  regenerable "${d##*/}" || return 1
+  # check-ignore reads its paths as pathspecs and refuses --literal-pathspecs,
+  # so a component starting with `:` (pathspec magic, `:/tmp` being the
+  # toplevel's tmp) would make it judge another path.
+  case "/${d}" in */:*) return 1 ;; esac
+  # Every .gitignore from the toplevel down to d's parent, and d's own: each one
+  # present must be tracked and clean, exactly as committed, so an untracked
+  # or edited .gitignore - an accident, a new `build/` line - never makes a
+  # directory regenerable.
+  chain='.gitignore'$'\n'
+  rest="${d}"
+  while [[ ${rest} == */* ]]; do
+    part="${rest%%/*}"
+    rest="${rest#*/}"
+    prefix+="${part}/"
+    chain+="${prefix}.gitignore"$'\n'
+  done
+  chain+="${d}/.gitignore"$'\n'
+  while IFS= read -r gi; do
+    [[ -n ${gi} ]] || continue
+    if [[ -e ${top}/${gi} || -L ${top}/${gi} ]] ||
+      [[ -n "$(git -C "${top}" --literal-pathspecs ls-files -- "${gi}" 2>/dev/null | head -c 1)" ]]; then
+      gitignore_clean "${top}" "${gi}" || return 1
+    fi
+  done <<<"${chain}"
+  # One check-ignore call for d's ancestors and d: no ancestor may be ignored
+  # by any source. Otherwise git, descending into an ignored private/ for a
+  # force-added file, reports private/tmp/ as ignored by private/'s rule -
+  # which says nothing about tmp/ being regenerable.
+  local ancestors='' found=0 s l p
+  rest="${d}"
+  prefix=''
+  while [[ ${rest} == */* ]]; do
+    prefix+="${rest%%/*}"
+    rest="${rest#*/}"
+    ancestors+="${prefix}"$'\n'
+    prefix+=/
+  done
+  source='' line='' pattern=''
+  while IFS= read -r -d '' s && IFS= read -r -d '' l && IFS= read -r -d '' p && IFS= read -r -d '' path; do
+    if [[ ${path} == "${d}" ]]; then
+      source="${s}" line="${l}" pattern="${p}" found=1
+    elif [[ -n ${s} && ${p} != '!'* ]]; then
+      return 1
+    fi
+  done < <({
+    printf '%s' "${ancestors}" | tr '\n' '\0'
+    printf '%s\0' "${d}"
+  } | git -C "${top}" -c core.fsmonitor=false check-ignore -v -z --non-matching --no-index --stdin 2>/dev/null)
+  ((found)) && [[ -n ${line} ]] || return 1
+  [[ ${source} != /* && ${source} != ../* && ${source} != .git/* && ${source##*/} == .gitignore ]] || return 1
+  # The rule must come from one of the files just checked, in d's parent or
+  # above (d's own .gitignore speaks only for what lies inside d).
+  case $'\n'"${chain%"${d}/.gitignore"$'\n'}" in *$'\n'"${source}"$'\n'*) ;; *) return 1 ;; esac
+  [[ -e ${top}/${source} ]] || return 1
+  [[ ${pattern} != '!'* ]] || return 1
+  [[ -z "$(git -C "${top}" -c core.fsmonitor=false ls-files -- ":(icase,literal)${d}" 2>/dev/null | head -c 1)" ]]
+}
+
+# Whether the .gitignore gi (relative to top) is tracked, stage 0, a plain
+# `H` entry, a regular file, byte for byte the index's blob (no filters) and
+# the index's blob the one at HEAD.
+gitignore_clean() {
+  local top="$1" gi="$2" entry meta sha tag got
+  local g=(git -C "${top}" --literal-pathspecs -c core.fsmonitor=false)
+  [[ -f ${top}/${gi} && ! -L ${top}/${gi} ]] || return 1
+  entry="$("${g[@]}" ls-files -s -- "${gi}" 2>/dev/null)" || return 1
+  [[ -n ${entry} && ${entry} != *$'\n'* ]] || return 1
+  meta="${entry%%$'\t'*}"
+  [[ ${entry#*$'\t'} == "${gi}" && ${meta%% *} == 100644 && ${meta##* } == 0 ]] || return 1
+  sha="${meta#* }"
+  sha="${sha%% *}"
+  tag="$("${g[@]}" ls-files -v -- "${gi}" 2>/dev/null)" || return 1
+  [[ ${tag} == "H ${gi}" ]] || return 1
+  got="$("${g[@]}" hash-object --no-filters -- "${gi}" 2>/dev/null)" || return 1
+  [[ ${got} == "${sha}" ]] || return 1
+  "${g[@]}" diff --quiet --no-ext-diff --no-textconv --cached HEAD -- "${gi}" >/dev/null 2>&1
+}
+
+# Whether the repository whose work tree is (or holds) t is its main checkout
+# and has at least one linked worktree - or git cannot tell, which counts as
+# yes.
+main_checkout_with_worktrees() {
+  local t="$1" git_dir common_dir wt
+  git_dir="$(git -C "${t}" rev-parse --absolute-git-dir 2>/dev/null)" || return 0
+  common_dir="$(git -C "${t}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 0
+  git_dir="$(physical_dir "${git_dir}")" || return 0
+  common_dir="$(physical_dir "${common_dir}")" || return 0
+  [[ ${git_dir} == "${common_dir}" && -d ${common_dir}/worktrees ]] || return 1
+  # shellcheck disable=SC2016 # perl program, not shell
+  wt="$(perl -e 'opendir(my $dh, $ARGV[0]) or exit 1;
+    print scalar grep { $_ ne "." && $_ ne ".." } readdir $dh' "${common_dir}/worktrees" 2>/dev/null)" || return 0
+  [[ ${wt} != 0 ]]
+}
+
+# The git rules for an existing target rel below toplevel top. No program from
+# the repository's own config runs (fsmonitor off; a repository defining a
+# filter driver is refused outright, and nothing below applies filters), and
+# git's own answers are checked against the file system rather than trusted:
+#
+# - a commit at HEAD, and the index identical to it under rel;
+# - every index entry a plain stage-0 `H` (no assume-unchanged, skip-worktree,
+#   conflict) of a file or symlink - a gitlink is an uninitialised submodule
+#   that restores nothing - with a printable ASCII path, present in the work
+#   tree with that type and exec bit, with content hashing (git hash-object
+#   --no-filters, each path an argument: --stdin-paths strips a trailing CR
+#   and unquotes a leading `"`) to the index's blob, and that blob present in
+#   the object store (a partial clone may not hold it);
+# - every file and symlink the walk finds either tracked, or below a directory
+#   with a regenerable name that git itself collapses as wholly ignored
+#   (`ls-files --others --ignored --directory`, which never collapses a
+#   directory holding a tracked file) by a rule of the repository's own
+#   (regen_dir_ok). Empty git output proves nothing on its own, so the walk,
+#   not git, decides what is there.
+git_ok() {
+  local top="$1" rel="$2" walked candidates collapsed='' c d out sha path got target
+  local tracked='' allowed='' links
+  # Literal pathspecs (a file named `*` is not a glob to git), and no
+  # fsmonitor or untracked cache answering for the work tree.
+  local g=(git -C "${top}" --literal-pathspecs -c core.fsmonitor=false -c core.untrackedCache=false)
+  if "${g[@]}" config --local --get-regexp '^filter\..*\.(clean|smudge|process)$' >/dev/null 2>&1; then
+    return 1
+  fi
+  # Objects borrowed from another store (alternates) restore only while that
+  # store lives - which may be a temp directory this very line deletes.
+  local alternates
+  alternates="$("${g[@]}" rev-parse --git-path objects/info/alternates 2>/dev/null)" || return 1
+  [[ ${alternates} == /* ]] || alternates="${top}/${alternates}"
+  [[ -s ${alternates} ]] && return 1
+  # A repository worked on through linked worktrees keeps its main checkout
+  # for the person: there, no delete passes (it would also override a project
+  # hook that refuses edits in the main checkout) - not in this repository,
+  # nor in a nested repository or submodule of such a checkout, so every
+  # enclosing repository up to / is asked too. A plain clone with no linked
+  # worktree is judged as any other.
+  local t="${top}" d up
+  while :; do
+    main_checkout_with_worktrees "${t}" && return 1
+    [[ ${t} == / ]] && break
+    d="${t%/*}"
+    [[ -n ${d} ]] || d=/
+    up=''
+    while :; do
+      if [[ -e ${d}/.git || -L ${d}/.git ]]; then
+        up="${d}"
+        break
+      fi
+      [[ ${d} == / ]] && break
+      d="${d%/*}"
+      [[ -n ${d} ]] || d=/
+    done
+    [[ -n ${up} ]] || break
+    t="${up}"
+  done
+  # The object store must be physically where it belongs: no objects/ or
+  # objects/pack symlinked elsewhere and no pack file a symlink, since a store
+  # moved out of .git is plain data to everything else here.
+  local common_dir objects
+  common_dir="$("${g[@]}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  common_dir="$(physical_dir "${common_dir}")" || return 1
+  objects="$("${g[@]}" rev-parse --path-format=absolute --git-path objects 2>/dev/null)" || return 1
+  objects="$(physical_dir "${objects}")" || return 1
+  [[ ${objects} == "${common_dir}/objects" && ! -L ${common_dir}/objects && ! -L ${common_dir}/objects/pack ]] ||
+    return 1
+  if [[ -d ${objects}/pack ]]; then
+    # shellcheck disable=SC2016 # perl program, not shell
+    perl -e 'opendir(my $dh, $ARGV[0]) or exit 1; exit((grep { -l "$ARGV[0]/$_" } readdir $dh) ? 1 : 0)' \
+      "${objects}/pack" 2>/dev/null || return 1
+  fi
+  "${g[@]}" rev-parse -q --verify HEAD >/dev/null 2>&1 || return 1
+  "${g[@]}" diff --quiet --no-ext-diff --no-textconv --cached HEAD -- "${rel}" >/dev/null 2>&1 || return 1
+  "${g[@]}" ls-files -z -v --cached -- "${rel}" 2>/dev/null | tr '\0' '\n' | cut -c1 |
+    awk '$0 != "H" { bad = 1 } END { exit bad }' || return 1
+  # One perl pass over the index entries (a bash loop took 40 s for 95k
+  # files): F <sha> <path> for a file, L <sha> <path> <target> for a symlink,
+  # or failure. The exec bit is the owner's, as git reads it; lstat, so a
+  # symlink in a file's place fails.
+  local listing expected
+  # shellcheck disable=SC2016 # perl program, not shell
+  listing="$("${g[@]}" ls-files -z -s --cached -- "${rel}" 2>/dev/null | perl -e '
+    my ($top) = @ARGV; local $/ = "\0";
+    while (my $e = <STDIN>) { chomp $e;
+      my ($meta, $path) = split /\t/, $e, 2;
+      exit 1 unless defined $path && $path =~ /^[\x20-\x7e]+\z/;
+      my ($mode, $sha, $stage) = split / /, $meta;
+      exit 1 unless defined $stage && $stage eq "0" && $sha =~ /^[0-9a-f]+\z/;
+      my @s = lstat "$top/$path" or exit 1;
+      if ($mode eq "100644" || $mode eq "100755") {
+        exit 1 unless -f _ && (($s[2] & 0100) ? 1 : 0) == ($mode eq "100755" ? 1 : 0);
+        print "F\t$sha\t$path\n";
+      } elsif ($mode eq "120000") {
+        exit 1 unless -l _; my $t = readlink "$top/$path";
+        exit 1 unless defined $t && $t =~ /^[\x20-\x7e]+\z/;
+        print "L\t$sha\t$path\t$t\n";
+      } else { exit 1 } }' "${top}")" || return 1
+  if [[ -n ${listing} ]]; then
+    # Files: hashed as they are on disk (no filters), each path an argument.
+    expected="$(printf '%s\n' "${listing}" | awk -F '\t' '$1 == "F" { print $2 }')"
+    if [[ -n ${expected} ]]; then
+      got="$(printf '%s\n' "${listing}" | awk -F '\t' '$1 == "F" { printf "%s%c", $3, 0 }' |
+        xargs -0 git -C "${top}" hash-object --no-filters -- 2>/dev/null)" || return 1
+      [[ ${got} == "${expected}" ]] || return 1
+    fi
+    # Symlinks (few): their target's exact bytes.
+    links="$(printf '%s\n' "${listing}" | awk -F '\t' '$1 == "L"')"
+    if [[ -n ${links} ]]; then
+      while IFS=$'\t' read -r _ sha path target; do
+        got="$(printf '%s' "${target}" | git -C "${top}" hash-object --stdin 2>/dev/null)" || return 1
+        [[ ${got} == "${sha}" ]] || return 1
+      done <<<"${links}"
+    fi
+    # Every blob in the object store itself.
+    printf '%s\n' "${listing}" | awk -F '\t' '{ print $2 }' |
+      git -C "${top}" cat-file --batch-check='%(objectname) %(objecttype)' 2>/dev/null |
+      awk '$2 != "blob" { bad = 1 } END { exit bad }' || return 1
+    tracked="$(printf '%s\n' "${listing}" | awk -F '\t' '{ print $3 }')"$'\n'
+    # Every index entry at HEAD: an intent-to-add entry (`git add -N`) is in
+    # the index only, and diff --cached does not show it.
+    {
+      "${g[@]}" ls-tree -r -z --name-only HEAD -- "${rel}" 2>/dev/null | tr '\0' '\n' | sed 's/^/H /'
+      printf '%s' "${tracked}" | sed 's/^/T /'
+    } | awk '{ tag = substr($0, 1, 1); path = substr($0, 3) }
+      tag == "H" { head[path] = 1; next }
+      tag == "T" && !(path in head) { bad = 1 } END { exit bad }' || return 1
+  fi
+
+  # Every file and symlink under the target, relative to the toplevel.
+  walked="$(find "${top}/${rel}" \( -type f -o -type l \) -print 2>/dev/null |
+    awk -v n="$((${#top} + 2))" -v lim="${WALK_LIMIT}" '{ if (++c > lim) exit 2; print substr($0, n) }')" ||
+    return 1
+  [[ -n ${walked} ]] || return 0
+  # For each path, its shallowest regenerable directory; git is asked once per
+  # such directory which ignored directories it collapses there.
+  # shellcheck disable=SC2016 # awk program, not shell
+  candidates="$(printf '%s\n' "${walked}" | awk -v regen="${REGENERABLE}" '
+    BEGIN { n = split(regen, r, " "); for (i = 1; i <= n; i++) R[r[i]] = 1 }
+    { k = split($0, part, "/"); p = ""
+      for (j = 1; j < k; j++) { p = (j == 1 ? part[j] : p "/" part[j])
+        if (tolower(part[j]) in R) { if (!(p in seen)) { seen[p] = 1; print p }; break } } }')" ||
+    return 1
+  if [[ -n ${candidates} ]]; then
+    while IFS= read -r c; do
+      out="$("${g[@]}" ls-files -z --others --ignored --exclude-standard --directory -- "${c}" 2>/dev/null |
+        tr '\0' '\n')" || return 1
+      collapsed+="${out}"$'\n'
+    done <<<"${candidates}"
+    # Of the collapsed directories, the regenerable ones ignored by the
+    # repository's own rules.
+    while IFS= read -r d; do
+      case "${d}" in */) ;; *) continue ;; esac
+      d="${d%/}"
+      if regen_dir_ok "${top}" "${d}"; then allowed+="${d}"$'\n'; fi
+    done <<<"${collapsed}"
+  fi
+  # T: tracked, R: an allowed regenerable directory, W: walked. A walked path
+  # passes when tracked, or when one of its directories is an R directory -
+  # not merely below an ignored one (an ignored private/ holding tmp/ is not
+  # regenerable) nor above one (a tracked build/ holding an ignored private/).
+  # shellcheck disable=SC2016 # awk program, not shell
+  {
+    printf '%s' "${tracked}" | sed 's/^/T /'
+    printf '%s' "${allowed}" | sed 's/^/R /'
+    printf '%s\n' "${walked}" | sed 's/^/W /'
+  } | awk '
+    { tag = substr($0, 1, 1); path = substr($0, 3) }
+    tag == "T" { tracked[path] = 1; next }
+    tag == "R" { allowed[path] = 1; next }
+    tag == "W" {
+      if (path in tracked) next
+      k = split(path, part, "/"); p = ""; ok = 0
+      for (j = 1; j < k; j++) { p = (j == 1 ? part[j] : p "/" part[j]); if (p in allowed) { ok = 1; break } }
+      if (!ok) exit 1 }'
+}
+
+# Resolves a target as rm sees it - relative to the current directory, the
+# directory part through symlinks, the last component itself (lstat: a symlink
+# is removed, not followed) - then checks it. Nothing inside a git directory
+# under any name passes. A path in a git work tree gets the git rules even
+# inside a temp root: a checkout in /tmp holds work too. Only in a temp root
+# may a target be missing: anywhere else there is nothing to check it against,
+# so a parse that ever diverged from the shell's fails safe. Every entry must
+# lie on the device of its temp root or toplevel.
+check_target() {
+  local t="$1" abs trailing=0 base dir rdir top rel target_path exists=0 r
+  case "${t}" in
+  '') silent ;;
+  /*) abs="${t}" ;;
+  *) abs="${cwd}/${t}" ;;
+  esac
+  while [[ ${abs} == */ && ${abs} != / ]]; do
+    abs="${abs%/}"
+    trailing=1
+  done
+  [[ ${abs} == / ]] && silent
+  base="${abs##*/}"
+  dir="${abs%/*}"
+  [[ -n ${dir} ]] || dir=/
+  case "${base}" in '' | . | ..) silent ;; esac
+  rdir="$(physical_dir "${dir}")" || silent
+  if [[ ${rdir} == / ]]; then target_path="/${base}"; else target_path="${rdir}/${base}"; fi
+  # `rm -r link/` deletes what the link points to, not the link.
+  ((trailing)) && [[ -L ${target_path} ]] && silent
+  # Only printable ASCII anywhere on the physical path: `pwd -P` keeps a name
+  # as typed, and APFS folds more than ASCII case (`.ſvn` opens .svn), so a
+  # non-ASCII spelling could reach a protected name unseen.
+  case "${target_path}" in *[![:print:]]*) silent ;; esac
+  [[ -e ${target_path} || -L ${target_path} ]] && exists=1
+  in_git_dir "${rdir}" && silent
+  # Protected names anywhere on the physical path, not only below the temp
+  # root or toplevel: a clone under ~/.claude/plugins is still agent config.
+  forbidden_components "${target_path}" && silent
+
+  if in_work_tree "${rdir}"; then
+    ((exists)) || silent
+    top="$(git -C "${rdir}" -c core.fsmonitor=false rev-parse --show-toplevel 2>/dev/null)" || silent
+    [[ -n ${top} ]] || silent
+    top="$(physical_dir "${top}")" || silent
+    [[ ${target_path} == "${top}"/* ]] || silent
+    rel="${target_path#"${top}"/}"
+    forbidden_components "${rel}" && silent
+    walk_ok "${target_path}" "${top}" || silent
+    git_ok "${top}" "${rel}" || silent
+    return 0
+  fi
+  for r in ${temp_roots[@]+"${temp_roots[@]}"}; do
+    if [[ ${target_path} == "${r}"/* ]]; then
+      temp_ok "${target_path#"${r}"/}" || silent
+      if ((exists)); then walk_ok "${target_path}" "${r}" || silent; fi
+      return 0
+    fi
+  done
+  silent
+}
+
+# The glob form `<literal>/*` (or `*`): judged as `rm -r` of every entry of
+# the literal directory, dotfiles included, never the directory itself. The
+# literal path must be a real directory, not a symlink, and none of its typed
+# components may have a sibling spelled the same in another case - zsh's
+# NO_CASE_GLOB matches those too, even on a case-sensitive file system. An
+# empty directory gets no decision either.
+check_glob() {
+  local word="$1" lit abs found=0 name
+  if [[ ${word} == '*' ]]; then lit='.'; else lit="${word%/\*}"; fi
+  [[ -n ${lit} ]] || lit=/
+  # No `.` or empty component in the literal path (link//*, link/./* would
+  # dodge the symlink test below); a leading / is the root.
+  if [[ ${word} != '*' ]]; then
+    case "/${lit#/}/" in *//* | */./*) [[ ${lit} == / ]] || silent ;; esac
+  fi
+  case "${lit}" in /*) abs="${lit}" ;; *) abs="${cwd}/${lit}" ;; esac
+  [[ -d ${abs} && ! -L ${abs} ]] || silent
+  # shellcheck disable=SC2016 # perl program, not shell
+  perl -e 'my ($dir, $path) = @ARGV; if ($path =~ m{^/}) { $dir = "/" } $dir =~ s{/*$}{/};
+    for my $c (grep { $_ ne "" } split m{/}, $path) {
+      if ($c ne "." && $c ne "..") { opendir(my $dh, $dir) or exit 1; my $exact = 0;
+        for my $e (readdir $dh) { next unless lc($e) eq lc($c); if ($e eq $c) { $exact = 1 } else { exit 2 } }
+        closedir $dh; exit 3 unless $exact }
+      $dir .= "$c/" }' "${cwd}" "${lit}" 2>/dev/null || silent
+  abs="$(physical_dir "${abs}")" || silent
+  while IFS= read -r -d '' name; do
+    found=1
+    case "${name}" in *[![:print:]]*) silent ;; esac
+    # A name that reads as an option would be one, and a symlink to a
+    # directory would reach rm as `link/` under zsh's mark_dirs.
+    ((! opts_done)) && [[ ${name} == -* ]] && silent
+    [[ -L ${abs}/${name} && -d ${abs}/${name} ]] && silent
+    check_target "${abs}/${name}"
+  done < <(perl -e 'opendir(my $dh, $ARGV[0]) or exit 1;
+    for (readdir $dh) { print "$_\0" unless $_ eq "." || $_ eq ".." }' "${abs}" 2>/dev/null)
+  ((found)) || silent
+}
+
+# -- Commands ----------------------------------------------------------------
+cwd="$(physical_dir "${start}")" || silent
+seen_cd=0
+w=0
+nwords=${#words[@]}
+c=0
+while ((c < ncmd)); do
+  # After a `cd`, every later command must hang on `&&`: behind `;` it would
+  # also run when the cd failed, in a directory nothing here checked.
+  ((seen_cd)) && [[ ${before[c]} != '&&' ]] && silent
+  argv=()
+  globs=()
+  while ((w < nwords)) && ((word_cmd[w] == c)); do
+    argv+=("${words[w]}")
+    globs+=("${word_glob[w]}")
+    w=$((w + 1))
+  done
+  ((${#argv[@]})) || silent
+  ((globs[0])) && silent
+  case "${argv[0]}" in
+  cd)
+    # Exactly one directory, absolute or starting with ./, and no `..`
+    # anywhere: a bare name may be looked up through CDPATH, and `..` resolves
+    # logically or physically depending on shell options (`set -P`, zsh's
+    # chase_links) this hook cannot see.
+    ((${#argv[@]} == 2)) || silent
+    ((globs[1])) && silent
+    dest="${argv[1]}"
+    case "${dest}" in
+    /* | . | ./*) ;;
+    *) silent ;;
+    esac
+    case "/${dest}/" in */../*) silent ;; esac
+    [[ ${dest} == /* ]] || dest="${cwd}/${dest}"
+    cwd="$(physical_dir "${dest}")" || silent
+    seen_cd=1
+    ;;
+  rm)
+    opts_done=0 seen_target=0 ntargets=0 a=1
+    while ((a < ${#argv[@]})); do
+      arg="${argv[a]}"
+      if ((! opts_done && ! globs[a])) && [[ ${arg} == -?* ]]; then
+        # Options before the first target only: BSD rm takes a later `-x` as
+        # a file name, GNU rm as an option.
+        ((seen_target)) && silent
+        case "${arg}" in
+        --) opts_done=1 ;;
+        --recursive | --force | --verbose | --dir) ;;
+        --*) silent ;;
+        *) [[ ${arg#-} =~ ^[rRfvd]+$ ]] || silent ;;
+        esac
+      else
+        seen_target=1
+        ntargets=$((ntargets + 1))
+        if ((globs[a])); then
+          check_glob "${arg}"
+        else
+          check_target "${arg}"
+        fi
+      fi
+      a=$((a + 1))
+    done
+    ((ntargets)) || silent
+    ;;
+  *) silent ;;
+  esac
+  c=$((c + 1))
+done
+
+printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}'

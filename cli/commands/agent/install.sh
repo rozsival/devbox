@@ -1,11 +1,12 @@
 local -r AGENTS=(omp claude)
 
-# -- Launchers, credential helper, fence, gh shim ------------------------------
+# -- Launchers, credential helper, fence, gh shim, safe-rm hook ----------------
 # Kept out of ~/.local/bin on purpose: only a launcher adds this directory to
 # the PATH, so the `gh` shim (tokens per directory) never intercepts your own
-# gh, which keeps its OAuth login.
+# gh, which keeps its OAuth login. devbox-safe-rm is the Claude Code
+# PermissionRequest hook the preset points at (docs/security.md).
 install -d -m 755 "${AGENT_DIR}"
-for tool in omp-launcher claude-launcher gh devbox-git-credential devbox-git-no-ssh; do
+for tool in omp-launcher claude-launcher gh devbox-git-credential devbox-git-no-ssh devbox-safe-rm; do
   install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${AGENT_DIR}/${tool}"
 done
 # Sourced by both launchers, never run.
@@ -184,7 +185,7 @@ fi
 agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_DIR}" 2>&1 || true)"
 
 # -- Report ---------------------------------------------------------------------
-log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
+log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,gh,devbox-git-credential,devbox-git-no-ssh,devbox-safe-rm}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
 path_fix=${legacy_kept}
 for agent in "${AGENTS[@]}"; do
   # Same rule as the launcher: the real binary is the first PATH entry that does

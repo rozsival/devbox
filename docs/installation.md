@@ -215,8 +215,8 @@ Agents run on the laptop too — OMP and Claude Code, same launchers, same mecha
 
 `devbox agent install` installs:
 
-- `agent-launch`, `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence in
-  `~/.local/libexec/devbox-agent`
+- `agent-launch`, `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence and the Claude Code safe-rm
+  hook (`devbox-safe-rm`) in `~/.local/libexec/devbox-agent`
 - `omp` and `claude` symlinks to their launchers in `~/.local/libexec/devbox-agent/launchers`
 - `devbox-gh-token` and `wt-herdr` (`wt herdr <branch>`) in `~/.local/bin`
 - `~/.config/devbox/git/agent*.gitconfig` (directory left read-only)

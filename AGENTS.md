@@ -140,14 +140,15 @@ the host's root Docker daemon.
   token checklist, each identity checked with its own `devbox-gh-token --identity <slug>` and `GH_HOST` set to
   that identity's host, for every identity); 13 the agent git override (`agent-launch` and both launchers plus their `omp`/`claude`
   symlinks, credential helper,
-  fence, the *rendered* `agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir` -
+  fence, `devbox-safe-rm` riding along, the *rendered* `agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir` -
   every one of them, inherited authors included, since git applies every matching `includeIf` and a nested
   tree would otherwise keep the outer author; the includes are emitted shortest `dir` first so the longest
   match is read last and wins); 14 agent configs: OMP's `~/.omp/agent/config.yml` (seeded if absent with the
   preset the laptop shares - model roles, feature flags, `secrets` and the `bash.patterns` guardrail - an
   existing file lacking a `bash:` block reported, never merged into) and Claude Code's
   `~/.claude/settings.json` (the `home/.claude/settings.json` preset: `model` plus the `permissions.deny`/`ask`
-  rules mirroring that guardrail, *merged* in with `jq` - never copied, since `moshi-hook` and IDE
+  rules mirroring that guardrail and the `devbox-safe-rm` `PermissionRequest` hook, *merged* in with
+  `container/claude-settings-merge.jq` - never copied, since `moshi-hook` and IDE
   integrations write the same file - when the file is missing or has no `permissions.deny`, the old file kept
   as `settings.json.bak`; invalid JSON registered as a manual action; a file already holding
   `permissions.deny` left alone), placed before §15 because `moshi-hook` merges its hooks into that same file;
@@ -166,6 +167,12 @@ the host's root Docker daemon.
   skill in `~/.claude/skills` for Claude Code. Chrome's shared libraries are in the `Dockerfile`
   because `--with-deps` needs root. Global npm installs pass `--prefix "$HOME/.local"` per call so the bins
   stay on the bind mount; never export `NPM_CONFIG_PREFIX` - nvm then refuses to activate its default Node
+- `container/claude-settings-merge.jq` - the one jq filter that merges the Claude Code preset into a live
+  `~/.claude/settings.json` (`jq -s -f … <live> <preset>`), used by bootstrap and `cli/lib/claude_settings.sh`
+  alike: jq `*` for every key but `hooks`, whose event arrays keep other writers' entries (moshi-hook's
+  `PermissionRequest` one among them) and lose only the preset's own commands - any that runs a script from
+  `~/.local/libexec/devbox-agent/`, removed from every event and from entries shared with a foreign command, which stays - before
+  the preset's current entries are appended (a hook dropped from the preset is thereby uninstalled)
 - `home/` - templates installed into `/home/dev` by bootstrap (and onto the laptop by `devbox agent install`);
   generated files, not user-edited. `home/.omp/agent/config.yml` and `home/.claude/settings.json` are the two
   agent presets, applied to both machines by `devbox sync omp` / `devbox sync claude`.
@@ -176,6 +183,18 @@ the host's root Docker daemon.
   reader, used by `container/bootstrap.sh`, the launchers and the CLI (`di_slugs`, `di_get`, `di_for`,
   `di_check`, the `di_render_*` functions) and installed as the `devbox-identities` CLI; deliberately bash 3.2
   compatible, since the laptop-side launchers and shims run under whatever `/usr/bin/env bash` macOS provides.
+  `home/.local/libexec/devbox-agent/devbox-safe-rm` is the Claude Code `PermissionRequest` hook the preset
+  points at (bash 3.2 run as `/bin/bash -p`, its exit status always turned into 0 since exit 2 would be a
+  deny; jq, git, perl): it approves a line of nothing but `rm` (optionally after `cd <dir> &&`, no `..`; the
+  only glob is a whole last segment `*`, judged as every entry of its literal directory) whose every target
+  is, in a git work tree (checked first, also inside `/tmp`), tracked and unchanged - content hashed against
+  the index - or below a regenerable directory ignored by the repository's own committed `.gitignore`, or,
+  outside any work tree, inside `/tmp` (never a per-user temp dir; under `claude-<uid>/` only this session's
+  scratchpad), never inside a git directory under any name, never touching `.git`, `.env*` (but
+  `.env.example`), `.claude`, `.omp`, `.github`, other VCS metadata, special files, non-ASCII names or another
+  device, never in a main checkout (or a repository inside one) that has linked worktrees, and is silent
+  otherwise, never denying - `docs/security.md` (Recoverable deletes) holds the rules,
+  `test/devbox-safe-rm.sh` the cases.
   `home/.local/libexec/devbox-agent/` holds `agent-launch`, the one body both launchers source (`omp-launcher`,
   `claude-launcher` are three lines each): it exports `GIT_CONFIG_GLOBAL`, the SSH fence,
   `GIT_TERMINAL_PROMPT=0`, a login-less `GH_CONFIG_DIR` and `DEVBOX_ENV` (`devbox` when `/etc/devbox-env`
@@ -316,11 +335,13 @@ the host's root Docker daemon.
     top-level `bash:` block, since the copy replaces each whole file and would drop its seeded guardrail. The
     flag is not `--force` on purpose: `--force` only ever means "past the live-session prompt"
   - `devbox sync claude` - applies the Claude Code preset, `home/.claude/settings.json`, to both machines, but
-    *merges* it (`jq -s '.[0] * .[1]'`, `cli/lib/claude_settings.sh`) instead of copying: `~/.claude/settings.json`
-    has other writers (`moshi-hook` and IDE integrations add `hooks`/`statusLine`, Claude itself `model` and
-    `permissions`), so every key the preset does not set stays, the ones it sets take its value, and the rule
-    arrays are replaced whole (a rule dropped from the preset disappears; a top-level key dropped from it
-    entirely stays in live files). The laptop's file first (one `settings.json.bak` when it changed), then the
+    *merges* it (`container/claude-settings-merge.jq` through `cli/lib/claude_settings.sh`) instead of copying:
+    `~/.claude/settings.json` has other writers (`moshi-hook` and IDE integrations add `hooks`/`statusLine`,
+    Claude itself `model` and `permissions`), so every key the preset does not set stays, the ones it sets take
+    its value, and the rule arrays are replaced whole (a rule dropped from the preset disappears; a top-level key
+    dropped from it entirely stays in live files) - but the `hooks` event arrays keep the other writers' entries,
+    only the preset's own `~/.local/libexec/devbox-agent/` commands removed from every event (a shared entry keeps the rest) and
+    the preset's entries appended, never duplicated. The laptop's file first (one `settings.json.bak` when it changed), then the
     devbox's: fetched over `ssh` (`Host devbox`), merged locally, copied back through `sync_to_devbox` with one
     `.bak` there, skipped when it already holds the preset. Needs `jq`, `rsync`, `ssh`; `CLAUDE_SETTINGS`
     overrides the source file. No `--allow-unguarded`: a merge cannot drop the live rules unless the preset sets
@@ -331,7 +352,7 @@ the host's root Docker daemon.
     sides, so a broken registry never becomes the one the devbox boots from. `sync` host: argument, then
     `DEVBOX_SSH_HOST` (environment or `.push.env`), then `devbox`
   - `devbox agent install` - idempotent: installs the same agent git override the devbox bootstraps (`agent-launch`,
-    `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence,
+    `omp-launcher`, `claude-launcher`, `gh` shim, credential helper, fence, the `devbox-safe-rm` hook,
     `devbox-gh-token`, `wt-herdr`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin` symlink so it answers
     by name, the read-only *rendered* `git/agent*.gitconfig`, and `omp`/`claude` symlinks to the launchers in
     `~/.local/libexec/devbox-agent/launchers` - removing the pre-Claude `~/.local/bin/omp` symlink only once

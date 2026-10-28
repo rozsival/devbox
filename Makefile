@@ -21,7 +21,7 @@ PRETTIER := mise exec -- prettier --log-level warn
 # Flags, not .editorconfig, so the style cannot drift with an editor setting.
 SHFMT := shfmt -i 2
 
-.PHONY: help build fmt lint check fmt-check build-check
+.PHONY: help build fmt lint test check fmt-check build-check
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -38,7 +38,10 @@ lint: ## Lint shell (shellcheck) and parse the laptop-side scripts with /bin/bas
 	for f in $(SH_BASH32); do /bin/bash -n "$$f"; done
 	@! grep -rnE 'args\[--[a-z0-9]+( - [a-z0-9]+)+' cli || { echo 'cli/: shfmt split these flag keys; quote them (AGENTS.md rule 2)' >&2; exit 1; }
 
-check: fmt-check lint build-check ## Everything CI would run; changes nothing
+test: ## Run the script tests in test/ (the safe-rm hook, the Claude Code preset merge)
+	for t in test/*.sh; do bash "$$t"; done
+
+check: fmt-check lint build-check test ## Everything CI would run; changes nothing
 
 fmt-check:
 	$(SHFMT) -d $(SH_SRC)

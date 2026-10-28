@@ -21,3 +21,5 @@ data/
 *.log
 *.tmp
 tmp
+# test/devbox-safe-rm.sh's git fixtures, removed when it exits
+/.check-tmp.*/

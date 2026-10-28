@@ -278,7 +278,7 @@ doctor_laptop() {
   stale=()
   for rel in .local/libexec/devbox-agent/agent-launch .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/claude-launcher \
     .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
-    .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .local/bin/wt-herdr .local/libexec/devbox-identities; do
+    .local/libexec/devbox-agent/devbox-git-no-ssh .local/libexec/devbox-agent/devbox-safe-rm .local/bin/devbox-gh-token .local/bin/wt-herdr .local/libexec/devbox-identities; do
     cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
   done
   git_config_dir="${CONFIG_DIR}/git"

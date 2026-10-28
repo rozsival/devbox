@@ -2,15 +2,19 @@
 # ~/.claude/settings.json, never copied over it the way `sync omp` copies
 # config.yml: that file has other writers - moshi-hook and IDE integrations add
 # `hooks` and `statusLine`, Claude itself `/model` and `/permissions` - and a
-# copy would drop them. jq's `*` keeps every key the preset does not set and
-# takes the preset's value for every key it does; arrays (the permission rules)
-# are replaced whole, so a rule removed from the preset disappears too.
+# copy would drop them. The filter is container/claude-settings-merge.jq, shared
+# with bootstrap: jq's `*` keeps every key the preset does not set and takes the
+# preset's value for every key it does; arrays (the permission rules) are
+# replaced whole, so a rule removed from the preset disappears too - except the
+# `hooks` event arrays, where the other writers' entries stay and only the
+# preset's own commands are replaced: one of the preset's exact commands, or
+# one that starts by naming a script in ~/.local/libexec/devbox-agent/.
 
 # $1 preset, $2 live file (absent counts as {}), $3 output file.
 claude_settings_merge() {
   local preset="$1" live="$2" out="$3"
   if [[ -f ${live} ]]; then
-    jq -s '.[0] * .[1]' "${live}" "${preset}" >"${out}"
+    jq -s -f "${REPO_ROOT}/container/claude-settings-merge.jq" "${live}" "${preset}" >"${out}"
   else
     jq '.' "${preset}" >"${out}"
   fi

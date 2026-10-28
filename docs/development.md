@@ -17,20 +17,23 @@
 | ShellCheck   | `.shellcheckrc`                          | Lints the shell files and the assembled `bin/devbox`                   |
 | bash         | >= 4.2 (`brew install bash` on macOS)    | Runs `bin/devbox` on both machines; macOS `/bin/bash` 3.2 is refused   |
 | Prettier     | `.prettierrc.yml`, pinned in `mise.toml` | Markdown and YAML formatting (`AGENTS.md` excluded)                    |
-| Make         | `Makefile`                               | `build`, `fmt`, `lint`, `check`; `make` alone lists them               |
+| Make         | `Makefile`                               | `build`, `fmt`, `lint`, `test`, `check`; `make` alone lists them       |
 | Docker       | Compose v2 on the workstation            | Builds and runs the container                                          |
 | EditorConfig | `.editorconfig`                          | LF, 2-space indent, final newline, 120-column lines                    |
 
 ```bash
 make build   # regenerate bin/devbox after editing cli/
 make fmt     # shfmt the shell files, prettier the Markdown and YAML
-make check   # format check, shellcheck, bash 3.2 parse of the laptop scripts, bin/devbox matches cli/
+make test    # the script tests in test/: the devbox-safe-rm hook, the Claude Code preset merge
+make check   # format check, shellcheck, bash 3.2 parse of the laptop scripts, bin/devbox matches cli/, make test
 ```
 
 `make` runs on the laptop: shfmt, shellcheck and bashly from Homebrew, prettier through `mise exec`, which installs the
 pinned version on first use (run `mise trust` once in the repo). The workstation has none of them; the container has
 only `shellcheck`, pinned in the `Dockerfile`.
-There is no CI and no test suite: `make check` proves the source, and a change is proven on the workstation with
+There is no CI. `make check` proves the source, including the few script tests in `test/` — plain bash, each one
+self-contained (`test/devbox-safe-rm.sh` runs the hook under macOS's `/bin/bash` 3.2 by default, `HOOK_BASH`
+overrides it) — and a change is proven on the workstation with
 `./bin/devbox doctor` and on the laptop with `./bin/devbox doctor laptop`.
 
 ## 📝 Rules

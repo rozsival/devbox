@@ -480,7 +480,11 @@ fi
 # their own PATH entries for `update` so it lands on the real install; the
 # symlink is the backstop, since omp's updater refuses to replace a script
 # behind one.
-for tool in omp-launcher claude-launcher devbox-git-credential devbox-git-no-ssh; do
+#
+# devbox-safe-rm rides along without being part of the fence: it is the Claude
+# Code PermissionRequest hook the preset (§14) points at, kept in the one
+# directory both machines install agent tooling into.
+for tool in omp-launcher claude-launcher devbox-git-credential devbox-git-no-ssh devbox-safe-rm; do
   install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${agent_dir}/${tool}"
 done
 install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${agent_dir}/agent-launch"
@@ -545,9 +549,10 @@ fi
 # The same guardrail for Claude Code, as permission rules. Here before §15 on
 # purpose: moshi-hook merges its hooks into this file, so on a box that ran
 # bootstrap before the preset existed it is never absent - "absent" therefore
-# means no permissions.deny, and the preset is merged in (jq `*`: every key it
-# does not set stays, see cli/lib/claude_settings.sh). A file holding deny
-# rules of its own is left alone; `devbox sync claude` re-applies the preset.
+# means no permissions.deny, and the preset is merged in (claude-settings-merge.jq,
+# shared with the CLI: every key it does not set stays, and so do moshi-hook's
+# entries in the `hooks` arrays). A file holding deny rules of its own is left
+# alone; `devbox sync claude` re-applies the preset.
 claude_settings="${HOME_DIR}/.claude/settings.json"
 mkdir -p "${claude_settings%/*}"
 if [[ ! -f "${claude_settings}" ]]; then
@@ -559,7 +564,7 @@ elif ! jq -e '.' "${claude_settings}" >/dev/null 2>&1; then
 elif jq -e '.permissions.deny == null' "${claude_settings}" >/dev/null; then
   log_info 'Merging the Claude Code preset into ~/.claude/settings.json...'
   claude_tmp="$(mktemp "${claude_settings}.XXXXXX")"
-  if jq -s '.[0] * .[1]' "${claude_settings}" "${TEMPLATE_DIR}/.claude/settings.json" >"${claude_tmp}"; then
+  if jq -s -f /opt/devbox/container/claude-settings-merge.jq "${claude_settings}" "${TEMPLATE_DIR}/.claude/settings.json" >"${claude_tmp}"; then
     chmod 644 "${claude_tmp}"
     cp -p "${claude_settings}" "${claude_settings}.bak"
     mv -f "${claude_tmp}" "${claude_settings}"
