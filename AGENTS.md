@@ -223,15 +223,19 @@ the host's root Docker daemon.
     therefore asserts the order (move to front) instead of prepending only when absent
 - `container/devbox-ports` - symlinked to `/usr/local/bin` by the `Dockerfile`, so a host edit is live
   without a rebuild; mirrors published project ports onto the container's own `127.0.0.1`
-- `container/agent-context` - `apply|check devbox|laptop <template-dir>`, run in place (never installed) by
-  bootstrap, `devbox agent install` and both doctors: tells every agent session which machine it runs on.
-  `apply` installs the side's `home/.config/devbox/agent-context/<side>.md` as
+- `container/agent-context` - `apply|check devbox|laptop <template-dir>` (plus `validate-profile <file>`), run
+  in place (never installed) by bootstrap, `devbox agent install`, `devbox sync profile` and both doctors:
+  tells every agent session which machine it runs on and who the user is.
+  `apply` renders the side's `home/.config/devbox/agent-context/<side>.md` - plus a `## The user` section from
+  the optional, never-seeded `~/.config/devbox/profile.json` (one object of non-empty `name`/`bio`/`tone`
+  strings, read with jq; `home/.config/devbox/profile.json.example` is its template; one that does not
+  validate is left out, never the machine half) - into
   `~/.config/devbox/agent-context.md`, the `home/.agents/skills/devbox-runtime` skill into `~/.agents/skills`
   with a `~/.claude/skills` link (only a link or nothing there is replaced), and appends one
   `@~/.config/devbox/agent-context.md` line to `~/.claude/CLAUDE.md` when missing - the rest of that file is
   the user's. That one file reaches Claude Code natively and OMP through `enabledProviders: [claude]` in the
   shared preset (OMP expands the import and, unlike an `AGENTS.md`, passes it to task subagents); `check`
-  prints one problem per line: stale files, a missing import, `claude` absent from OMP's `enabledProviders`
+  prints one problem per line: stale files, an invalid profile, a missing import, `claude` absent from OMP's `enabledProviders`
   or present in `disabledProviders` (parsed with awk, no YAML tool on either machine), a non-empty
   `~/.omp/agent/AGENTS.md` (OMP keeps one user-level context file and its own wins), and the
   `/etc/devbox-env` marker missing on the devbox or present on the laptop. It never edits OMP's config.
@@ -242,7 +246,7 @@ the host's root Docker daemon.
   generated, committed result. Commands by group:
   - **Workstation** (Linux host outside a container only): `env`, `start`, `stop`, `rebuild`, `bootstrap`,
     `skills`, `shell`, `sessions`, `logs`, `hook`, `update`, `keys`, `docker setup`
-  - **Laptop** (macOS only): `deploy`, `sync omp`, `sync claude`, `sync identities`, `agent install`
+  - **Laptop** (macOS only): `deploy`, `sync omp`, `sync claude`, `sync identities`, `sync profile`, `agent install`
   - **Both**: `install`, `doctor` (`host` or `laptop`, defaulting to the side the machine is), `completions
     [bash|zsh]` (the `[host]` of `deploy`/`sync` completes from `~/.ssh/config`)
 
@@ -330,6 +334,10 @@ the host's root Docker daemon.
     file catches up; validates locally with `devbox-identities check` first, the same reader that runs on both
     sides, so a broken registry never becomes the one the devbox boots from. `sync` host: argument, then
     `DEVBOX_SSH_HOST` (environment or `.push.env`), then `devbox`
+  - `devbox sync profile` - validates `~/.config/devbox/profile.json` (`agent-context validate-profile`),
+    re-renders the laptop's agent context with it, copies it into the devbox (one `profile.json.bak` kept
+    remotely) and re-runs only `agent-context apply devbox` there - nothing else depends on the profile, so
+    no bootstrap. The devbox renders with its deployed `agent-context`, so a changed script needs `deploy` first
   - `devbox agent install` - idempotent: installs the same agent git override the devbox bootstraps (`agent-launch`,
     `omp-launcher`, `claude-launcher`, `claude-session-env`, `gh` shim, credential helper, fence,
     `devbox-gh-token`, `wt-herdr`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin` symlink so it answers

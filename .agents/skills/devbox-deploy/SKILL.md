@@ -54,6 +54,7 @@ local Docker daemon, and `deploy`/`sync`/`agent install` only on the laptop. Fro
 | `home/.omp/agent/config.yml` (the OMP preset)                                     | `./bin/devbox sync omp`             | Live files are OMP-owned once seeded; `sync omp` replaces both, laptop and devbox                                                                                |
 | `home/.claude/settings.json` (the Claude Code preset)                             | `./bin/devbox sync claude`          | Merged, not copied: other tools write `hooks`/`statusLine` into the live files, which stay; rule lists are replaced whole                                        |
 | `~/.config/devbox/identities.conf`                                                | `./bin/devbox sync identities`      | Hand-held state, not repo content                                                                                                                                |
+| `~/.config/devbox/profile.json`                                                   | `./bin/devbox sync profile`         | Hand-held state; only the agent context depends on it, so no bootstrap runs                                                                                      |
 | A new host needing project Docker                                                 | `sudo ./bin/devbox docker setup`    | Host provisioning, needs sudo                                                                                                                                    |
 | `cli/lib/docker_setup.sh` (firewall, daemon unit, user manager and sshd drop-ins) | `sudo ./bin/devbox docker setup`    | `doctor` flags a stale ruleset, firewall unit or drop-in, and sshd's effective `DenyUsers`; `docker setup --check` reports every piece, the daemon unit included |
 
@@ -100,7 +101,7 @@ This matters: "will I lose my keys / repos / gh login" is a flat no, by construc
 - `${DEVBOX_DATA_DIR}` is a host bind mount, not the image: `~/.ssh/id_*.pub`,
   `~/.ssh/signing_*.pub` (public keys only - devbox holds no private key), sshd host key under
   `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/identities.conf`, `~/.config/devbox/secrets.env`,
-  `~/.config/devbox/git/agent*.gitconfig`,
+  `~/.config/devbox/profile.json`, `~/.config/devbox/git/agent*.gitconfig`,
   `~/.local/libexec/devbox-agent` (`agent-launch`, both launchers plus their `omp`/`claude` symlinks, `gh`
   shim, credential helper, fence), the OMP and Claude Code installs in `~/.local/bin` with the Claude login
   in `~/.claude`, `~/.gitconfig`, every project checkout, project daemon's images, build cache, named volumes under

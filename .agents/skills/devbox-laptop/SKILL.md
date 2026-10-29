@@ -165,7 +165,9 @@ Bash commands only - Claude's own process, other hooks and MCP servers keep the 
 laptop` fails while the entry is missing.
 
 And it tells laptop agents where they run (`container/agent-context apply laptop`). It installs the laptop template as
-`~/.config/devbox/agent-context.md`, plus the `devbox-runtime` skill in `~/.agents/skills` with a link in
+`~/.config/devbox/agent-context.md` - with a `## The user` section appended from the optional
+`~/.config/devbox/profile.json` (`name`, `bio`, `tone`; never seeded, `./bin/devbox sync profile` pushes it to the
+devbox) - plus the `devbox-runtime` skill in `~/.agents/skills` with a link in
 `~/.claude/skills`, and appends one `@~/.config/devbox/agent-context.md` line to `~/.claude/CLAUDE.md`. Claude Code reads
 that file natively. OMP reads it only with `claude` in `enabledProviders`, which the shared preset sets and
 `./bin/devbox sync omp` applies to an existing config, and only while no `~/.omp/agent/AGENTS.md` shadows it. Launcher

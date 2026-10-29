@@ -197,6 +197,10 @@ else
   log_warn "Installing the agent context failed: ${agent_context_out}"
 fi
 agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_DIR}" 2>&1 || true)"
+# Optional, so a hint rather than a manual step; never seeded, since the
+# example's placeholders would become what every session believes about you.
+[[ -e ${CONFIG_DIR}/profile.json ]] ||
+  log_info "Optional: tell agents who you are and the tone to take - cp ${TEMPLATE_DIR}/.config/devbox/profile.json.example ${CONFIG_DIR}/profile.json, fill it in, then ./bin/devbox sync profile"
 
 # -- Report ---------------------------------------------------------------------
 log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,claude-session-env,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"

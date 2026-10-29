@@ -235,7 +235,7 @@ on the devbox, or the user's own credentials on the laptop. Three pieces, each i
 | Piece                                     | What it holds                                                                                                                                                                                                                                                                                                  |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DEVBOX_ENV`                              | `devbox` or `laptop`, exported by `agent-launch` for the session's process tree; in a Claude desktop app session on the laptop, by its `SessionStart` hook ([Git Identities](git.md#claude-desktop-app)). `devbox` means the image's root-owned `/etc/devbox-env` exists; nothing in the bind mount can set it |
-| `~/.config/devbox/agent-context.md`       | A short, always-loaded summary for this machine: what is there, what is missing, what not to try. Copied from `home/.config/devbox/agent-context/{devbox,laptop}.md` on every run                                                                                                                              |
+| `~/.config/devbox/agent-context.md`       | A short, always-loaded summary for this machine: what is there, what is missing, what not to try. Rendered on every run from `home/.config/devbox/agent-context/{devbox,laptop}.md`, plus a section about you from `~/.config/devbox/profile.json` when that exists ([below](#about-you-profilejson))          |
 | `devbox-runtime` skill                    | How-tos for both machines (missing tools, Docker, ports for the user, secrets, git and `gh` failures), from `home/.agents/skills/devbox-runtime`: copied to `~/.agents/skills`, linked from `~/.claude/skills`                                                                                                 |
 | `@~/.config/devbox/agent-context.md` line | Appended once to `~/.claude/CLAUDE.md`; the rest of that file stays yours (a dotfiles symlink is written through)                                                                                                                                                                                              |
 
@@ -257,6 +257,29 @@ rather than edit that file:
 sessions on the devbox get `laptop`, and `doctor host` and `bootstrap` say so. To change what agents are told, edit the
 templates or the skill, commit, deploy, and re-run `bootstrap` and `agent install`; `doctor host` and `doctor laptop`
 fail while either machine's copy is stale.
+
+### About you: `profile.json`
+
+`~/.config/devbox/profile.json` is optional and yours, like `identities.conf`: who you are and the tone agents should
+take with you. One JSON object, every key a non-empty string, at least one set, no other keys:
+
+| Key    | Rendered as                                                                                   |
+| ------ | --------------------------------------------------------------------------------------------- |
+| `name` | `Their name is <name>.`                                                                       |
+| `bio`  | `### About them`, the text as written                                                         |
+| `tone` | `### Tone`, the text, introduced as shaping the agent's wording but never the machine's rules |
+
+```bash
+cp home/.config/devbox/profile.json.example ~/.config/devbox/profile.json   # on the laptop, then fill it in
+./bin/devbox sync profile                                                    # render it on the laptop, copy and render on the devbox
+```
+
+`container/agent-context` appends it to the machine template as a `## The user` section, worded the same on both
+machines, so the one imported file carries both. Nothing seeds it: the example's placeholders would become what every
+session believes about you. Absent means no section and no complaint. One that does not validate is left out — the
+machine half is still installed — and both doctors, `bootstrap` and `agent install` report why. Edit it on the laptop:
+`sync profile` copies laptop → devbox, while `bootstrap` only re-renders whatever copy the devbox holds. Running
+sessions keep the context they started with.
 
 ## 📱 Moshi and `moshi-hook`
 

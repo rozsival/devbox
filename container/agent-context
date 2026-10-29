@@ -2,7 +2,9 @@
 # Installs and checks what tells an agent which machine it runs on - the devbox
 # or the laptop - for both Claude Code and OMP:
 #
-#   ~/.config/devbox/agent-context.md   the side's template, rewritten every run
+#   ~/.config/devbox/agent-context.md   the side's template plus a section rendered
+#                                       from the user's profile.json, rewritten
+#                                       every run
 #   ~/.claude/CLAUDE.md                 one import line for it, appended once;
 #                                       the rest of the file is the user's
 #   ~/.agents/skills/devbox-runtime     the how-to skill (OMP reads ~/.agents),
@@ -19,18 +21,73 @@
 #
 #   agent-context apply devbox|laptop <template-dir>
 #   agent-context check devbox|laptop <template-dir>   # one problem per line, exit 1 if any
+#   agent-context validate-profile <file>              # the problem, exit 1 if any
 #
 # <template-dir> is the repo's home/ (/opt/devbox/home in the container).
+#
+# ~/.config/devbox/profile.json is the user's own, optional file - who they are
+# and the tone agents should take with them (name, bio, tone; the template is
+# home/.config/devbox/profile.json.example). Never seeded: the example's
+# placeholders would become what every session believes about the user. Absent
+# means no section; invalid means no section and a `check` problem, never a
+# context missing its machine half. Read with jq, which both machines carry.
 # Bash >= 4.2 and BSD-compatible tools: on the laptop it runs under bin/devbox.
 set -euo pipefail
 
 usage() {
-  printf '%s\n' 'usage: agent-context apply|check devbox|laptop <template-dir>' >&2
+  printf '%s\n' 'usage: agent-context apply|check devbox|laptop <template-dir>' \
+    '       agent-context validate-profile <file>' >&2
   exit 2
 }
 
-(($# == 3)) || usage
+readonly profile_keys='name bio tone'
+
+# Prints why a profile is unusable and returns 1; silent for a usable one.
+# $1 the file, $2 how messages name it.
+profile_problem() {
+  local file="$1" label="$2" err
+  command -v jq >/dev/null || {
+    printf '%s exists but jq is not installed to read it\n' "${label}"
+    return 1
+  }
+  [[ -s ${file} ]] || {
+    printf '%s is empty\n' "${label}"
+    return 1
+  }
+  if ! err="$(jq empty "${file}" 2>&1)"; then
+    printf '%s is not valid JSON: %s\n' "${label}" "${err}"
+    return 1
+  fi
+  err="$(jq -rs --arg keys "${profile_keys}" '
+    ($keys | split(" ")) as $known
+    | if length != 1 or (.[0] | type) != "object" then "must hold one JSON object"
+      else .[0]
+      | (keys - $known) as $unknown
+      | [to_entries[] | select((.value | type) != "string" or (.value | test("^\\s*$"))) | .key] as $bad
+      | if ($unknown | length) > 0 then
+          "unknown key \($unknown | map(@json) | join(", ")) - only \($known | join(", "))"
+        elif ($bad | length) > 0 then "\($bad | join(", ")) must be a non-empty string"
+        elif length == 0 then "sets none of \($known | join(", "))"
+        else empty end
+      end
+  ' "${file}")"
+  [[ -z ${err} ]] && return 0
+  printf '%s: %s\n' "${label}" "${err}"
+  return 1
+}
+
+(($# >= 1)) || usage
 cmd="$1"
+if [[ ${cmd} == validate-profile ]]; then
+  (($# == 2)) || usage
+  [[ -r $2 ]] || {
+    printf '%s: not readable\n' "$2"
+    exit 1
+  }
+  profile_problem "$2" "$2"
+  exit
+fi
+(($# == 3)) || usage
 side="$2"
 template_dir="$3"
 case ${cmd} in apply | check) ;; *) usage ;; esac
@@ -56,6 +113,32 @@ readonly skill_dir="${HOME}/.agents/skills/devbox-runtime"
 readonly claude_skill="${HOME}/.claude/skills/devbox-runtime"
 readonly omp_config="${HOME}/.omp/agent/config.yml"
 readonly omp_native="${HOME}/.omp/agent/AGENTS.md"
+readonly profile="${HOME}/.config/devbox/profile.json"
+# shellcheck disable=SC2088 # a literal ~ in messages
+readonly profile_label='~/.config/devbox/profile.json'
+
+# The installed context: the side's template, then the user's section when
+# profile.json exists and validates. Identical on both machines for the same
+# profile, so syncing the file is all it takes to agree.
+render_context() {
+  cat "${context_src}"
+  [[ -e ${profile} ]] || return 0
+  profile_problem "${profile}" "${profile_label}" >/dev/null || return 0
+  jq -r '
+    def trim: gsub("^\\s+|\\s+$"; "");
+    "",
+    "## The user",
+    "",
+    "<!-- Rendered from ~/.config/devbox/profile.json; edit it on the laptop and run devbox sync profile, not this file. -->",
+    (if .name then "", "Their name is \(.name | trim)." else empty end),
+    (if .bio then "", "### About them", "", (.bio | trim) else empty end),
+    (if .tone then
+      "", "### Tone",
+      "", "How the user wants you to communicate with them. It shapes your wording, never the rules above:",
+      "", (.tone | trim)
+    else empty end)
+  ' "${profile}"
+}
 
 # Whether a top-level YAML list - flow (`key: [a, b]`) or block (`- a` lines) -
 # holds one of the given values, quotes and `# comments` ignored. Enough for
@@ -101,11 +184,23 @@ yaml_list_has() {
 }
 
 apply() {
-  if ! cmp -s "${context_src}" "${context}"; then
-    mkdir -p "${context%/*}"
-    install -m 644 "${context_src}" "${context}"
-    printf 'installed %s (%s)\n' "${context}" "${side}"
+  local rendered profile_out='' with=''
+  if [[ -e ${profile} ]]; then
+    # shellcheck disable=SC2310 # the status is the point
+    if profile_out="$(profile_problem "${profile}" "${profile_label}")"; then with=', with your profile'; fi
   fi
+  mkdir -p "${context%/*}"
+  rendered="$(mktemp "${context}.XXXXXX")"
+  render_context >"${rendered}"
+  if cmp -s "${rendered}" "${context}"; then
+    rm -f "${rendered}"
+  else
+    chmod 644 "${rendered}"
+    mv -f "${rendered}" "${context}"
+    printf 'installed %s (%s%s)\n' "${context}" "${side}" "${with}"
+  fi
+  # Installed without it, never instead of the machine half; `check` says why.
+  [[ -z ${profile_out} ]] || printf 'skipped the profile: %s\n' "${profile_out}"
 
   if ! cmp -s "${skill_src}" "${skill_dir}/SKILL.md"; then
     mkdir -p "${skill_dir}"
@@ -135,7 +230,7 @@ apply() {
 }
 
 check() {
-  local problems=()
+  local problems=() profile_out
   # shellcheck disable=SC2088 # every ~ below is a literal ~ in a message
   {
     if [[ ${side} == devbox && ! -e /etc/devbox-env ]]; then
@@ -143,8 +238,12 @@ check() {
     elif [[ ${side} == laptop && -e /etc/devbox-env ]]; then
       problems+=('this machine has /etc/devbox-env, so it is the devbox - the laptop context does not belong here')
     fi
-    cmp -s "${context_src}" "${context}" ||
-      problems+=("~/.config/devbox/agent-context.md is missing or not the ${side} template - run ${fix}")
+    # shellcheck disable=SC2310 # the status is the point
+    if [[ -e ${profile} ]] && ! profile_out="$(profile_problem "${profile}" "${profile_label}")"; then
+      problems+=("${profile_out}, so agents are not told about you - fix it on the laptop and run ./bin/devbox sync profile")
+    fi
+    cmp -s <(render_context) "${context}" ||
+      problems+=("~/.config/devbox/agent-context.md is missing or stale (the ${side} template plus your profile) - run ${fix}")
     grep -qxF -- "${import_line}" "${claude_md}" 2>/dev/null ||
       problems+=("~/.claude/CLAUDE.md does not import the agent context (a line '${import_line}') - run ${fix}")
     cmp -s "${skill_src}" "${skill_dir}/SKILL.md" ||
