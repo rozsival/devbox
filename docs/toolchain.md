@@ -17,23 +17,25 @@
 Each version lives in one place, the `ARG` named below; the `Dockerfile` is the source of truth, and
 [Renovate](#-updates) keeps it current.
 
-| Tool             | Pinned by                | Installed as                                                           |
-| ---------------- | ------------------------ | ---------------------------------------------------------------------- |
-| `herdr`          | `HERDR_VERSION`          | `/usr/local/bin/herdr`                                                 |
-| `node`           | `NODE_VERSION`           | nvm in `/opt/nvm`, symlinked into `/usr/local/bin`                     |
-| `pnpm`           | `PNPM_VERSION`           | `npm install -g`, symlinked into `/usr/local/bin`                      |
-| `rustc`/`cargo`  | `RUST_VERSION`           | rustup in `/opt/rustup` + `/opt/cargo`, wrapped into `/usr/local/bin`  |
-| `rustup`         | `RUSTUP_VERSION`         | `/opt/cargo/bin/rustup`, wrapped into `/usr/local/bin`                 |
-| `ruby`           | `RUBY_VERSION`           | built from source into `/opt/ruby`, symlinked into `/usr/local/bin`    |
-| `gh`             | `GH_VERSION`             | pinned `.deb`                                                          |
-| `lazygit`        | `LAZYGIT_VERSION`        | `/usr/local/bin/lazygit` (alias `lg`)                                  |
-| `wt` (worktrunk) | `WORKTRUNK_VERSION`      | `/usr/local/bin/wt` + `git-wt`                                         |
-| `terraform`      | `TERRAFORM_VERSION`      | `/usr/local/bin/terraform`                                             |
-| `shellcheck`     | `SHELLCHECK_VERSION`     | `/usr/local/bin/shellcheck`                                            |
-| `nvm`            | `NVM_VERSION`            | `/opt/nvm`                                                             |
-| Docker CLI       | `DOCKER_CLI_VERSION`     | `docker-ce-cli` from Docker's signed apt repository, `/usr/bin/docker` |
-| Compose plugin   | `DOCKER_COMPOSE_VERSION` | `/usr/local/lib/docker/cli-plugins/docker-compose`                     |
-| Buildx plugin    | `DOCKER_BUILDX_VERSION`  | `/usr/local/lib/docker/cli-plugins/docker-buildx`                      |
+| Tool                  | Pinned by                  | Installed as                                                           |
+| --------------------- | -------------------------- | ---------------------------------------------------------------------- |
+| `herdr`               | `HERDR_VERSION`            | `/usr/local/bin/herdr`                                                 |
+| `node`                | `NODE_VERSION`             | nvm in `/opt/nvm`, symlinked into `/usr/local/bin`                     |
+| `node` (previous LTS) | `NODE_MAINTENANCE_VERSION` | nvm in `/opt/nvm`, reached with `nvm use`                              |
+| `pnpm`                | `PNPM_VERSION`             | `npm install -g`, symlinked into `/usr/local/bin`                      |
+| `corepack`            | `COREPACK_VERSION`         | `npm install -g`, symlinked into `/usr/local/bin`                      |
+| `rustc`/`cargo`       | `RUST_VERSION`             | rustup in `/opt/rustup` + `/opt/cargo`, wrapped into `/usr/local/bin`  |
+| `rustup`              | `RUSTUP_VERSION`           | `/opt/cargo/bin/rustup`, wrapped into `/usr/local/bin`                 |
+| `ruby`                | `RUBY_VERSION`             | built from source into `/opt/ruby`, symlinked into `/usr/local/bin`    |
+| `gh`                  | `GH_VERSION`               | pinned `.deb`                                                          |
+| `lazygit`             | `LAZYGIT_VERSION`          | `/usr/local/bin/lazygit` (alias `lg`)                                  |
+| `wt` (worktrunk)      | `WORKTRUNK_VERSION`        | `/usr/local/bin/wt` + `git-wt`                                         |
+| `terraform`           | `TERRAFORM_VERSION`        | `/usr/local/bin/terraform`                                             |
+| `shellcheck`          | `SHELLCHECK_VERSION`       | `/usr/local/bin/shellcheck`                                            |
+| `nvm`                 | `NVM_VERSION`              | `/opt/nvm`                                                             |
+| Docker CLI            | `DOCKER_CLI_VERSION`       | `docker-ce-cli` from Docker's signed apt repository, `/usr/bin/docker` |
+| Compose plugin        | `DOCKER_COMPOSE_VERSION`   | `/usr/local/lib/docker/cli-plugins/docker-compose`                     |
+| Buildx plugin         | `DOCKER_BUILDX_VERSION`    | `/usr/local/lib/docker/cli-plugins/docker-buildx`                      |
 
 Also from the Ubuntu archive: `git`, `git-lfs`, `starship`, `ripgrep`, `fd` (symlinked from `fdfind`), `jq`, `curl`,
 `rsync`, `build-essential`, `python3`, `openssh-server`/`-client`, `nano`, `less`, `procps`, `iproute2`, `socat` (backs
@@ -359,11 +361,18 @@ Re-running `./bin/devbox skills` is safe: npm and `npx skills add` overwrite in 
 ```bash
 node -v      # v<NODE_VERSION>
 pnpm -v      # <PNPM_VERSION>
+nvm use 24   # the previous LTS, v<NODE_MAINTENANCE_VERSION>, with the same pnpm and corepack
 ```
 
+Two Node versions ship: `NODE_VERSION` (the default, symlinked into `/usr/local/bin`) and `NODE_MAINTENANCE_VERSION`,
+the previous LTS, kept until its end of life. Renovate holds the latter on its major (`renovate.json`); at its end of
+life, drop it from the Dockerfile and the docs.
+
 pnpm installs via `npm install -g pnpm@<PNPM_VERSION>`, not `corepack prepare`: pnpm 12's JS wrapper loads a native binary from
-its own `node_modules`, but corepack's cache held only the wrapper — every shimmed call re-downloaded it. `corepack`
-stays enabled for `yarn`, with `COREPACK_HOME` set so repos declaring `packageManager` still work.
+its own `node_modules`, but corepack's cache held only the wrapper — every shimmed call re-downloaded it. Node 25+ no
+longer bundles `corepack`, so it installs the same way (`corepack@<COREPACK_VERSION>`) and stays enabled for `yarn`,
+with `COREPACK_HOME` set so repos declaring `packageManager` still work. The corepack package ships its own
+`pnpm`/`pnpx` shims, so pnpm installs with `--force` to replace them.
 
 ## 🦀 Rust and Ruby
 
@@ -482,8 +491,8 @@ checksum.
 
 ### A different Node version for one project?
 
-`nvm install <version>` works normally — writes to `/opt/nvm`, writable by `dev`, persisting until the next rebuild. Pin
-the default by bumping `NODE_VERSION`.
+`nvm use 24` switches to the previous LTS the image ships. `nvm install <version>` works normally — writes to `/opt/nvm`,
+writable by `dev`, persisting until the next rebuild. Pin the default by bumping `NODE_VERSION`.
 
 ### A different Rust or Ruby version for one project?
 

@@ -2,5 +2,5 @@
 # missing; run `mise trust` once. shfmt, shellcheck and bashly come from Homebrew (docs/development.md).
 
 [tools]
-node = "24"
+node = "26"
 "npm:prettier" = "3.9.9"

@@ -43,9 +43,17 @@
       "prBodyNotes": ["Upgrade the workstation's Docker daemon to this version before deploying this change."]
     },
     {
+      "description": "NODE_MAINTENANCE_VERSION (Dockerfile) keeps the previous LTS until its end of life: patch and minor only",
+      "matchDepNames": ["node"],
+      "matchCurrentVersion": "<25",
+      "allowedVersions": "<25"
+    },
+    {
       "description": "A skill is instructions an agent follows: read the diff before merging a new commit",
       "matchDepNames": ["anthropic-skills"],
-      "prBodyNotes": ["Review the skill changes between the two commits before merging; agents follow them as instructions."]
+      "prBodyNotes": [
+        "Review the skill changes between the two commits before merging; agents follow them as instructions."
+      ]
     }
   ]
 }
