@@ -15,10 +15,17 @@ ARG HOST_GID=1000
 ARG HERDR_VERSION=0.9.4
 # renovate: datasource=github-releases depName=nvm packageName=nvm-sh/nvm
 ARG NVM_VERSION=0.40.8
+# NODE_VERSION is the default Node; NODE_MAINTENANCE_VERSION is the previous LTS,
+# kept installed for `nvm use` until its end of life (renovate.json holds it on
+# its major).
 # renovate: datasource=node-version depName=node versioning=node
-ARG NODE_VERSION=24.21.0
+ARG NODE_VERSION=26.13.0
+# renovate: datasource=node-version depName=node versioning=node
+ARG NODE_MAINTENANCE_VERSION=24.22.2
 # renovate: datasource=npm depName=pnpm
 ARG PNPM_VERSION=12.11.2
+# renovate: datasource=npm depName=corepack
+ARG COREPACK_VERSION=0.36.0
 # renovate: datasource=github-tags depName=rustup packageName=rust-lang/rustup
 ARG RUSTUP_VERSION=1.29.2
 # renovate: datasource=github-releases depName=rust packageName=rust-lang/rust
@@ -242,14 +249,21 @@ USER dev
 RUN set -eux; \
   PROFILE=/dev/null bash -c "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | bash"; \
   . "$NVM_DIR/nvm.sh"; \
-  nvm install "${NODE_VERSION}"; \
-  nvm alias default "${NODE_VERSION}"; \
-  corepack enable yarn; \
-  npm install -g "pnpm@${PNPM_VERSION}"
+  for v in "${NODE_MAINTENANCE_VERSION}" "${NODE_VERSION}"; do \
+    nvm install "$v"; \
+    npm install -g "corepack@${COREPACK_VERSION}"; \
+    npm install -g --force "pnpm@${PNPM_VERSION}"; \
+    corepack enable yarn; \
+    [ "$(pnpm -v)" = "${PNPM_VERSION}" ]; \
+  done; \
+  nvm alias default "${NODE_VERSION}"
+# Each Node gets the same pinned corepack and pnpm, so `nvm use` keeps both.
+# Node 25+ no longer bundles corepack, so it comes from npm like pnpm.
 # pnpm is installed with npm rather than `corepack prepare`: pnpm 12 ships a
 # native binary as an optional dependency, and the corepack cache holds only the
 # JS wrapper - so every corepack-shimmed `pnpm` call re-downloads that binary.
-# corepack is enabled for yarn alone; its pnpm shim would shadow the real one.
+# The corepack package also ships `pnpm`/`pnpx` shims; `--force` lets the real
+# pnpm replace them, and corepack is enabled for yarn alone.
 
 # Same reason as the pinned binaries above: non-interactive SSH sessions get the
 # default PATH and never source ~/.bashrc, so the toolchain needs a stable home.
