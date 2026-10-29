@@ -47,7 +47,8 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox rebuild && ./bin/devbox doctor'
 
 - dotfiles
 - every SSH identity's public keys
-- `~/.config/devbox` (`identities.conf`, `secrets.env`, the rendered agent and user gitconfigs)
+- `~/.config/devbox` (`identities.conf`, `secrets.env`, `profile.json`, the rendered agent and user gitconfigs and agent
+  context)
 - the sshd host key
 - `~/.config/gh`
 - the whole `~/projects` tree

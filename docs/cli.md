@@ -38,6 +38,7 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox sessions'   # who is connected (a
 ./bin/devbox agent install           # laptop-side: same agent git override as the devbox
 ./bin/devbox doctor laptop           # laptop-side acceptance test: keys, configs, override, tokens
 ./bin/devbox sync identities         # push this laptop's identity registry into the devbox
+./bin/devbox sync profile            # render your profile.json into the agent context on both machines
 ```
 
 ## 🗂️ Command groups
@@ -50,7 +51,7 @@ the same on both.
 | Group       | Commands                                                                                                                        | Side guard                                        |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
 | Workstation | `env`, `start`, `stop`, `rebuild`, `bootstrap`, `skills`, `shell`, `sessions`, `logs`, `hook`, `update`, `keys`, `docker setup` | Linux host that runs the container, not inside it |
-| Laptop      | `deploy`, `sync omp`, `sync claude`, `sync identities`, `agent install`                                                         | macOS only                                        |
+| Laptop      | `deploy`, `sync omp`, `sync claude`, `sync identities`, `sync profile`, `agent install`                                         | macOS only                                        |
 | Both        | `install`, `doctor`, `completions`                                                                                              | Either side                                       |
 
 `./bin/devbox --help` lists them, `./bin/devbox <command> --help` shows one command's flags, and `--version`/`-v` prints
@@ -195,8 +196,8 @@ Finish with `./bin/devbox rebuild` as your own user.
 
 ## 💻 Laptop commands
 
-Run these on the macOS laptop, from the repo checkout. `deploy`, `sync omp`, `sync claude` and `sync identities` need
-`rsync` and `ssh` (`sync claude` also `jq`); a missing `rsync` fails up front with a `brew install rsync` remedy.
+Run these on the macOS laptop, from the repo checkout. `deploy` and every `sync` need `rsync` and `ssh` (`sync claude`
+and `sync profile` also `jq`); a missing `rsync` fails up front with a `brew install rsync` remedy.
 `deploy` needs **GNU** rsync, not macOS's `/usr/bin/rsync` — see [the FAQ](#rsync-is-not-gnu-rsync-on-deploy).
 
 | Command                                 | What it does                                                                                                                       |
@@ -205,6 +206,7 @@ Run these on the macOS laptop, from the repo checkout. `deploy`, `sync omp`, `sy
 | `sync omp [HOST] [--allow-unguarded]`   | Apply the repo's OMP preset to this laptop and the devbox — see [`devbox sync omp`](#devbox-sync-omp)                              |
 | `sync claude [HOST]`                    | Merge the repo's Claude Code preset into this laptop's and the devbox's settings — see [`devbox sync claude`](#devbox-sync-claude) |
 | `sync identities [HOST]`                | Copy the laptop's identity registry into the devbox and apply it — see [`devbox sync identities`](#devbox-sync-identities)         |
+| `sync profile [HOST]`                   | Render your profile into the agent context on this laptop and the devbox — see [`devbox sync profile`](#devbox-sync-profile)       |
 | `agent install`                         | Install the agent git override on this laptop — see [`devbox agent install`](#devbox-agent-install)                                |
 
 ### `devbox deploy`
@@ -256,7 +258,7 @@ DEVBOX_REMOTE_PATH=~/devbox-test ./bin/devbox deploy <workstation>
 
 ### `devbox sync`
 
-`sync omp`, `sync claude` and `sync identities` talk to the _container's_ sshd (`Host devbox`, port 2223), not the
+Every `sync` talks to the _container's_ sshd (`Host devbox`, port 2223), not the
 workstation's, so the file lands inside bind-mounted `/home/dev`. None is part of a deploy: a redeploy updates the
 workstation's checkout, never the live files in `/home/dev`. All resolve the host the same way: the `HOST` argument,
 then `DEVBOX_SSH_HOST` from the environment or `.push.env` (the same gitignored file `deploy` reads), then `devbox`.
@@ -329,10 +331,29 @@ so `~/.ssh/config`, `~/.gitconfig`'s includes, `allowed_signers` and the agent g
 landed. If the copy lands but bootstrap fails, the error says so and points at `./bin/devbox bootstrap` on the
 workstation.
 
+#### `devbox sync profile`
+
+```
+Usage: ./bin/devbox sync profile [HOST]
+
+  HOST    devbox SSH host from ~/.ssh/config (default: $DEVBOX_SSH_HOST, then 'devbox')
+
+Environment:
+  DEVBOX_SSH_HOST      default SSH host; may also be set in .push.env
+```
+
+Applies `~/.config/devbox/profile.json` (who you are and the tone agents take with you,
+[Toolchain](toolchain.md#about-you-profilejson)) on both machines: validates it with `container/agent-context
+validate-profile`, re-renders this laptop's `~/.config/devbox/agent-context.md` with it, backs up the remote copy as
+`profile.json.bak`, `rsync`s the file over and re-runs `container/agent-context apply devbox` there — only the agent
+context depends on the profile, so bootstrap does not run. The devbox renders with its own deployed `agent-context`, so
+`deploy` first after changing it. New agent sessions on either machine pick the profile up.
+
 ```bash
 ./bin/devbox sync omp                    # home/.omp/agent/config.yml → laptop and devbox:~/.omp/agent/config.yml
 ./bin/devbox sync claude                 # home/.claude/settings.json merged into laptop and devbox:~/.claude/settings.json
 ./bin/devbox sync identities             # laptop → devbox:~/.config/devbox/identities.conf
+./bin/devbox sync profile                # laptop → devbox:~/.config/devbox/profile.json, agent context re-rendered on both
 ./bin/devbox sync identities devbox-2    # a different ~/.ssh/config host
 ```
 
@@ -370,10 +391,12 @@ wraps, get the launcher's fence and `DEVBOX_ENV=laptop` through `CLAUDE_ENV_FILE
 Identities](git.md#claude-desktop-app)).
 
 It also installs the agent context ([Toolchain](toolchain.md#-which-machine-the-agent-context)) through
-`container/agent-context apply laptop`: `~/.config/devbox/agent-context.md` from the laptop template, the `devbox-runtime`
-skill in `~/.agents/skills` with a `~/.claude/skills` link, and one `@~/.config/devbox/agent-context.md` line appended to
-`~/.claude/CLAUDE.md` if it is missing. Nothing else in that file is touched. What it cannot fix in OMP's own config (no
-`claude` in `enabledProviders`, a shadowing `~/.omp/agent/AGENTS.md`) becomes a manual step.
+`container/agent-context apply laptop`: `~/.config/devbox/agent-context.md` from the laptop template plus your
+`~/.config/devbox/profile.json` when it exists, the `devbox-runtime` skill in `~/.agents/skills` with a `~/.claude/skills`
+link, and one `@~/.config/devbox/agent-context.md` line appended to `~/.claude/CLAUDE.md` if it is missing. Nothing else
+in that file is touched. What it cannot fix in OMP's own config (no `claude` in `enabledProviders`, a shadowing
+`~/.omp/agent/AGENTS.md`) or an invalid profile becomes a manual step; a missing profile only prints the optional `cp`
+command, since nothing seeds it either.
 
 Reports whether `omp` and `claude` resolve to their launchers — printing the `PATH` line for your shell rc as a manual
 step until they do — plus the remaining manual steps per registry identity: a read-only `GH_TOKEN_<SLUG>` line in
@@ -432,7 +455,7 @@ container has no docker and no keys). Naming a side the machine is not is refuse
 | 8   | Agent git override intact: `omp` and `claude` each resolve through a symlink to their launcher (`omp-launcher`, `claude-launcher`), never a plain file an update could have replaced ([Git Identities](git.md#updates-omp-update-claude-update))                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 9   | `~/.config/devbox/identities.conf` passes `devbox-identities check` — a failing registry is reported here with the reader's own message, and skips every identity-derived check below rather than failing them individually                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 10  | `~/.config/devbox/git/agent.gitconfig` plus one `agent-<slug>.gitconfig` per registry identity that claims a `dir`, each matching a fresh render, in a directory still read-only — a `git config --global` in a session writes there, and once put the user's own identity on agent commits; an `agent-*.gitconfig` left over from a renamed or dropped identity is flagged too ([Git Identities](git.md#-agent-sessions))                                                                                                                                                                                                                                                              |
-| 11  | Agent context current, by `container/agent-context check devbox`: the image's `/etc/devbox-env` marker behind `DEVBOX_ENV=devbox` (missing until `start`/`rebuild` builds a new image), `~/.config/devbox/agent-context.md` matching the devbox template, the `@~/.config/devbox/agent-context.md` line in `~/.claude/CLAUDE.md`, the `devbox-runtime` skill and its `~/.claude/skills` link, `claude` in OMP's `enabledProviders` and no `~/.omp/agent/AGENTS.md` shadowing it ([Toolchain](toolchain.md#-which-machine-the-agent-context))                                                                                                                                            |
+| 11  | Agent context current, by `container/agent-context check devbox`: the image's `/etc/devbox-env` marker behind `DEVBOX_ENV=devbox` (missing until `start`/`rebuild` builds a new image), `~/.config/devbox/agent-context.md` matching the devbox template plus the profile, `~/.config/devbox/profile.json` valid when present, the `@~/.config/devbox/agent-context.md` line in `~/.claude/CLAUDE.md`, the `devbox-runtime` skill and its `~/.claude/skills` link, `claude` in OMP's `enabledProviders` and no `~/.omp/agent/AGENTS.md` shadowing it ([Toolchain](toolchain.md#-which-machine-the-agent-context))                                                                       |
 | 12  | `moshi-hook` daemon installed and running — unpaired warns, doesn't fail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | 13  | Project Docker daemon reachable from the container, reporting `rootless`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | 14  | `host.docker.internal` resolves inside the container to the project daemon's published address (`--ip` in `/etc/systemd/user/docker.service`) — a mismatch strands every published project port                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -453,7 +476,7 @@ ones that do not depend on it (private keys, launcher symlinks) still run. The c
 | `~/.ssh/config`    | Per forge host, the plain connection selecting the host's default key and each identity's tagged connection (`ssh -P <slug>`) selecting its own, with no leftover SSH-alias `Host` block; `Host devbox` on `devbox.pub` and `Host <workstation>` on the default identity's `id_<slug>.pub` — never `devbox.pub`, which every `ssh -A devbox` leaves approved for anything in the devbox to sign with                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | git                | The base `user.name`/`user.email`/`user.signingkey` matching the default identity (what every repo no include claims commits as), every identity's gitconfig signing through `op-ssh-sign` with its own `signing_*.pub` key and an `allowed_signers` file covering all of them; each `gitdir:` include setting its identity's name, email and signing key; each `orgs` pattern probed as a `hasconfig:` remote from `/` — email, signing key and `core.sshCommand` matching what `org-<slug>.gitconfig` should set, and no `gitdir:` include left rewriting URLs; no clone still pointed at a stale SSH-alias remote (`devbox-identities alias-remotes`); no clone setting its own `user.name`/`user.email` in `.git/config`, which outranks the agent author (`devbox-identities local-user-overrides`)                                                                                                                                                                                                     |
 | Agent git override | `omp` and `claude` resolving to their launchers through symlinks in `~/.local/libexec/devbox-agent/launchers` (a plain file is what an `omp update` takes over); `~/.local/bin/devbox-identities` still a symlink onto the libexec reader — the hop that makes the name resolve at all, since only `~/.local/bin` is on the PATH; every installed agent file matching the repo template (the agent gitconfigs matching a fresh `devbox-identities render agent-gitconfig`); the `SessionStart` hook running `claude-session-env` in `~/.claude/settings.json`, without which Claude desktop app sessions run git and `gh` as you; `~/.config/devbox/git/` still read-only and no login shell writing a git identity into it; no agent token (`x-access-token`) in the macOS keychain — a sign a system credential helper preempted `devbox-git-credential`                                                                                                                                                   |
-| Agent context      | `container/agent-context check laptop`: `~/.config/devbox/agent-context.md` matching the laptop template, the `@~/.config/devbox/agent-context.md` line in `~/.claude/CLAUDE.md`, the `devbox-runtime` skill and its `~/.claude/skills` link, `claude` in OMP's `enabledProviders` and no `~/.omp/agent/AGENTS.md` shadowing it, and no `/etc/devbox-env` on this machine ([Toolchain](toolchain.md#-which-machine-the-agent-context))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Agent context      | `container/agent-context check laptop`: `~/.config/devbox/agent-context.md` matching the laptop template plus the profile, `~/.config/devbox/profile.json` valid when present, the `@~/.config/devbox/agent-context.md` line in `~/.claude/CLAUDE.md`, the `devbox-runtime` skill and its `~/.claude/skills` link, `claude` in OMP's `enabledProviders` and no `~/.omp/agent/AGENTS.md` shadowing it, and no `/etc/devbox-env` on this machine ([Toolchain](toolchain.md#-which-machine-the-agent-context))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Credentials        | `secrets.env` at mode 600; every identity's own token, fetched with `devbox-gh-token --identity <slug>` and checked by `gh` with `GH_HOST` set to that identity's host, accepted; every identity naming an `app` directory, its `app-id` present and its `app.pem` at mode 600 and readable as a key — without one, that identity's agents can only read (its PAT is read-only)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Connections        | Every configured connection authenticating: each registry identity (tagged where it has one, plain otherwise), `devbox`, and the workstation if `DEVBOX_HOST` (in the environment or in `.push.env`, the same value `devbox deploy` reads) names its `~/.ssh/config` alias — unset just logs that the check is opt-in. Each identity's connection must authenticate with the key its registry `pubkey` names (`Server accepts key` in `ssh -v`); which account answers is only reported, so two identities may share one ([Git Identities](git.md#-faq)). The workstation must also refuse `devbox.pub`, asked with `ssh -v` and no agent: the server's answer comes before any signature, so there is no 1Password prompt. When it accepts it, the remedy is ordered so you never lock yourself out: authorize `~/.ssh/id_<default>.pub` on the workstation and point `Host <workstation>` at it until `ssh <workstation> true` passes, only then remove `devbox.pub` from that account's `authorized_keys` |
 | devbox command     | `devbox` on the PATH with bash completion — the [`devbox install`](#-devbox-install) checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |

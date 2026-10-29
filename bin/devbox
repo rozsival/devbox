@@ -47,6 +47,7 @@ devbox_usage() {
   printf "  %s   Apply the repo's OMP preset to this laptop and the devbox\n" "sync omp       "
   printf "  %s   Apply the repo's Claude Code preset to this laptop and the devbox\n" "sync claude    "
   printf "  %s   Copy the laptop's identity registry into the devbox and apply it\n" "sync identities"
+  printf "  %s   Apply your profile to the agent context on this laptop and the devbox\n" "sync profile   "
   printf "  %s   The agent git override on this laptop\n" "agent          "
   printf "  %s   Install the agent git override on this laptop\n" "agent install  "
   echo
@@ -434,6 +435,7 @@ devbox_sync_usage() {
   printf "  %s   Apply the repo's OMP preset to this laptop and the devbox\n" "omp       "
   printf "  %s   Apply the repo's Claude Code preset to this laptop and the devbox\n" "claude    "
   printf "  %s   Copy the laptop's identity registry into the devbox and apply it\n" "identities"
+  printf "  %s   Apply your profile to the agent context on this laptop and the devbox\n" "profile   "
   echo
 
   if [[ -n "$long_usage" ]]; then
@@ -566,6 +568,42 @@ devbox_sync_identities_usage() {
 
     printf "  %s\n" "DEVBOX_IDENTITIES"
     printf "    Source file (default ~/.config/devbox/identities.conf)\n"
+    echo
+
+  fi
+}
+
+devbox_sync_profile_usage() {
+  if [[ -n $long_usage ]]; then
+    printf "devbox sync profile\n\n"
+    printf "  Apply your profile to the agent context on this laptop and the devbox\n  \n  Validates ~/.config/devbox/profile.json (name, bio, tone), re-renders\n  the laptop's ~/.config/devbox/agent-context.md with it, copies it to\n  the devbox (keeping one profile.json.bak there) and re-renders there.\n\n"
+  else
+    printf "devbox sync profile - Apply your profile to the agent context on this laptop and the devbox\n\n"
+  fi
+
+  printf "%s\n" "Usage:"
+  printf "  devbox sync profile [HOST]\n"
+  printf "  devbox sync profile --help | -h\n"
+  echo
+
+  if [[ -n "$long_usage" ]]; then
+
+    printf "%s\n" "Options:"
+
+    printf "  %s\n" "--help, -h"
+    printf "    Show this help\n"
+    echo
+
+    printf "%s\n" "Arguments:"
+
+    printf "  %s\n" "HOST"
+    printf "    Devbox SSH host (default DEVBOX_SSH_HOST, from the environment or .push.env,\n    then 'devbox')\n"
+    echo
+
+    printf "%s\n" "Environment Variables:"
+
+    printf "  %s\n" "DEVBOX_SSH_HOST"
+    printf "    Default devbox SSH host; may also be set in .push.env\n"
     echo
 
   fi
@@ -3386,6 +3424,38 @@ devbox_sync_identities_command() {
 
 }
 
+devbox_sync_profile_command() {
+
+  src="${HOME}/.config/devbox/profile.json"
+  [[ -f "${src}" ]] ||
+    log_error "No profile at ${src} - cp ${TEMPLATE_DIR}/.config/devbox/profile.json.example ${src}, then fill it in"
+
+  # Validated before anything is written: a profile that does not validate is
+  # skipped by agent-context on both machines, so syncing it would only spread it.
+  agent_context="${REPO_ROOT}/container/agent-context"
+  problem="$("${BASH}" "${agent_context}" validate-profile "${src}")" ||
+    log_error "${problem} - fix it before syncing"
+
+  # The laptop first, so a failed devbox copy still leaves this machine current.
+  out="$("${BASH}" "${agent_context}" apply laptop "${TEMPLATE_DIR}" 2>&1)" ||
+    log_error "Rendering the laptop's agent context failed: ${out}"
+  [[ -z "${out}" ]] || while IFS= read -r line; do log_success "${line}"; done <<<"${out}"
+
+  host="$(devbox_ssh_host)"
+  sync_to_devbox "${host}" "${src}" .config/devbox/profile.json
+
+  # Only the agent context depends on the profile, so this re-renders that one
+  # file rather than re-running all of bootstrap.
+  log_info "Rendering the agent context on ${host}..."
+  if out="$(ssh "${host}" 'bash /opt/devbox/container/agent-context apply devbox /opt/devbox/home' 2>&1)"; then
+    [[ -z "${out}" ]] || while IFS= read -r line; do log_success "${host}: ${line}"; done <<<"${out}"
+    log_success "Profile synced to ${host}; new agent sessions on either machine read it."
+  else
+    log_error "Profile copied, but rendering failed on ${host}: ${out}"
+  fi
+
+}
+
 devbox_agent_install_command() {
 
   local -r AGENTS=(omp claude)
@@ -3587,6 +3657,10 @@ devbox_agent_install_command() {
     log_warn "Installing the agent context failed: ${agent_context_out}"
   fi
   agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_DIR}" 2>&1 || true)"
+  # Optional, so a hint rather than a manual step; never seeded, since the
+  # example's placeholders would become what every session believes about you.
+  [[ -e ${CONFIG_DIR}/profile.json ]] ||
+    log_info "Optional: tell agents who you are and the tone to take - cp ${TEMPLATE_DIR}/.config/devbox/profile.json.example ${CONFIG_DIR}/profile.json, fill it in, then ./bin/devbox sync profile"
 
   # -- Report ---------------------------------------------------------------------
   log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,claude-session-env,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
@@ -4959,6 +5033,13 @@ devbox_sync_parse_requirements() {
     shift $#
     ;;
 
+  profile)
+    action="profile"
+    shift
+    devbox_sync_profile_parse_requirements "$@"
+    shift $#
+    ;;
+
   "")
     devbox_sync_usage >&2
     exit 1
@@ -5227,6 +5308,99 @@ devbox_sync_identities_parse_requirements() {
   fi
 
   action="sync identities"
+
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case "$key" in
+
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        key="$1"
+
+        if [[ -z ${args['host']+x} ]]; then
+          args['host']=$1
+          shift
+        else
+          printf "invalid argument: %s\n" "$key" >&2
+          exit 1
+        fi
+
+      done
+      break
+      ;;
+
+    -?*)
+      printf "invalid option: %s\n" "$key" >&2
+      exit 1
+      ;;
+
+    *)
+
+      if [[ -z ${args['host']+x} ]]; then
+        args['host']=$1
+        shift
+      else
+        printf "invalid argument: %s\n" "$key" >&2
+        exit 1
+      fi
+
+      ;;
+
+    esac
+  done
+
+  filter_error=$(filter_laptop)
+  if [[ -n $filter_error ]]; then
+    echo "$filter_error" >&2
+    exit 1
+  fi
+
+}
+
+devbox_sync_profile_parse_requirements() {
+  local key
+
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case "$key" in
+    --help | -h)
+      long_usage=yes
+      devbox_sync_profile_usage
+      exit
+      ;;
+
+    *)
+      break
+      ;;
+
+    esac
+  done
+
+  missing_deps=
+
+  if ! command -v jq >/dev/null 2>&1; then
+    printf "missing dependency: jq\n" >&2
+    printf "%s\n\n" "brew install jq" >&2
+    missing_deps=1
+  fi
+
+  if ! command -v rsync >/dev/null 2>&1; then
+    printf "missing dependency: rsync\n" >&2
+    printf "%s\n\n" "brew install rsync" >&2
+    missing_deps=1
+  fi
+
+  if ! command -v ssh >/dev/null 2>&1; then
+    printf "missing dependency: ssh\n" >&2
+    missing_deps=1
+  fi
+
+  if [[ -n $missing_deps ]]; then
+    exit 1
+  fi
+
+  action="sync profile"
 
   while [[ $# -gt 0 ]]; do
     key="$1"
@@ -6369,6 +6543,11 @@ devbox_sync_completion() {
       devbox_sync_identities_completion "$completion_current" "$@"
       return
       ;;
+    profile)
+      shift
+      devbox_sync_profile_completion "$completion_current" "$@"
+      return
+      ;;
     --help | -h)
       completion_blocked_flags["--help"]=1
       shift
@@ -6378,7 +6557,7 @@ devbox_sync_completion() {
       ;;
     esac
   done
-  completion_candidates "$completion_current" omp claude identities
+  completion_candidates "$completion_current" omp claude identities profile
 
   if [[ $completion_current == -* ]]; then
     completion_flag_candidates --help "$completion_current" --help -h
@@ -6469,6 +6648,44 @@ devbox_sync_claude_completion() {
 }
 
 devbox_sync_identities_completion() {
+  local completion_current="$1"
+  local completion_arg_index=0
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+      completion_blocked_flags["--help"]=1
+      shift
+      ;;
+    *)
+      if [[ $completion_arg_index -ge 1 ]]; then
+        return
+      fi
+      completion_arg_index=$((completion_arg_index + 1))
+      shift
+
+      ;;
+    esac
+  done
+
+  if [[ $completion_current == -* ]]; then
+    completion_flag_candidates --help "$completion_current" --help -h
+  fi
+
+  if [[ $completion_current != -* ]]; then
+    case "$completion_arg_index" in
+    0)
+      if completion_output="$({ completion_ssh_hosts; } 2>/dev/null)"; then
+        completion_dynamic_candidates "$completion_current" "$completion_output"
+      fi
+      ;;
+    esac
+  fi
+
+}
+
+devbox_sync_profile_completion() {
   local completion_current="$1"
   local completion_arg_index=0
   shift
@@ -6721,6 +6938,7 @@ run() {
   "sync omp") devbox_sync_omp_command ;;
   "sync claude") devbox_sync_claude_command ;;
   "sync identities") devbox_sync_identities_command ;;
+  "sync profile") devbox_sync_profile_command ;;
   "agent") devbox_agent_command ;;
   "agent install") devbox_agent_install_command ;;
   "install") devbox_install_command ;;
