@@ -1,0 +1,195 @@
+# The devbox guardrail for Codex: the same reach the OMP preset's `bash.patterns`
+# (home/.omp/agent/config.yml) and the Claude Code preset's permission rules
+# (home/.claude/settings.json) stop, as Codex execpolicy rules. Installed as
+# ~/.codex/rules/devbox.rules by container/bootstrap.sh (devbox) and
+# `devbox agent install` (laptop), rewritten on every run - edit it here, never
+# the installed copy. Codex loads every *.rules file under ~/.codex/rules and
+# applies the strictest match (forbidden > prompt > allow), so an "always allow"
+# you click in the TUI - written to default.rules beside this file - never
+# lifts a `forbidden` here. `make lint` loads this file through
+# `codex execpolicy check`, which also runs every match/not_match example below.
+#
+# Guardrail, not containment (docs/security.md, accepted limit 7), and coarser
+# than OMP's globs. A rule is a prefix of the command's argument list - literal
+# tokens, a list meaning "any of these" - so it cannot see:
+#
+# - a flag later in the line (`git push origin main --force`, `gh auth status
+#   -h github.com --show-token`): only the shapes listed below match;
+# - an assignment (`GIT_CONFIG_GLOBAL=x git push`, `export GH_CONFIG_DIR=x`) or
+#   a script with redirection, substitution or control flow: Codex splits a
+#   `bash -lc` script into commands only when it is a plain chain of words, and
+#   otherwise matches the whole `bash -lc '<script>'`, which nothing here does;
+# - a pinned runner (`npx vercel@39`): only bare names and `@latest` match.
+#
+# So the CLIs OMP gates verb by verb (Vercel, Neon) prompt on every
+# invocation here, reads included - a resource before the verb (`vercel env
+# add`) is not expressible otherwise. What actually bounds an agent is what its
+# credentials can do; these rules catch the obvious reach past that.
+
+# Every rule for a CLI a project may run through a package runner instead of
+# a global install is repeated behind each of these.
+RUNNERS = [[], ["npx"], ["pnpx"], ["bunx"], ["pnpm", "dlx"], ["pnpm", "exec"], ["npm", "exec"]]
+
+def runner_rule(pattern, decision, justification):
+    for runner in RUNNERS:
+        prefix_rule(pattern = runner + pattern, decision = decision, justification = justification)
+
+# -- The human GitHub login ---------------------------------------------------
+# The agent's `gh` is the shim's scoped token; these read, replace or
+# reconfigure the account-wide one. Plain `gh auth status` stays allowed: it
+# shows which token a session holds.
+prefix_rule(
+    pattern = ["gh", "auth", ["token", "login", "logout", "refresh", "setup-git", "switch"]],
+    decision = "forbidden",
+    justification = "The agent's gh runs on the shim's scoped token; the account-wide login is not the agent's.",
+    match = ["gh auth token", "gh auth login --web", "gh auth setup-git"],
+    not_match = ["gh auth status"],
+)
+prefix_rule(
+    pattern = ["gh", "auth", "status", ["--show-token", "-t"]],
+    decision = "forbidden",
+    justification = "Prints the token; `gh auth status` without it shows which one the session holds.",
+)
+
+# -- Stepping out of the launcher's fence -------------------------------------
+# The shape of a past bypass: `env -u GH_CONFIG_DIR -u GH_TOKEN
+# /opt/homebrew/bin/gh pr create` reached the human OAuth login. A path to the
+# real gh skips the shim; clearing an export undoes the fence for one command.
+# Reading the exports (`echo $GIT_CONFIG_GLOBAL`) stays allowed.
+prefix_rule(
+    pattern = [["/usr/bin/gh", "/usr/local/bin/gh", "/opt/homebrew/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"]],
+    decision = "forbidden",
+    justification = "A path to the real gh skips the shim and its scoped token - run `gh` by name.",
+    match = ["/opt/homebrew/bin/gh pr create"],
+)
+prefix_rule(
+    pattern = ["env", ["-u", "--unset"]],
+    decision = "forbidden",
+    justification = "Clearing a variable can undo the launcher's git and gh fence for that command.",
+)
+prefix_rule(
+    pattern = ["env", ["-i", "--ignore-environment"]],
+    decision = "prompt",
+    justification = "A scrubbed environment drops the launcher's fence; a person decides.",
+)
+FENCE = ["GIT_CONFIG_GLOBAL", "GIT_SSH_COMMAND", "GH_CONFIG_DIR", "GIT_TERMINAL_PROMPT"]
+prefix_rule(
+    pattern = ["unset", FENCE],
+    decision = "forbidden",
+    justification = "These four exports are the launcher's fence.",
+    match = ["unset GH_CONFIG_DIR"],
+)
+prefix_rule(
+    pattern = ["unset", "-v", FENCE],
+    decision = "forbidden",
+    justification = "These four exports are the launcher's fence.",
+)
+
+# -- Credential stores outside the agent's own --------------------------------
+# The macOS keychain (the human gh login and git credentials live there) and
+# 1Password.
+prefix_rule(
+    pattern = ["security", ["find-generic-password", "find-internet-password", "dump-keychain"]],
+    decision = "forbidden",
+    justification = "The keychain holds your own logins, not the agent's.",
+)
+prefix_rule(
+    pattern = ["git", "credential-osxkeychain"],
+    decision = "forbidden",
+    justification = "The keychain holds your own git credentials, not the agent's.",
+)
+prefix_rule(
+    pattern = ["op"],
+    decision = "prompt",
+    justification = "1Password is your vault; a person decides.",
+)
+
+# -- GitHub surfaces no agent session should touch ----------------------------
+prefix_rule(
+    pattern = ["gh", "repo", "delete"],
+    decision = "forbidden",
+    justification = "Deleting a repository is never an agent's call.",
+)
+prefix_rule(
+    pattern = ["gh", ["secret", "variable"]],
+    decision = "forbidden",
+    justification = "Actions secrets and variables are not an agent's to read or set.",
+)
+prefix_rule(
+    pattern = ["gh", "api", ["-X", "--method"], "DELETE"],
+    decision = "forbidden",
+    justification = "Raw API deletes are never an agent's call.",
+    match = ["gh api -X DELETE repos/o/r"],
+    not_match = ["gh api -X GET repos/o/r"],
+)
+prefix_rule(
+    pattern = ["gh", "api", ["-XDELETE", "--method=DELETE"]],
+    decision = "forbidden",
+    justification = "Raw API deletes are never an agent's call.",
+)
+prefix_rule(
+    pattern = ["gh", "workflow", "run"],
+    decision = "prompt",
+    justification = "Starting a workflow spends CI and may deploy; a person decides.",
+)
+
+# -- Cloud and infrastructure: a person decides -------------------------------
+prefix_rule(
+    pattern = ["gcloud"],
+    decision = "prompt",
+    justification = "Google Cloud acts on real infrastructure; a person decides.",
+)
+prefix_rule(
+    pattern = ["terraform", ["apply", "import"]],
+    decision = "prompt",
+    justification = "Changes real infrastructure; a person decides.",
+)
+prefix_rule(
+    pattern = ["terraform", "destroy"],
+    decision = "forbidden",
+    justification = "Destroying infrastructure is never an agent's call.",
+)
+
+# -- Vercel and Neon ----------------------------------------------------------
+# Every invocation prompts (see the header); the irreversible ones are
+# forbidden outright: project deletion and minting account tokens. Raw API
+# DELETEs prompt with everything else, since the method flag can sit anywhere.
+VERCEL = ["vercel", "vc", "vercel@latest"]
+NEON = ["neon", "neonctl", "neonctl@latest"]
+runner_rule([VERCEL], "prompt", "Vercel deploys, links, spends and hands out secrets; a person decides.")
+runner_rule([NEON], "prompt", "Neon creates, resets and hands out database credentials; a person decides.")
+runner_rule([VERCEL, ["project", "projects"], ["delete", "remove", "rm"]], "forbidden", "Deleting a Vercel project is never an agent's call.")
+runner_rule([VERCEL, "tokens", "create"], "forbidden", "Minting a Vercel account token is never an agent's call.")
+runner_rule([NEON, ["project", "projects"], "delete"], "forbidden", "Deleting a Neon project is never an agent's call.")
+runner_rule([NEON, ["api-keys", "api-key"], "create"], "forbidden", "Minting a Neon API key is never an agent's call.")
+
+# -- History and data destruction ---------------------------------------------
+# --force-with-lease stays allowed. `origin` is spelled out because the remote
+# usually sits between `push` and the flag.
+prefix_rule(
+    pattern = ["git", "push", ["--force", "-f"]],
+    decision = "forbidden",
+    justification = "Rewrites shared history; use --force-with-lease.",
+    match = ["git push --force origin main", "git push -f"],
+    not_match = ["git push --force-with-lease"],
+)
+prefix_rule(
+    pattern = ["git", "push", "origin", ["--force", "-f"]],
+    decision = "forbidden",
+    justification = "Rewrites shared history; use --force-with-lease.",
+)
+prefix_rule(
+    pattern = ["git", ["commit", "push", "merge", "rebase", "am", "cherry-pick"], "--no-verify"],
+    decision = "forbidden",
+    justification = "Hooks are the project's checks; fix what they report instead.",
+)
+prefix_rule(
+    pattern = ["docker", "system", "prune"],
+    decision = "forbidden",
+    justification = "Prunes every project's containers, images and networks.",
+)
+prefix_rule(
+    pattern = ["docker", "volume", "rm"],
+    decision = "forbidden",
+    justification = "Volumes hold project data.",
+)

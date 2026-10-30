@@ -13,11 +13,11 @@ export CARGO_HOME=/opt/cargo
 case ":$PATH:" in *:/opt/cargo/bin:*) ;; *) PATH="/opt/cargo/bin:$PATH" ;; esac
 case ":$PATH:" in *:/opt/ruby/bin:*) ;; *) PATH="/opt/ruby/bin:$PATH" ;; esac
 
-# OMP and Claude Code install in ~/.local/bin so `omp update` and Claude's
-# auto-update work without an image rebuild. ~/.local/libexec/devbox-agent goes
-# in front of it: that is where the `omp` and `claude` launchers live (the agent
-# git override, docs/git.md) and the `gh` shim that picks a GitHub token per
-# working directory (docs/secrets.md).
+# OMP, Claude Code and Codex install in ~/.local/bin so `omp update`, `codex
+# update` and Claude's auto-update work without an image rebuild.
+# ~/.local/libexec/devbox-agent goes in front of it: that is where the `omp`,
+# `claude` and `codex` launchers live (the agent git override, docs/git.md) and
+# the `gh` shim that picks a GitHub token per working directory (docs/secrets.md).
 #
 # Order is asserted, not "prepend if absent": a login shell reads ~/.profile,
 # which sources this file and *then* prepends ~/.local/bin, putting the real

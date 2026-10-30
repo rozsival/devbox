@@ -7,11 +7,11 @@
 ![Platform](https://img.shields.io/badge/Platform-Ubuntu%2026.04%20LTS-0A84FF)
 ![Runtime](https://img.shields.io/badge/Runtime-Docker%20%2B%20rootless%20project%20daemon-2496ED)
 ![Network](https://img.shields.io/badge/Network-Tailscale%20only-4CAF50)
-![Agents](https://img.shields.io/badge/Agents-OMP%20%2B%20Claude%20Code-F46800)
+![Agents](https://img.shields.io/badge/Agents-OMP%20%2B%20Claude%20Code%20%2B%20Codex-F46800)
 
 One Docker container with its own unprivileged `sshd`, published only on the node's Tailscale address. A
-[herdr](https://herdr.dev) client on a laptop attaches to it as a saved machine and runs **OMP** and **Claude Code**
-agents inside — the container is the agent sandbox.
+[herdr](https://herdr.dev) client on a laptop attaches to it as a saved machine and runs **OMP**, **Claude Code** and
+**Codex** agents inside — the container is the agent sandbox.
 
 **[📚 Documentation](docs/README.md)** · [Installation](docs/installation.md) · [Connecting](docs/connecting.md) ·
 [Git identities](docs/git.md) · [CLI](docs/cli.md)
@@ -42,9 +42,10 @@ agents inside — the container is the agent sandbox.
 
 Setup spans the laptop, the workstation and 1Password, so let an agent drive it. You need a workstation running
 Ubuntu 26.04 LTS with Docker and Tailscale ≥ 1.98, and a laptop with 1Password and
-[OMP](https://github.com/can1357/oh-my-pi) or [Claude Code](https://claude.com/claude-code).
+[OMP](https://github.com/can1357/oh-my-pi), [Claude Code](https://claude.com/claude-code) or
+[Codex](https://github.com/openai/codex).
 
-Clone this repo on the laptop, start the agent in the checkout (both load the repo's `devbox-setup` and
+Clone this repo on the laptop, start the agent in the checkout (each loads the repo's `devbox-setup` and
 `devbox-laptop` skills) and paste:
 
 ```text

@@ -33,7 +33,7 @@ fmt: ## Format shell (shfmt), Markdown and YAML (prettier)
 	$(SHFMT) -w $(SH_SRC)
 	$(PRETTIER) --write $(PRETTIER_SRC)
 
-lint: ## Lint shell (shellcheck), parse the laptop-side scripts with /bin/bash and the Claude env file with sh/bash/zsh
+lint: ## Lint shell (shellcheck), parse the laptop-side scripts with /bin/bash and the Claude env file with sh/bash/zsh, load the Codex rules
 	shellcheck $(SH_LINT)
 	for f in $(SH_BASH32); do /bin/bash -n "$$f"; done
 	@! grep -rnE 'args\[--[a-z0-9]+( - [a-z0-9]+)+' cli || { echo 'cli/: shfmt split these flag keys; quote them (AGENTS.md rule 2)' >&2; exit 1; }
@@ -45,6 +45,9 @@ lint: ## Lint shell (shellcheck), parse the laptop-side scripts with /bin/bash a
 	for sh in sh bash zsh; do \
 	  ! command -v "$$sh" >/dev/null || "$$sh" -n "$$tmp/env" || { echo "claude-session-env output does not parse in $$sh" >&2; exit 1; }; \
 	done
+	@# Codex validates a rules file - Starlark syntax and every match/not_match example - only when it loads it;
+	@# loading it here catches a broken guardrail before an install puts it in front of a session.
+	@! command -v codex >/dev/null || codex execpolicy check --rules home/.codex/rules/devbox.rules -- true >/dev/null
 
 check: fmt-check lint build-check ## Everything CI would run; changes nothing
 

@@ -74,7 +74,7 @@ commands:
 
   - name: update
     group: Workstation
-    help: Update OMP, Claude Code and moshi-hook in the running container and restart the hook daemon; no rebuild
+    help: Update OMP, Claude Code, Codex and moshi-hook in the running container and restart the hook daemon; no rebuild
     filters: [host]
 
   - name: keys
@@ -228,9 +228,10 @@ commands:
         help: |-
           Install the agent git override on this laptop
 
-          From home/: the omp and claude launchers, the gh shim, the credential
-          helper, the SSH fence and the read-only rendered agent gitconfigs; the
-          OMP and Claude Code presets where no guardrail exists yet.
+          From home/: the omp, claude and codex launchers, the gh shim, the
+          credential helper, the SSH fence and the read-only rendered agent
+          gitconfigs; the OMP and Claude Code presets where no guardrail exists
+          yet, and the Codex guardrail rules.
           Idempotent; prints the manual steps that remain.
         filters: [laptop]
         dependencies:

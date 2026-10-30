@@ -7,7 +7,7 @@ description: Explains how the devbox works - the container-as-sandbox model, the
 
 `devbox` provisions one Docker container on `<workstation>`: its own unprivileged `sshd`, published only on
 its Tailscale address. A [herdr](https://herdr.dev) laptop client attaches to it as a saved machine, running
-OMP and Claude Code agents inside.
+OMP, Claude Code and Codex agents inside.
 
 **The container is the sandbox.** A bypassed-permission agent reaches the project tree, internet, and a
 rootless project Docker daemon - never the host filesystem or its root Docker daemon.
@@ -87,21 +87,24 @@ fetches - unlike `includeIf gitdir:`, which needs the directory to exist first. 
 
 The devbox holds no private key for any identity: manual git (pane push, signed commit) borrows the
 laptop's 1Password agent, forwarded per connection with `ssh -A devbox`; agent git never touches it - the
-`omp`/`claude` launchers rewrite their git to HTTPS with a repo-scoped token and bot author, unsigned. Agents
+`omp`/`claude`/`codex` launchers rewrite their git to HTTPS with a repo-scoped token and bot author, unsigned. Agents
 write only through each identity's GitHub App (one per identity, personal included); every PAT is read-only,
 so a repo without the App is clone/fetch only. Their `gh` on a repo the App covers uses the same App token,
 so PRs carry the bot author too. Full mechanism: `docs/git.md`, `docs/secrets.md#permissions-per-token`.
 
 ## Two optional extras, not installed by default
 
-`./bin/devbox skills` (workstation) installs `skill-creator` and `find-skills` into `~/.agents/skills` (OMP) with a
-symlink each in `~/.claude/skills` (Claude Code), plus the `agent-browser` CLI and a Chrome build, so panes can drive a
+`./bin/devbox skills` (workstation) installs `skill-creator` and `find-skills` into `~/.agents/skills` (OMP and Codex)
+with a symlink each in `~/.claude/skills` (Claude Code), plus the `agent-browser` CLI and a Chrome build, so panes can drive a
 headless browser. `./bin/devbox sync omp` and `./bin/devbox sync claude` (laptop) apply the
 repo's OMP preset, `home/.omp/agent/config.yml`, and Claude Code preset, `home/.claude/settings.json` (`model` plus
 `permissions.deny`/`ask` rules mirroring OMP's `bash.patterns` guardrail), to the laptop and the devbox so both share
 them; `sync omp` copies, `sync claude` merges (other tools write `hooks` into that file). Neither sync nor `skills` runs
 during bootstrap, which only seeds each preset when absent; all are idempotent.
-Claude Code itself is installed by bootstrap and needs one `/login` in a pane (`docs/toolchain.md#-claude-code`).
+Claude Code and Codex are installed by bootstrap and each needs one login in a pane: `/login` in `claude`
+(`docs/toolchain.md#-claude-code`), `codex login --device-auth` for Codex (ChatGPT subscription; allow device code sign-in in
+ChatGPT's security settings first). Codex's guardrail, `home/.codex/rules/devbox.rules`, is rewritten by every
+bootstrap - no sync; its sandbox is off on the devbox (the container is the sandbox).
 
 ## What credentials live in the box
 
@@ -117,7 +120,8 @@ key**, **no Google user credential** (`gcloud` not installed). Three layers:
   after sourcing, so no process inherits them). Nothing exports `GH_TOKEN` - the `gh` shim in
   `~/.local/libexec/devbox-agent` resolves it per invocation from the working directory, reading the file,
   same rule as git identity (`devbox-gh-token --account` reports it); plus the Claude Code OAuth login in
-  `~/.claude/.credentials.json`, from one `/login`
+  `~/.claude/.credentials.json` (from one `/login`) and the Codex login in `~/.codex/auth.json` (from one
+  `codex login --device-auth`)
 - **Per project** - that project's `.env`, rendered on the laptop, copied in, so a leak stays scoped there;
   GCP keys are per-project too, via `GOOGLE_APPLICATION_CREDENTIALS`
 

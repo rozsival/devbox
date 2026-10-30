@@ -9,8 +9,8 @@ Deploying is two easily-conflated steps: **sync the repo** to the workstation (`
 it** to the running container (`devbox start` and friends, workstation side) - picking the wrong one is
 usually why a change seems to do nothing. Syncing the _identity registry_ is a separate, third step
 (`devbox sync identities`): it never travels with `devbox deploy`, since `identities.conf` is gitignored,
-hand-held state, not repo content. `devbox update` is none of these: it upgrades OMP, Claude Code and `moshi-hook`
-in the running container and applies no repo change.
+hand-held state, not repo content. `devbox update` is none of these: it upgrades OMP, Claude Code, Codex and
+`moshi-hook` in the running container and applies no repo change.
 
 Full reference: `docs/cli.md` (flags), `docs/operations.md` (restart, backup, troubleshooting).
 
@@ -42,21 +42,23 @@ local Docker daemon, and `deploy`/`sync`/`agent install` only on the laptop. Fro
 
 ## Which apply step does the change need
 
-| Changed                                                                           | Apply with                          | Why                                                                                                                                                              |
-| --------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docker-compose.yml`, `.env`                                                      | `start`                             | Config hash change recreates                                                                                                                                     |
-| `Dockerfile`, apt list, install block                                             | `start`                             | Rebuilds changed layers                                                                                                                                          |
-| A pinned `ARG <TOOL>_VERSION`                                                     | `start`, or `rebuild` for no cache  | `ARG` invalidates that layer                                                                                                                                     |
-| `container/*`, `home/*`                                                           | `start`                             | In build context, recreate                                                                                                                                       |
-| Re-apply user setup only                                                          | `bootstrap`                         | No restart, no lost panes                                                                                                                                        |
-| `bin/devbox` (regenerated from `cli/`)                                            | nothing                             | Read at invocation, on host                                                                                                                                      |
-| `container/skills.sh`                                                             | `start`, then `./bin/devbox skills` | Only run on demand                                                                                                                                               |
-| `home/.omp/agent/config.yml` (the OMP preset)                                     | `./bin/devbox sync omp`             | Live files are OMP-owned once seeded; `sync omp` replaces both, laptop and devbox                                                                                |
-| `home/.claude/settings.json` (the Claude Code preset)                             | `./bin/devbox sync claude`          | Merged, not copied: other tools write `hooks`/`statusLine` into the live files, which stay; rule lists are replaced whole                                        |
-| `~/.config/devbox/identities.conf`                                                | `./bin/devbox sync identities`      | Hand-held state, not repo content                                                                                                                                |
-| `~/.config/devbox/profile.json`                                                   | `./bin/devbox sync profile`         | Hand-held state; only the agent context depends on it, so no bootstrap runs                                                                                      |
-| A new host needing project Docker                                                 | `sudo ./bin/devbox docker setup`    | Host provisioning, needs sudo                                                                                                                                    |
-| `cli/lib/docker_setup.sh` (firewall, daemon unit, user manager and sshd drop-ins) | `sudo ./bin/devbox docker setup`    | `doctor` flags a stale ruleset, firewall unit or drop-in, and sshd's effective `DenyUsers`; `docker setup --check` reports every piece, the daemon unit included |
+| Changed                                                                           | Apply with                           | Why                                                                                                                                                                             |
+| --------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docker-compose.yml`, `.env`                                                      | `start`                              | Config hash change recreates                                                                                                                                                    |
+| `Dockerfile`, apt list, install block                                             | `start`                              | Rebuilds changed layers                                                                                                                                                         |
+| A pinned `ARG <TOOL>_VERSION`                                                     | `start`, or `rebuild` for no cache   | `ARG` invalidates that layer                                                                                                                                                    |
+| `container/*`, `home/*`                                                           | `start`                              | In build context, recreate                                                                                                                                                      |
+| `home/.codex/rules/devbox.rules` (the Codex guardrail)                            | `start` or `bootstrap`               | Bootstrap rewrites it on every run (no `sync codex`); on the laptop `./bin/devbox agent install` does                                                                           |
+| `container/codex-config.toml` (`/etc/codex/config.toml`: Codex's devbox sandbox)  | `start`; `rebuild` once for the link | Edits are live, since the symlink points into the `:ro` `container/` mount; the `Dockerfile` creates the link, so an image from before it needs one rebuild (`doctor` flags it) |
+| Re-apply user setup only                                                          | `bootstrap`                          | No restart, no lost panes                                                                                                                                                       |
+| `bin/devbox` (regenerated from `cli/`)                                            | nothing                              | Read at invocation, on host                                                                                                                                                     |
+| `container/skills.sh`                                                             | `start`, then `./bin/devbox skills`  | Only run on demand                                                                                                                                                              |
+| `home/.omp/agent/config.yml` (the OMP preset)                                     | `./bin/devbox sync omp`              | Live files are OMP-owned once seeded; `sync omp` replaces both, laptop and devbox                                                                                               |
+| `home/.claude/settings.json` (the Claude Code preset)                             | `./bin/devbox sync claude`           | Merged, not copied: other tools write `hooks`/`statusLine` into the live files, which stay; rule lists are replaced whole                                                       |
+| `~/.config/devbox/identities.conf`                                                | `./bin/devbox sync identities`       | Hand-held state, not repo content                                                                                                                                               |
+| `~/.config/devbox/profile.json`                                                   | `./bin/devbox sync profile`          | Hand-held state; only the agent context depends on it, so no bootstrap runs                                                                                                     |
+| A new host needing project Docker                                                 | `sudo ./bin/devbox docker setup`     | Host provisioning, needs sudo                                                                                                                                                   |
+| `cli/lib/docker_setup.sh` (firewall, daemon unit, user manager and sshd drop-ins) | `sudo ./bin/devbox docker setup`     | `doctor` flags a stale ruleset, firewall unit or drop-in, and sshd's effective `DenyUsers`; `docker setup --check` reports every piece, the daemon unit included                |
 
 `docker setup` restarts `dev`'s user manager - and with it the project daemon and every project container - when
 the `user@1001` drop-in changed or the running manager predates it. Ubuntu's 5 s stop timeout for `user@`
@@ -72,8 +74,9 @@ itself. `start`/`stop`/`rebuild` count sessions first: connected ones prompt on 
 script - `--force` overrides, needing say-so. `./bin/devbox sessions` also shows sshd's recent
 `Accepted`/`Disconnected` lines. Only `bootstrap`, `skills`, `hook`, `update` are pane-safe: all `docker compose exec`
 into the container. `hook` restarts `moshi-hook` (after `moshi-hook pair`, or crashing) without
-costing anyone their session; `hook --update` upgrades it first, for a new release; `update` upgrades OMP and Claude
-Code too, then does the same - in place, no rebuild or recreate, so it never applies a repo change (`start` does).
+costing anyone their session; `hook --update` upgrades it first, for a new release; `update` upgrades OMP, Claude
+Code and Codex too (`codex update`), then does the same - in place, no rebuild or recreate, so it never applies a repo
+change (`start` does).
 
 `container/` and `home/` are bind-mounted `:ro` _and_ `COPY`d into the image (`COPY container/` / `COPY
 home/` in the `Dockerfile`, as fallback): the mount makes new bytes visible immediately; editing also
@@ -83,10 +86,11 @@ entrypoint and bootstrap. That's why `start` answers both; unchanged, it's idemp
 
 One caveat for `home/`: bootstrap rewrites several files unconditionally - `~/.bashrc.d/devbox.sh`,
 `~/.bash_profile`, `~/.ssh/config`,
-`~/.local/libexec/devbox-agent/{agent-launch,omp-launcher,claude-launcher,omp,claude,gh,devbox-git-credential,devbox-git-no-ssh,devbox-identities}`,
+`~/.local/libexec/devbox-agent/{agent-launch,omp-launcher,claude-launcher,codex-launcher,omp,claude,codex,gh,devbox-git-credential,devbox-git-no-ssh,devbox-identities}`,
 `~/.config/devbox/git/agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir`
 (reinstalled through their read-only directory: bootstrap lifts the mode, re-renders from
-`identities.conf`, locks it again) - all generated, not hand-edited, so template edits land next run.
+`identities.conf`, locks it again) - all generated, not hand-edited, so template edits land next run; so is
+`~/.codex/rules/devbox.rules`.
 `~/.gitconfig`, `~/.config/devbox/secrets.env`, `~/.config/devbox/identities.conf`, OMP config are
 create-if-absent: editing those templates doesn't reach an existing home - delete the file under
 `${DEVBOX_DATA_DIR}`, or apply by hand (`identities.conf` specifically: edit it, or
@@ -102,9 +106,10 @@ This matters: "will I lose my keys / repos / gh login" is a flat no, by construc
   `~/.ssh/signing_*.pub` (public keys only - devbox holds no private key), sshd host key under
   `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/identities.conf`, `~/.config/devbox/secrets.env`,
   `~/.config/devbox/profile.json`, `~/.config/devbox/git/agent*.gitconfig`,
-  `~/.local/libexec/devbox-agent` (`agent-launch`, both launchers plus their `omp`/`claude` symlinks, `gh`
-  shim, credential helper, fence), the OMP and Claude Code installs in `~/.local/bin` with the Claude login
-  in `~/.claude`, `~/.gitconfig`, every project checkout, project daemon's images, build cache, named volumes under
+  `~/.local/libexec/devbox-agent` (`agent-launch`, all three launchers plus their `omp`/`claude`/`codex` symlinks, `gh`
+  shim, credential helper, fence), the OMP, Claude Code and Codex installs in `~/.local/bin` with the Claude login
+  in `~/.claude` and the Codex login in `~/.codex`, `~/.gitconfig`, every project checkout, project daemon's images,
+  build cache, named volumes under
   `~/.local/share/docker` - all persist across `start`, `rebuild`, image changes.
 - `--delete`/`--delete-excluded` apply to the workstation's checkout only; they _will_ remove anything there outside
   the allowlist and hand-added files inside a synced directory - the remote is a runtime mirror, deliberately.
@@ -133,8 +138,10 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 
 `doctor` runs all checks, reports each, exits non-zero on any failure: compose present, `BIND_ADDR` equal
 to `tailscale ip -4`, port listening on `BIND_ADDR`, **nothing** on `0.0.0.0`, container `healthy`, PID 1
-as `dev`, sixteen toolchain probes, real exit codes, the agent git override intact (`omp` and `claude` each
-resolving through a symlink to their launcher, not a file an update replaced), `moshi-hook` running (unpaired warns,
+as `dev`, eighteen toolchain probes (Codex's included), real exit codes, the agent git override intact (`omp`,
+`claude` and `codex` each
+resolving through a symlink to their launcher, not a file an update replaced), Codex's rules file matching the repo's
+(else run `bootstrap`) and `/etc/codex/config.toml` present (else `rebuild`), `moshi-hook` running (unpaired warns,
 stopped fails - `./bin/devbox hook` restarts it), project Docker daemon reachable and rootless, `host.docker.internal`
 resolving to publish address, `devbox-docker-firewall` active with the ruleset and unit this checkout writes, the
 daemon's user manager reading root-owned `/etc/devbox-docker` (drop-in current, manager started after it), and the

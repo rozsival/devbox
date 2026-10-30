@@ -16,8 +16,8 @@ quick start live in the [root README](../README.md).
 | [Installation](installation.md) | Set up the laptop and the workstation for the first time    | Laptop key, `~/.ssh/config`, deploy, `.env` reference, laptop agent install        |
 | [Connecting](connecting.md)     | Get a shell in the devbox                                   | herdr panes, `ssh devbox`, Moshi, `devbox shell`, cloning, dev servers             |
 | [Git identities](git.md)        | Clone repos and commit as the right account                 | Identity registry, manual vs agent git, credential helper, signing, laptop install |
-| [Secrets](secrets.md)           | Place tokens and keys where the right process reads them    | Three layers, `secrets.env`, per-identity `gh` tokens, Claude login, GCP ADC       |
-| [Toolchain](toolchain.md)       | See what is installed and add a tool                        | Pinned versions, install locations, OMP, Claude Code, Moshi hooks, agent skills    |
+| [Secrets](secrets.md)           | Place tokens and keys where the right process reads them    | Three layers, `secrets.env`, per-identity `gh` tokens, agent logins, GCP ADC       |
+| [Toolchain](toolchain.md)       | See what is installed and add a tool                        | Pinned versions, install locations, OMP, Claude Code, Codex, Moshi hooks, skills   |
 | [Networking](networking.md)     | Know who can reach the devbox and how to reach a dev server | `BIND_ADDR`, why UFW cannot help, verifying exposure, port forwarding              |
 | [Docker](docker.md)             | Run a project's containers from inside the devbox           | Rootless project daemon, path identity, published ports, `devbox-ports`            |
 | [Operations](operations.md)     | Redeploy, back up or troubleshoot a running devbox          | Redeploy, persistence, backup, health, troubleshooting                             |

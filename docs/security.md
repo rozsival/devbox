@@ -85,8 +85,8 @@ These are known and deliberate, not gaps to be closed later:
    boundary drops for the devbox and the project daemon.
 2. **A forwarded agent is open to the whole devbox while it lasts.** `ssh -A devbox` exposes the 1Password agent
    socket for the connection's lifetime, and the socket belongs to `dev`: every process in the container can use it, not
-   just the shell you forwarded it into. Only agent git is fenced (HTTPS, through the `omp`/`claude` launchers, which
-   also start each session without `SSH_AUTH_SOCK` — a default, since the socket stays findable under `~/.ssh/agent/`
+   just the shell you forwarded it into. Only agent git is fenced (HTTPS, through the `omp`/`claude`/`codex` launchers,
+   which also start each session without `SSH_AUTH_SOCK` — a default, since the socket stays findable under `~/.ssh/agent/`
    (OpenSSH ≥ 10.1)). That directory is on the bind mount, so any project container that bind-mounts `/home/dev`, and
    `dev` on the host, reach the socket as well. And 1Password approves per key and per application, not per use — a key
    your terminal app is already approved for (by this connection, or by anything since 1Password last locked) signs
@@ -99,9 +99,9 @@ These are known and deliberate, not gaps to be closed later:
 3. **No isolation between projects.** One container, one `dev` user, one bind mount: an agent in project A can read
    project B's `.env` and GCP key. Cloning something less trusted is where per-project containers or separate users stop
    being over-engineering.
-4. **Secrets are plaintext at rest.** `.env` files, `gh` tokens, key files and the Claude Code login
-   (`~/.claude/.credentials.json`) are unencrypted on the workstation's disk, readable by the host user. Workstation
-   disk encryption and host account hygiene are part of this security model, not separate.
+4. **Secrets are plaintext at rest.** `.env` files, `gh` tokens, key files and the Claude Code and Codex logins
+   (`~/.claude/.credentials.json`, `~/.codex/auth.json`) are unencrypted on the workstation's disk, readable by the
+   host user. Workstation disk encryption and host account hygiene are part of this security model, not separate.
 5. **The project Docker daemon widens reach to the `dev` account.** Anything in the container can start a container
    through that socket, including one bind-mounting a host path — but only as unprivileged `dev`: world-readable host
    files to read, only `dev`-owned files to write, never host root, the root daemon, or your home directory (`750`,
@@ -129,7 +129,13 @@ These are known and deliberate, not gaps to be closed later:
    approval prompt is then the only gate). On the devbox the same bypass gains nothing — no credential broader than the
    scoped PATs and App keys exists there. Keep autonomous or bypass-permission work against orgs you own on the devbox;
    on the laptop, a `gh auth logout` (your own `gh` on fine-grained PATs too) and 1Password set to approve every SSH
-   request remove what a bypass could reach.
+   request remove what a bypass could reach. Sessions an app starts sit outside the launchers: the Claude desktop app's
+   Bash commands are fenced by a `SessionStart` hook, but the Codex desktop app's sessions are **not** fenced at all.
+   Codex's nearest counterpart, `shell_environment_policy` in `~/.codex/config.toml`, could set the git exports for
+   every command but cannot put the `gh` shim ahead on the `PATH` (it takes literal values), and the file is the desktop
+   app's own, so applying it would need a TOML merge - not done. Those sessions still read `~/.codex/AGENTS.md` (the
+   laptop context, which tells an agent with an empty `DEVBOX_ENV` to stop before any git push or `gh` write) and load
+   the rules file, but those are instructions and a guardrail, not a fence — only a launcher-started `codex` is fenced.
 8. **`tailscaled`'s LocalAPI relays to the Tailnet.** `/run/tailscale/tailscaled.sock` is world-accessible (`0666`),
    and its `dial` endpoint has `tailscaled`, as root, open a connection for any local caller. From 1.98 it relays only
    Tailnet routes — a peer, its sshd included — and answers a non-Tailscale address with Dial-Self; before 1.98 it
@@ -174,8 +180,34 @@ Claude Code differs from OMP in four ways that matter here:
   `.claude/settings.json` cannot drop these rules the way a project's `bash.patterns` replaces OMP's.
 - Nothing in the preset corresponds to OMP's `secrets.enabled` obfuscation.
 
-The limits are otherwise the same: rules match command text, so an interpreter one-liner or a script file walks past
-them — accepted limit 7 still applies on the laptop.
+The limits are otherwise the same for OMP and Claude Code: rules match command text, so an interpreter one-liner or a
+script file walks past them — accepted limit 7 still applies on the laptop.
+
+`home/.codex/rules/devbox.rules` is the Codex counterpart: execpolicy rules (Starlark `prefix_rule`, decision
+`forbidden` or `prompt`) for the same categories as the other two lists — the human `gh` login, an absolute-path `gh`,
+`env -u` and `unset` of the launcher's exports, the keychain, `op`, `gh repo delete`/`secret`/`variable` and API
+`DELETE`s, `gh workflow run`, `gcloud` and `terraform apply`/`import` (prompt), `terraform destroy`, force pushes,
+`--no-verify` and `docker system prune`/`volume rm`. It is a file of our own, so nothing is seeded or merged: `bootstrap`
+and `./bin/devbox agent install` rewrite `~/.codex/rules/devbox.rules` on every run, and there is no `sync codex`. Codex
+loads every `*.rules` file in `~/.codex/rules` and the strictest match wins (forbidden over prompt over allow), so an
+"always allow" click, which Codex writes to `default.rules`, never lifts a `forbidden`. Codex's rules are **coarser than
+OMP's globs**:
+
+- A rule matches only the start of the command's argument list. A flag later in the line (`git push origin main
+--force`), a leading assignment (`GIT_CONFIG_GLOBAL=x git push`, `export GH_CONFIG_DIR=x`) or a `bash -lc` script
+  that is not a plain chain of words falls past it; a pinned runner (`npx vercel@39`) does too.
+- So every Vercel and Neon invocation prompts, reads included, and only project deletion and token or API-key minting
+  are forbidden, where OMP and Claude Code gate those CLIs verb by verb.
+
+The sandbox is a separate matter. On the devbox `container/codex-config.toml`, linked by the `Dockerfile` to
+`/etc/codex/config.toml` (Codex's lowest-precedence config layer, root-owned and outside the bind mount), sets
+`sandbox_mode = "danger-full-access"`. Codex's Linux sandbox is bubblewrap, which needs a user namespace; Docker's
+default seccomp profile refuses one without `CAP_SYS_ADMIN`, and this container runs `cap_drop: [ALL]` with
+`no-new-privileges`. Left at its default every sandboxed command fails and Codex asks to rerun it unsandboxed. The
+container is the boundary — OpenAI's own advice for a container that is — and Codex stands on the same footing as OMP and
+Claude Code here, which also run commands unsandboxed. Approvals keep their default, so the rules above still prompt and
+forbid. Your own `~/.codex/config.toml` or a `-c`/`--sandbox` flag overrides the layer; it is a default, not a guardrail.
+The laptop keeps Codex's own macOS Seatbelt sandbox defaults: nothing writes a config there.
 
 ## 🚫 Deliberate boundaries
 

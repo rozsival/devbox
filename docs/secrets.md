@@ -33,6 +33,7 @@ Everything is on the `/home/dev` bind mount, so it survives rebuilds and is set 
 | `gh` tokens, one per identity            | `~/.config/devbox/secrets.env`                                       | you, a read-only fine-grained PAT each ([below](#-github-cli))              |
 | OMP login                                | `~/.omp/agent/agent.db`                                              | you, once, `/login` in `omp` ([below](#omp))                                |
 | Claude Code login                        | `~/.claude/.credentials.json`                                        | you, once, `/login` in `claude` ([below](#claude-code))                     |
+| Codex login                              | `~/.codex/auth.json`                                                 | you, once, `codex login --device-auth` ([below](#codex))                    |
 | Model API keys (optional)                | `~/.config/devbox/secrets.env`                                       | you, only for providers you use by key                                      |
 | GitHub App credentials, one per identity | the directory the identity's `app` field names                       | you, `app-id` + `app.pem` at mode 600 ([Git](git.md#devbox-git-credential)) |
 | Per-project secrets                      | `<project>/.env`                                                     | you, rendered on the laptop ([below](#-per-project-secrets))                |
@@ -50,7 +51,7 @@ the OMP login.
 | 1   | Set identity public keys     | `pubkey` and `signing_pubkey` per identity in `identities.conf` — see [Git Identities](git.md#-signing)                |
 | 2   | Fill `secrets.env`           | A read-only `GH_TOKEN_<SLUG>` per identity ([permissions](#permissions-per-token)); model API keys only if you use any |
 | 3   | Place GitHub App credentials | Every identity's `app` directory: `app-id` and `app.pem` (mode 600) — without them its agents can only read            |
-| 4   | Log the agents in            | `/login` once in `omp` and once in `claude` — see [Agent logins](#-agent-logins)                                       |
+| 4   | Log the agents in            | `/login` once in `omp` and once in `claude`, `codex login --device-auth` once — see [Agent logins](#-agent-logins)     |
 
 ---
 
@@ -130,8 +131,8 @@ variable.
 
 ### Agent sessions use the App
 
-In an agent session (`GIT_CONFIG_GLOBAL` points at `agent.gitconfig`, which only the `omp`/`claude` launchers set), a
-command about **one repository** uses that repository's App installation token from
+In an agent session (`GIT_CONFIG_GLOBAL` points at `agent.gitconfig`, which only the `omp`/`claude`/`codex` launchers
+set), a command about **one repository** uses that repository's App installation token from
 `devbox-git-credential token <owner>/<repo>` — the same token agent git pushes with, so PRs and comments carry the bot
 author like the commits do.
 
@@ -234,7 +235,7 @@ Never raise the PAT.
 
 ## 🤖 Agent logins
 
-Both agents log in with a subscription, not an API key. Each login lives on the bind mount, survives rebuilds, and is
+Every agent logs in with a subscription, not an API key. Each login lives on the bind mount, survives rebuilds, and is
 readable by any agent on the box — the same blast radius as `secrets.env`. If the box is compromised, revoke it at the
 provider and log in again.
 
@@ -254,6 +255,18 @@ lists the login as outstanding until that file exists.
 
 `claude-launcher` unsets `ANTHROPIC_API_KEY` for Claude's process tree: Claude would otherwise bill such a key instead
 of the subscription. A `claude` started by absolute path, bypassing the launcher, would see it.
+
+### Codex
+
+Codex runs on the ChatGPT subscription. Its default login opens a browser callback on `localhost`, which the container
+cannot receive, so use device-code sign-in: allow it once in ChatGPT's security settings, then run
+`codex login --device-auth` in a pane and enter the printed code in a laptop browser. The credentials land in
+`~/.codex/auth.json` on the bind mount, plaintext like Claude's; `bootstrap` lists the login as outstanding until that
+file exists.
+
+`codex-launcher` unsets `OPENAI_API_KEY` and `CODEX_API_KEY` for Codex's process tree: Codex would otherwise bill such a
+key instead of the subscription. A `codex` started by absolute path, bypassing the launcher, would see it. A project's
+own LLM calls take their key from that project's `.env`, not from `secrets.env`.
 
 ---
 
@@ -418,7 +431,7 @@ _"… by **personal access token**"_ is the read-only PAT — the App is not ins
 ### Does OMP see my keys in plaintext?
 
 `~/.omp/agent/config.yml` sets `secrets: { enabled: true }`, which obfuscates environment secrets before they reach a
-provider. The Claude Code preset has no such setting.
+provider. Neither the Claude Code preset nor the Codex setup has such a setting.
 
 ### How do I rotate a leaked key?
 

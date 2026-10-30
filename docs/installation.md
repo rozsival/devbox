@@ -140,8 +140,8 @@ same on the workstation, so from then on `devbox <TAB>` works in any new shell o
 `Dockerfile`, `docker-compose.yml`, `.env.example`), not `docs/` or the agent skills.
 
 `.push.env` (gitignored) holds `DEVBOX_HOST`, the default for `deploy`'s `<workstation>` argument, and optionally
-`DEVBOX_SSH_HOST`, the `~/.ssh/config` host every `sync` (`omp`, `claude`, `identities`, `profile`) uses for the container (default
-`devbox`).
+`DEVBOX_SSH_HOST`, the `~/.ssh/config` host every `sync` (`omp`, `claude`, `identities`, `profile`) uses for the container
+(default `devbox`).
 
 `env` creates `.env` from `.env.example`: `BIND_ADDR` from `tailscale ip -4`, `HOST_UID`/`HOST_GID` from `dev` (else
 current user). Edit `~/devbox/.env`, at minimum `DEVBOX_EXTRA_AUTHORIZED_KEYS` with `devbox.pub`.
@@ -192,32 +192,39 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'   # 2 global agent skills
 ./bin/devbox sync omp                                    # repo OMP preset → laptop and devbox
 ./bin/devbox sync claude                                 # repo Claude Code preset → laptop and devbox
 ssh -t devbox claude                                     # once: /login for Claude Code on the devbox
+ssh -t devbox codex login --device-auth                  # once: ChatGPT sign-in for Codex on the devbox
 ```
 
 All idempotent, rerunnable anytime. Details: [Toolchain](toolchain.md#-agent-skills-and-browser-automation),
-[Claude Code](toolchain.md#-claude-code).
+[Claude Code](toolchain.md#-claude-code), [Codex](toolchain.md#-codex).
+
+Codex's sign-in is the one manual step `bootstrap` registers for it while `~/.codex/auth.json` is missing: allow device
+code sign-in in ChatGPT's security settings first, then run `codex login --device-auth` in a pane (a browser callback to
+`localhost` cannot reach the container). The credentials live in `~/.codex` on the bind mount and survive rebuilds.
+There is no `sync` for Codex: its guardrail is a rules file `bootstrap` and `agent install` rewrite on every run.
 
 ### 6. Agent git on the laptop (optional but recommended)
 
 The laptop is the only place a private key or a 1Password session ever lives; the devbox borrows them per connection.
-Agents run on the laptop too — OMP and Claude Code, same launchers, same mechanism. Two commands make the laptop match:
+Agents run on the laptop too — OMP, Claude Code and Codex, same launchers, same mechanism. Two commands make the laptop
+match:
 
 ```bash
-./bin/devbox agent install   # omp + claude launchers, gh shim, credential helper, fence, agent gitconfigs - same as the devbox
+./bin/devbox agent install   # omp + claude + codex launchers, gh shim, credential helper, fence, agent gitconfigs
 ./bin/devbox doctor laptop   # acceptance test: keys, ~/.ssh/config, signing, the override, tokens, connections
 ```
 
-| Part       | What the laptop gets                                                                                                                                                                                                                                                              |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Keys**   | One `id_<slug>.pub`/`signing_<slug>.pub` pair per identity in `~/.config/devbox/identities.conf`, plus `devbox`: 1Password SSH items, public halves only in `~/.ssh`, selected per `Host` by `IdentityFile <name>.pub` + `IdentitiesOnly`.                                        |
-| **Git**    | Your own commits sign through `op-ssh-sign`; agents run through the `omp`/`claude` launchers and get HTTPS remotes, per-operation tokens, a bot author and no signing, on the same clones. On the laptop the launchers need one `PATH` line, which `devbox agent install` prints. |
-| **Tokens** | One `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env` (mode 600) and each identity's GitHub App credentials in its own `app` directory, read only by agent sessions.                                                                                               |
+| Part       | What the laptop gets                                                                                                                                                                                                                                                                      |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Keys**   | One `id_<slug>.pub`/`signing_<slug>.pub` pair per identity in `~/.config/devbox/identities.conf`, plus `devbox`: 1Password SSH items, public halves only in `~/.ssh`, selected per `Host` by `IdentityFile <name>.pub` + `IdentitiesOnly`.                                                |
+| **Git**    | Your own commits sign through `op-ssh-sign`; agents run through the `omp`/`claude`/`codex` launchers and get HTTPS remotes, per-operation tokens, a bot author and no signing, on the same clones. On the laptop the launchers need one `PATH` line, which `devbox agent install` prints. |
+| **Tokens** | One `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env` (mode 600) and each identity's GitHub App credentials in its own `app` directory, read only by agent sessions.                                                                                                       |
 
 `devbox agent install` installs:
 
-- `agent-launch`, `omp-launcher`, `claude-launcher`, `claude-session-env`, `gh` shim, credential helper, fence in
-  `~/.local/libexec/devbox-agent`
-- `omp` and `claude` symlinks to their launchers in `~/.local/libexec/devbox-agent/launchers`
+- `agent-launch`, `omp-launcher`, `claude-launcher`, `codex-launcher`, `claude-session-env`, `gh` shim, credential
+  helper, fence in `~/.local/libexec/devbox-agent`
+- `omp`, `claude` and `codex` symlinks to their launchers in `~/.local/libexec/devbox-agent/launchers`
 - `devbox-gh-token` and `wt-herdr` (`wt herdr <branch>`) in `~/.local/bin`
 - `~/.config/devbox/git/agent*.gitconfig` (directory left read-only)
 - the identity registry reader (`devbox-identities`)
@@ -226,11 +233,14 @@ Agents run on the laptop too — OMP and Claude Code, same launchers, same mecha
   `~/.claude/settings.json` when that has no `permissions.deny` (needs `jq`; see [Toolchain](toolchain.md#-claude-code))
 - a `SessionStart` hook in `~/.claude/settings.json` that fences Claude desktop app sessions the way the launcher fences
   terminal ones ([Git Identities](git.md#claude-desktop-app))
+- the Codex guardrail, `~/.codex/rules/devbox.rules` (execpolicy rules, rewritten every run), and a `~/.codex/AGENTS.md`
+  link to the agent context when that file is absent, empty or a dangling link
 
 `identities.conf` is never created for you — it prints the `cp` command instead, so placeholder values can never become
 your agent's author. Idempotent: regenerates generated files, keeps `secrets.env` and `identities.conf`, touches nothing
 else — your shell rc included. One line there is yours to add, after anything that puts `~/.local/bin` first (Claude's
-native install owns `~/.local/bin/claude`, so the launchers cannot live there):
+native install owns `~/.local/bin/claude`, and Codex's installer and `codex update` re-point `~/.local/bin/codex`, so
+the launchers cannot live there):
 
 ```bash
 export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"
@@ -238,9 +248,15 @@ export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"
 
 On a [dotfiles](https://github.com/rozsival/dotfiles) laptop, `~/.config/bash/env.sh` already puts the launchers first.
 
-It reports whether `omp` and `claude` resolve to their launchers, and prints the remaining manual steps per identity: a
-read-only `GH_TOKEN_<SLUG>` in `~/.config/devbox/secrets.env`, and its GitHub App credentials in its `app` directory —
-every identity has one, since the App is the only way its agents write. See [Git Identities](git.md#-laptop-install).
+It reports whether `omp`, `claude` and `codex` resolve to their launchers (an agent that is not installed is only noted:
+its launcher takes over once it is), and prints the remaining manual steps per identity: a read-only `GH_TOKEN_<SLUG>`
+in `~/.config/devbox/secrets.env`, and its GitHub App credentials in its `app` directory — every identity has one,
+since the App is the only way its agents write. See [Git Identities](git.md#-laptop-install).
+
+Codex is optional on the laptop: install it with the standalone installer
+(`curl -fsSL https://chatgpt.com/codex/install.sh | sh`) or `brew install --cask codex`, then sign in. The launcher
+fences it either way; the laptop keeps Codex's own macOS sandbox defaults, and sessions the Codex desktop app starts
+are not fenced ([Git Identities](git.md#codex-desktop-app)).
 
 `./bin/devbox doctor laptop` is the laptop's acceptance test. It covers steps 1, 2 and 6 plus the GitHub `Host` blocks
 and the signing config: keys held by 1Password with none on disk, every `Host` selecting one `.pub` per registry

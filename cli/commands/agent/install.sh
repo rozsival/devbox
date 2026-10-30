@@ -1,14 +1,14 @@
-local -r AGENTS=(omp claude)
+local -r AGENTS=(omp claude codex)
 
 # -- Launchers, credential helper, fence, gh shim ------------------------------
 # Kept out of ~/.local/bin on purpose: only a launcher adds this directory to
 # the PATH, so the `gh` shim (tokens per directory) never intercepts your own
 # gh, which keeps its OAuth login.
 install -d -m 755 "${AGENT_DIR}"
-for tool in omp-launcher claude-launcher claude-session-env gh devbox-git-credential devbox-git-no-ssh; do
+for tool in omp-launcher claude-launcher codex-launcher claude-session-env gh devbox-git-credential devbox-git-no-ssh; do
   install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${AGENT_DIR}/${tool}"
 done
-# Sourced by both launchers and claude-session-env, never run.
+# Sourced by the launchers and claude-session-env, never run.
 install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${AGENT_DIR}/agent-launch"
 
 # The resolver is a user-facing command (`devbox-gh-token --account`), same
@@ -19,16 +19,17 @@ for tool in devbox-gh-token wt-herdr; do
   install -m 755 "${TEMPLATE_DIR}/.local/bin/${tool}" "${BIN_DIR}/${tool}"
 done
 
-# `omp` and `claude` must shadow the real binaries, from a directory holding
-# nothing else: it goes on your PATH ahead of ~/.local/bin, and anything more in
-# it - the gh shim above all - would shadow your own tools too. Not
-# ~/.local/bin itself: Claude's native install keeps its own `claude` symlink
-# there and re-points it on every update, which would silently drop the
-# launcher. Symlinks rather than copies, and no launcher script is itself named
-# after its tool: `omp update` resolves its install target by looking `omp` up
-# on the PATH and takes over a plain file it finds there in place - which used
-# to be the launcher. The launchers drop their own PATH entries for `update`;
-# reaching them only through a symlink is the backstop.
+# `omp`, `claude` and `codex` must shadow the real binaries, from a directory
+# holding nothing else: it goes on your PATH ahead of ~/.local/bin, and anything
+# more in it - the gh shim above all - would shadow your own tools too. Not
+# ~/.local/bin itself: Claude's native install and Codex's standalone one keep
+# their own symlinks there and re-point them on every update, which would
+# silently drop the launcher. Symlinks rather than copies, and no launcher
+# script is itself named after its tool: `omp update` resolves its install
+# target by looking `omp` up on the PATH and takes over a plain file it finds
+# there in place - which used to be the launcher. The launchers drop their own
+# PATH entries for `update`; reaching them only through a symlink is the
+# backstop.
 install -d -m 755 "${LAUNCHER_DIR}"
 for agent in "${AGENTS[@]}"; do
   ln -sfn "${AGENT_DIR}/${agent}-launcher" "${LAUNCHER_DIR}/${agent}"
@@ -185,11 +186,20 @@ if [[ ${claude_settings_state} != invalid ]]; then
   esac
 fi
 
+# The same guardrail for Codex, as execpolicy rules in a file of its own:
+# Codex loads every *.rules under ~/.codex/rules and the strictest match wins,
+# so unlike the two above this is never anyone else's file and is rewritten on
+# every run. The rules the TUI learns from "always allow" go to default.rules
+# beside it and cannot lift a `forbidden`. The desktop app reads it too.
+install -d -m 755 "${HOME}/.codex/rules"
+install -m 644 "${TEMPLATE_DIR}/.codex/rules/devbox.rules" "${HOME}/.codex/rules/devbox.rules"
+
 # Which machine this is, for every agent session: the laptop template as
 # ~/.config/devbox/agent-context.md, one import line appended to your
 # ~/.claude/CLAUDE.md (Claude Code reads it, and OMP with `claude` in its
-# enabledProviders), and the devbox-runtime skill. What it cannot fix - OMP's
-# own config, a shadowing ~/.omp/agent/AGENTS.md - is listed below.
+# enabledProviders), a ~/.codex/AGENTS.md link to it for Codex, and the
+# devbox-runtime skill. What it cannot fix - OMP's own config, a shadowing
+# ~/.omp/agent/AGENTS.md, a ~/.codex/AGENTS.md of your own - is listed below.
 agent_context="${REPO_ROOT}/container/agent-context"
 if agent_context_out="$("${BASH}" "${agent_context}" apply laptop "${TEMPLATE_DIR}" 2>&1)"; then
   [[ -z ${agent_context_out} ]] || while IFS= read -r line; do log_success "${line}"; done <<<"${agent_context_out}"
@@ -203,7 +213,7 @@ agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_
   log_info "Optional: tell agents who you are and the tone to take - cp ${TEMPLATE_DIR}/.config/devbox/profile.json.example ${CONFIG_DIR}/profile.json, fill it in, then ./bin/devbox sync profile"
 
 # -- Report ---------------------------------------------------------------------
-log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,claude-session-env,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
+log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,codex-launcher,claude-session-env,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude,codex}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only), ~/.codex/rules/devbox.rules"
 path_fix=${legacy_kept}
 for agent in "${AGENTS[@]}"; do
   # Same rule as the launcher: the real binary is the first PATH entry that does

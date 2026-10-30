@@ -47,8 +47,8 @@ agent-browser install
 
 # -- 2. global agent skills ---------------------------------------------------
 # `--global --agent universal claude-code` installs to ~/.agents/skills - the
-# directory OMP reads - and symlinks each skill into ~/.claude/skills, the only
-# one Claude Code reads. `--agent '*'` would also symlink the set into ~45
+# directory OMP and Codex read - and symlinks each skill into ~/.claude/skills,
+# the only one Claude Code reads. `--agent '*'` would also symlink the set into ~45
 # per-agent dotdirs for tools that are not installed. `--yes` plus an explicit
 # `--skill` keeps it non-interactive: without both, the CLI prompts for scope
 # and skill selection.
