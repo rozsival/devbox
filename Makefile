@@ -46,8 +46,10 @@ lint: ## Lint shell (shellcheck), parse the laptop-side scripts with /bin/bash a
 	  ! command -v "$$sh" >/dev/null || "$$sh" -n "$$tmp/env" || { echo "claude-session-env output does not parse in $$sh" >&2; exit 1; }; \
 	done
 	@# Codex validates a rules file - Starlark syntax and every match/not_match example - only when it loads it;
-	@# loading it here catches a broken guardrail before an install puts it in front of a session.
-	@! command -v codex >/dev/null || codex execpolicy check --rules home/.codex/rules/devbox.rules -- true >/dev/null
+	@# loading it here catches a broken guardrail before an install puts it in front of a session. Probed with
+	@# --version, not `command -v`: after `agent install` the launcher answers to `codex` even with no Codex
+	@# installed, and exits 127 - Codex is optional, so that skips the check instead of failing it.
+	@! codex --version >/dev/null 2>&1 || codex execpolicy check --rules home/.codex/rules/devbox.rules -- true >/dev/null
 
 check: fmt-check lint build-check ## Everything CI would run; changes nothing
 
