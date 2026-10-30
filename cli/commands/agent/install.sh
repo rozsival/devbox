@@ -1,14 +1,15 @@
 local -r AGENTS=(omp claude codex)
 
-# -- Launchers, credential helper, fence, gh shim ------------------------------
+# -- Launchers, credential helper, fence, gh and git shims ---------------------
 # Kept out of ~/.local/bin on purpose: only a launcher adds this directory to
 # the PATH, so the `gh` shim (tokens per directory) never intercepts your own
-# gh, which keeps its OAuth login.
-install -d -m 755 "${AGENT_DIR}"
-for tool in omp-launcher claude-launcher codex-launcher claude-session-env gh devbox-git-credential devbox-git-no-ssh; do
+# gh, which keeps its OAuth login. fenced/ holds the `git` shim, which restores
+# the fence in an agent child whose environment a tool stripped (fenced/git).
+install -d -m 755 "${AGENT_DIR}" "${AGENT_DIR}/fenced"
+for tool in omp-launcher claude-launcher codex-launcher claude-session-env gh devbox-git-credential devbox-git-no-ssh fenced/git; do
   install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${AGENT_DIR}/${tool}"
 done
-# Sourced by the launchers and claude-session-env, never run.
+# Sourced by the launchers, claude-session-env and both shims, never run.
 install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${AGENT_DIR}/agent-launch"
 
 # The resolver is a user-facing command (`devbox-gh-token --account`), same
@@ -213,7 +214,7 @@ agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_
   log_info "Optional: tell agents who you are and the tone to take - cp ${TEMPLATE_DIR}/.config/devbox/profile.json.example ${CONFIG_DIR}/profile.json, fill it in, then ./bin/devbox sync profile"
 
 # -- Report ---------------------------------------------------------------------
-log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,codex-launcher,claude-session-env,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude,codex}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only), ~/.codex/rules/devbox.rules"
+log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,codex-launcher,claude-session-env,gh,fenced/git,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude,codex}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only), ~/.codex/rules/devbox.rules"
 path_fix=${legacy_kept}
 for agent in "${AGENTS[@]}"; do
   # Same rule as the launcher: the real binary is the first PATH entry that does

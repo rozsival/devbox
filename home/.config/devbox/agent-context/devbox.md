@@ -22,6 +22,9 @@ launcher. If it is empty, git and `gh` are not fenced: stop and tell the user be
 - **Git and GitHub:** git runs over HTTPS with per-repo GitHub App tokens. Remotes may stay SSH URLs, because the agent
   gitconfig rewrites them to HTTPS, so never change a remote URL. SSH itself is fenced and there are no private keys
   here. Commits use the bot author and are unsigned. Never run `gh auth login`, and don't change the git identity.
+  Run git and `gh` from the shell tool: a 403 "Resource not accessible by personal access token" or "Could not resolve
+  to a Repository" means a call ran outside the fence, not that a permission is missing (the `devbox-runtime` skill has
+  the check).
 - **Secrets:** there is no 1Password (`op`) and no `gcloud`. A file that a vault renders (such as `.env.local` from
   `op inject`) has to be generated on the laptop and copied in: ask the user.
 

@@ -52,9 +52,11 @@ agent_fence "${agent_dir}" || exit 1
   for name in "${AGENT_FENCE_EXPORT[@]}"; do
     printf 'export %s=%s\n' "${name}" "$(sh_quote "${!name}")"
   done
-  # A guarded prepend: the file runs before every command, the PATH it sees is
-  # whatever the previous command left.
-  # shellcheck disable=SC2016 # expanded by the session's shell, not here
-  printf 'case ":${PATH}:" in *:%s:*) ;; *) export PATH=%s:"${PATH}" ;; esac\n' \
-    "$(sh_quote "${agent_dir}")" "$(sh_quote "${agent_dir}")"
+  # Guarded prepends, the same two agent_fence makes: the file runs before every
+  # command, the PATH it sees is whatever the previous command left.
+  for dir in "${agent_dir}" "${agent_dir}/fenced"; do
+    # shellcheck disable=SC2016 # expanded by the session's shell, not here
+    printf 'case ":${PATH}:" in *:%s:*) ;; *) export PATH=%s:"${PATH}" ;; esac\n' \
+      "$(sh_quote "${dir}")" "$(sh_quote "${dir}")"
+  done
 } >>"${CLAUDE_ENV_FILE}"

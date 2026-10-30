@@ -38,6 +38,17 @@ if [[ -z ${real} ]]; then
   exit 127
 fi
 
+# An agent session whose environment a tool filtered down (fenced/git explains
+# how): fenced/ is on the PATH, which only agent_fence puts there, but the
+# exports are gone. Restore them before anything reads them - without
+# GH_CONFIG_DIR a laptop gh left with no token falls back to your own login,
+# and without GIT_CONFIG_GLOBAL the App token below is never chosen.
+if [[ -z ${GIT_CONFIG_GLOBAL+set} && ":${PATH}:" == *":${self%/*}/fenced:"* ]]; then
+  # shellcheck source=agent-launch
+  . "${self%/*}/agent-launch"
+  agent_fence "${self%/*}" || exit 1
+fi
+
 # An agent session is one an agent launcher started: it, and only it, points git
 # at agent.gitconfig - the file that makes the App's bot the commit author.
 agent_session() {

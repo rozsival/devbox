@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
+# edit home/.local/libexec/devbox-agent/fenced/git in the repo.
+#
+# PATH shim in front of the real `git`, for agent sessions only: agent_fence
+# (agent-launch) puts this directory on the PATH of an agent's process tree and
+# nothing else does - not devbox.sh, not your own shell on either machine.
+#
+# Why it exists: a tool inside a session can start a child with an environment
+# of its own choosing. OMP's Python eval kernel passes on an allowlist (PATH,
+# HOME, SSH_AUTH_SOCK, LC_*, ...) and drops every variable the fence exported,
+# so git there read ~/.gitconfig and committed under your name. The PATH is the
+# one part such a filter keeps, so the shims on it restore the fence: with
+# GIT_CONFIG_GLOBAL unset, this runs agent_fence again before git. A value that
+# is set but different is a choice (a test suite's /dev/null) and is left
+# alone. The gh shim does the same for gh. See docs/git.md.
+#
+# Bash 3.2 compatible: on the laptop /usr/bin/env bash may be macOS's.
+set -euo pipefail
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+fenced_dir="${self%/*}"
+agent_dir="${fenced_dir%/*}"
+
+real=''
+IFS=: read -ra path_dirs <<<"${PATH}"
+for dir in "${path_dirs[@]}"; do
+  candidate="${dir}/git"
+  [[ -f ${candidate} && -x ${candidate} ]] || continue
+  [[ "$(readlink -f "${candidate}")" == "${self}" ]] && continue
+  real="${candidate}"
+  break
+done
+if [[ -z ${real} ]]; then
+  printf '%s\n' 'git shim: no other git on the PATH' >&2
+  exit 127
+fi
+
+if [[ -z ${GIT_CONFIG_GLOBAL+set} ]]; then
+  # shellcheck source=../agent-launch
+  . "${agent_dir}/agent-launch"
+  agent_fence "${agent_dir}" || exit 1
+fi
+
+exec "${real}" "$@"

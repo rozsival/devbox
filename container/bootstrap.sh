@@ -489,7 +489,9 @@ fi
 # off) and a GIT_SSH_COMMAND that refuses, for their own process trees only -
 # the shared body is agent-launch. The directory is first on the PATH from
 # devbox.sh so all three resolve to the launchers ahead of the real installs in
-# ~/.local/bin (§1). All generated files: reinstalled on every run.
+# ~/.local/bin (§1). fenced/ holds the `git` shim, which only agent_fence puts
+# on a PATH: it restores the fence in an agent child whose environment a tool
+# stripped. All generated files: reinstalled on every run.
 #
 # `omp`, `claude` and `codex` here are symlinks to the launcher scripts, never
 # the scripts themselves: `omp update` resolves what to replace by looking `omp`
@@ -497,7 +499,8 @@ fi
 # their own PATH entries for `update` so it lands on the real install; the
 # symlink is the backstop, since omp's updater refuses to replace a script
 # behind one.
-for tool in omp-launcher claude-launcher codex-launcher devbox-git-credential devbox-git-no-ssh; do
+install -d -m 755 "${agent_dir}/fenced"
+for tool in omp-launcher claude-launcher codex-launcher devbox-git-credential devbox-git-no-ssh fenced/git; do
   install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${agent_dir}/${tool}"
 done
 install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${agent_dir}/agent-launch"

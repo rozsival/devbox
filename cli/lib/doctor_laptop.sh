@@ -278,7 +278,8 @@ doctor_laptop() {
   stale=()
   for rel in .local/libexec/devbox-agent/agent-launch .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/claude-launcher \
     .local/libexec/devbox-agent/codex-launcher .local/libexec/devbox-agent/claude-session-env .local/libexec/devbox-agent/gh \
-    .local/libexec/devbox-agent/devbox-git-credential .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token \
+    .local/libexec/devbox-agent/fenced/git .local/libexec/devbox-agent/devbox-git-credential \
+    .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token \
     .local/bin/wt-herdr .local/libexec/devbox-identities .codex/rules/devbox.rules; do
     cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
   done
