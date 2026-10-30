@@ -10,8 +10,8 @@ by its SSH agent. Everything on disk: public key, config, or token. `./bin/devbo
 acceptance test - run it, fix what it names, run again; its checks are the phases below.
 
 Prerequisite: bash >= 4.2 - `bin/devbox` is bashly-generated and refuses to start under macOS's /bin/bash 3.2.
-`brew install bash`, so `/usr/bin/env bash` finds the Homebrew one first on the PATH. (The launchers, `gh` shim,
-credential helper and `devbox-identities` are not generated and stay bash 3.2 compatible.)
+`brew install bash`, so `/usr/bin/env bash` finds the Homebrew one first on the PATH. (The launchers, `gh` and `git`
+shims, credential helper and `devbox-identities` are not generated and stay bash 3.2 compatible.)
 
 Blocks, rationale: `docs/installation.md` (key, ssh config), `docs/git.md` (identities, agent override, signing).
 Read the needed section, not retyped, so a changed default gets picked up, not reintroduced.

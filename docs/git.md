@@ -197,7 +197,7 @@ shared body, `agent-launch`, so the agents can never drift apart:
 | `GIT_SSH_COMMAND`     | `…/devbox-git-no-ssh`                  | refuses every SSH remote, exit 255      |
 | `GIT_TERMINAL_PROMPT` | `0`                                    | missing credential errors, never hangs  |
 | `GH_CONFIG_DIR`       | `~/.config/devbox/gh`                  | `gh` sees no login: shim token, or none |
-| `PATH`                | launcher's directory prepended         | puts `gh` shim ahead of real `gh`       |
+| `PATH`                | launcher's directory and its `fenced/` | puts the `gh` and `git` shims in front  |
 
 Nothing outside that process tree sees any of it — a clone opened in a pane or IDE keeps its SSH remote, forwarded
 agent, signed commits.
@@ -224,13 +224,25 @@ can't follow the repo tree like `agent.gitconfig`'s `includeIf`. Pointing `GIT_C
 > A repository's own `.git/config` `user.email` wins over `GIT_CONFIG_GLOBAL` — local always outranks global in git.
 > Stock git behavior.
 
+### Children with a filtered environment
+
+A tool inside a session can start a child process with an environment of its own choosing. OMP's Python eval kernel
+passes on an allowlist (`PATH`, `HOME`, `SSH_AUTH_SOCK`, `LC_*`, `XDG_*`, `PI_*` …) and drops all five exports: git
+there reads `~/.gitconfig` and commits under your name, and `gh` gets the read-only PAT, or on the laptop without
+`GH_CONFIG_DIR` your own login. `PATH` is the one part such a filter keeps, so the fence travels on it:
+`agent_fence` also prepends `~/.local/libexec/devbox-agent/fenced`, which holds a `git` shim and is on no other `PATH`
+— not your own shell's on either machine, not `devbox.sh`'s. When `GIT_CONFIG_GLOBAL` is unset, the `git` shim and the
+`gh` shim (on finding `fenced/` on the `PATH`) run `agent_fence` again before the real binary, so git commits as the
+bot and `gh` takes the App token again. A `GIT_CONFIG_GLOBAL` that is set to anything else, a test suite's
+`/dev/null` say, is a choice and stays. A child that also rebuilds `PATH` from scratch is out of reach of this.
+
 ### Claude desktop app
 
 The Claude desktop app starts its sessions itself, from launchd's environment, so no launcher runs and git and `gh`
 would act as you. On the laptop `./bin/devbox agent install` therefore also adds a `SessionStart` hook to
 `~/.claude/settings.json`: `~/.local/libexec/devbox-agent/claude-session-env` sources `agent-launch`, runs the same
-`agent_fence` the launchers run, and writes its exports and unsets (plus `DEVBOX_ENV=laptop` and a guarded `PATH`
-prepend for the `gh` shim) into the session's `CLAUDE_ENV_FILE`, which Claude Code runs before every Bash command. The
+`agent_fence` the launchers run, and writes its exports and unsets (plus `DEVBOX_ENV=laptop` and guarded `PATH`
+prepends for the `gh` and `git` shims) into the session's `CLAUDE_ENV_FILE`, which Claude Code runs before every Bash command. The
 entry is appended next to the herdr, `moshi-hook` and IDE ones, never in the preset: `sync claude` replaces arrays
 whole. Under a launcher it writes the values the session already has.
 
@@ -410,7 +422,7 @@ bootstraps from:
 
 | Destination                                                                                   | Installed                                                                                                                                                                                                                                                                |
 | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `~/.local/libexec/devbox-agent`                                                               | `agent-launch`, `omp-launcher`, `claude-launcher`, `codex-launcher`, the `gh` shim, `devbox-git-credential`, `devbox-git-no-ssh`                                                                                                                                         |
+| `~/.local/libexec/devbox-agent`                                                               | `agent-launch`, `omp-launcher`, `claude-launcher`, `codex-launcher`, the `gh` shim, `fenced/git` (the `git` shim), `devbox-git-credential`, `devbox-git-no-ssh`                                                                                                          |
 | `~/.local/bin`                                                                                | `devbox-gh-token`, `wt-herdr` (`wt herdr <branch>`, [Toolchain](toolchain.md#new-worktree-in-herdr))                                                                                                                                                                     |
 | `~/.local/libexec`                                                                            | `devbox-identities`                                                                                                                                                                                                                                                      |
 | `~/.local/libexec/devbox-agent/launchers`                                                     | `omp`, `claude` and `codex` symlinks to their launchers (the pre-Claude `~/.local/bin/omp` symlink is removed once `omp` resolves through the new directory — until then that link is what keeps `omp` fenced)                                                           |

@@ -88,10 +88,17 @@ agent_fence() {
   fi
 
   # Puts the `gh` shim ahead of the real gh for this session; on the devbox the
-  # directory is already there (home/.bashrc.d/devbox.sh).
+  # directory is already there (home/.bashrc.d/devbox.sh). Then fenced/, the
+  # `git` shim, which only agent sessions get on either machine: it and the gh
+  # shim run this function again in a child whose environment a tool filtered
+  # down to an allowlist that kept PATH and dropped the exports above.
   case ":${PATH}:" in
   *":${agent_dir}:"*) ;;
   *) export PATH="${agent_dir}:${PATH}" ;;
+  esac
+  case ":${PATH}:" in
+  *":${agent_dir}/fenced:"*) ;;
+  *) export PATH="${agent_dir}/fenced:${PATH}" ;;
   esac
 }
 

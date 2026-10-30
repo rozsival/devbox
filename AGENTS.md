@@ -244,7 +244,12 @@ the host's root Docker daemon.
     `get` also answers git `quit=1`, so git asks no askpass program next). The helper caches App answers per
     repository on tmpfs (`devbox-agent-<uid>/`, never under `$HOME`) because a mint is two API round trips;
     a failure is never cached. Nothing exports `GH_TOKEN`; `gh auth
-  login` is rejected by design (`docs/secrets.md`). `home/.config/devbox/git/agent.gitconfig.tpl` is the
+  login` is rejected by design (`docs/secrets.md`). `devbox-agent/fenced/` holds the `git` shim and is on an
+    agent session's `PATH` only (`agent_fence` prepends it; `devbox.sh` never does), on both machines: a tool may
+    start a child with a filtered environment - OMP's Python eval kernel keeps `PATH` and drops every fence export,
+    so git there committed as the user and `gh` fell back to the PAT - and with `GIT_CONFIG_GLOBAL` *unset* the
+    `git` shim, and the `gh` shim on finding `fenced/` on the `PATH`, run `agent_fence` again first; a set but
+    different value stays (`docs/git.md`). `home/.config/devbox/git/agent.gitconfig.tpl` is the
     template `devbox-identities render agent-gitconfig` fills in with the registry's hosts and URL
     rewrites - edit it here, never the rendered `~/.config/devbox/git/agent.gitconfig` or the one
     `agent-<slug>.gitconfig` per identity claiming a `dir` that it produces. Sets the bot author,
@@ -379,7 +384,7 @@ the host's root Docker daemon.
     remotely) and re-runs only `agent-context apply devbox` there - nothing else depends on the profile, so
     no bootstrap. The devbox renders with its deployed `agent-context`, so a changed script needs `deploy` first
   - `devbox agent install` - idempotent: installs the same agent git override the devbox bootstraps (`agent-launch`,
-    `omp-launcher`, `claude-launcher`, `codex-launcher`, `claude-session-env`, `gh` shim, credential helper, fence,
+    `omp-launcher`, `claude-launcher`, `codex-launcher`, `claude-session-env`, `gh` shim, `fenced/git` shim, credential helper, fence,
     `devbox-gh-token`, `wt-herdr`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin` symlink so it answers
     by name, the read-only *rendered* `git/agent*.gitconfig`, and `omp`/`claude`/`codex` symlinks to the launchers in
     `~/.local/libexec/devbox-agent/launchers` - removing the pre-Claude `~/.local/bin/omp` symlink only once

@@ -1,6 +1,6 @@
 ---
 name: devbox-runtime
-description: How to work in the machine this agent session runs on - the devbox container (remote, unprivileged Ubuntu sandbox) or the user's macOS laptop - and how the two relate. Use it whenever DEVBOX_ENV matters to a decision - installing a tool, running Docker or a dev server, giving the user a URL or port, a path that may only exist on the other machine, a git or gh authentication failure, calling gh or the GitHub API from a script or another language, a secret or vault-rendered file that is missing - and whenever you catch yourself assuming root, sudo, the user's own credentials or the other machine's files.
+description: How to work in the machine this agent session runs on - the devbox container (remote, unprivileged Ubuntu sandbox) or the user's macOS laptop - and how the two relate. Use it whenever DEVBOX_ENV matters to a decision - installing a tool, running Docker or a dev server, giving the user a URL or port, a path that may only exist on the other machine, a git or gh authentication failure (a 403 "Resource not accessible by personal access token", "Could not resolve to a Repository"), calling git, gh or the GitHub API from a script, an eval/REPL kernel or another language, a commit with the wrong author, a secret or vault-rendered file that is missing - and whenever you catch yourself assuming root, sudo, the user's own credentials or the other machine's files.
 ---
 
 # Working in the devbox and on the laptop
@@ -113,11 +113,21 @@ container. herdr restores the pane layout, not the processes.
   output. If `gh` fails with no token, stop and report the error; `command -v gh` should print the shim's path. Don't
   route around it.
 
-- **Diagnosing a 403 or a missing repo:** `devbox-git-credential explain <owner>/<repo>` names the identity and whether
-  an App or the PAT answers. A read-only PAT can't push: the identity needs its App installed on that repository. Tell
-  the user; don't swap credentials.
-- **Wrong author on a commit:** a clone's own `[user]` section outranks the agent author (`git config --local --list`).
-  Report it rather than rewriting history.
+- **The fence is the environment, not the PATH.** Finding the shim proves nothing: what makes git and `gh` act as the
+  bot are the launcher's exports (`GIT_CONFIG_GLOBAL`, `GH_CONFIG_DIR`, …). A tool may start a child with a filtered
+  environment - OMP's Python eval kernel keeps `PATH` and drops them all - and there git would read the user's
+  `~/.gitconfig` and `gh` would get the PAT. The `git` shim in `devbox-agent/fenced` and the `gh` shim restore the
+  fence in such a child, but run git and `gh` from the shell tool anyway, and in a child check
+  `echo "${GIT_CONFIG_GLOBAL:-unset}"` before trusting the result.
+- **Diagnosing a 403 or a missing repo:** in an agent session, `Resource not accessible by personal access token` or
+  `Could not resolve to a Repository` means the call ran on the read-only PAT, almost always because it ran outside the
+  fence (above). Re-run it as a plain shell command and check `devbox-git-credential explain <owner>/<repo>`, which
+  names the identity and whether an App or the PAT answers, before you conclude that a permission is missing. A
+  read-only PAT can't push: the identity needs its App installed on that repository. Tell the user; don't swap
+  credentials.
+- **Wrong author on a commit:** a clone's own `[user]` section outranks the agent author (`git config --local --list`),
+  and a commit made outside the fence (above) carries the user's `~/.gitconfig` identity. Report it rather than
+  rewriting history.
 
 ## When unsure
 

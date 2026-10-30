@@ -222,8 +222,8 @@ match:
 
 `devbox agent install` installs:
 
-- `agent-launch`, `omp-launcher`, `claude-launcher`, `codex-launcher`, `claude-session-env`, `gh` shim, credential
-  helper, fence in `~/.local/libexec/devbox-agent`
+- `agent-launch`, `omp-launcher`, `claude-launcher`, `codex-launcher`, `claude-session-env`, `gh` shim, `fenced/git`
+  shim, credential helper, fence in `~/.local/libexec/devbox-agent`
 - `omp`, `claude` and `codex` symlinks to their launchers in `~/.local/libexec/devbox-agent/launchers`
 - `devbox-gh-token` and `wt-herdr` (`wt herdr <branch>`) in `~/.local/bin`
 - `~/.config/devbox/git/agent*.gitconfig` (directory left read-only)
