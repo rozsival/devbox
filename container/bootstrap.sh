@@ -596,6 +596,25 @@ fi
 install -d -m 755 "${HOME_DIR}/.codex/rules"
 install -m 644 "${TEMPLATE_DIR}/.codex/rules/devbox.rules" "${HOME_DIR}/.codex/rules/devbox.rules"
 
+# No shared Codex background server (0.157+, on by default): it outlives the
+# pane that started it and keeps that pane's environment for every session
+# attached later, so Moshi pins every Codex session to that first pane, and
+# its updater pulls ~370 MB releases into ~/.codex. The launcher already passes
+# --no-daemon for the fence; this stops a bare codex from starting one. In
+# ~/.codex/config.toml rather than /etc/codex/config.toml because moshi-hook's
+# check reads only that file, and §15's non-interactive `moshi-hook install`
+# skips the question it would ask. Only when the key is absent, so an explicit
+# choice of your own stands. A server already running keeps serving until
+# `codex app-server daemon stop` (docs/toolchain.md).
+codex_config="${HOME_DIR}/.codex/config.toml"
+if [[ -x "${HOME_DIR}/.local/bin/codex" ]] && ! grep -qs 'daemon_auto_start' "${codex_config}"; then
+  if "${HOME_DIR}/.local/bin/codex" features disable daemon_auto_start >/dev/null 2>&1; then
+    log_success "Turned off Codex's shared background server in ${codex_config}."
+  else
+    log_warn "Could not turn off Codex's shared background server; run 'codex features disable daemon_auto_start'."
+  fi
+fi
+
 # Which machine this is, for every agent session: ~/.config/devbox/agent-context.md
 # (the devbox template), imported by one line in ~/.claude/CLAUDE.md that OMP
 # and Claude Code read and linked as ~/.codex/AGENTS.md for Codex, plus the

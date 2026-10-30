@@ -178,7 +178,8 @@ There is no `claude-session-env` for Codex (`shell_environment_policy` could set
 launcher-started `codex` is (accepted limit 7, `docs/security.md`). They still load `~/.codex/rules/devbox.rules` and
 read `~/.codex/AGENTS.md` - the laptop context, which tells an agent with an empty `DEVBOX_ENV` to stop before any git
 push or `gh` write. `codex-launcher` also unsets `OPENAI_API_KEY` and `CODEX_API_KEY`, so Codex stays on its ChatGPT
-sign-in.
+sign-in, and passes `--no-daemon`, so a session never attaches to a shared background server the desktop app started
+(that server's environment, not the fence, would apply).
 
 And it tells laptop agents where they run (`container/agent-context apply laptop`). It installs the laptop template as
 `~/.config/devbox/agent-context.md` - with a `## The user` section appended from the optional

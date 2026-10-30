@@ -211,7 +211,10 @@ deliberate choice. Clearing is a default, not a boundary — a forwarded agent's
 (OpenSSH >= 10.1), on the bind mount, for anything that looks ([accepted limit 2](security.md#-accepted-limits)).
 
 `codex-launcher` also drops `OPENAI_API_KEY` and `CODEX_API_KEY`, so a key exported from `secrets.env` or a shell is
-never billed instead of Codex's ChatGPT sign-in (the mirror of `claude-launcher` dropping `ANTHROPIC_API_KEY`).
+never billed instead of Codex's ChatGPT sign-in (the mirror of `claude-launcher` dropping `ANTHROPIC_API_KEY`). And it
+passes `--no-daemon`: since 0.157 an interactive `codex` attaches to one shared background server, which runs every
+attached session under the environment of whatever started it — the desktop app or a bare `codex` would mean a session
+without the fence. With the flag a launcher session runs its own embedded server even while a shared one is up.
 
 `GIT_CONFIG_GLOBAL` beats `includeIf` via `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*`, which ignores `includeIf gitdir:` and
 can't follow the repo tree like `agent.gitconfig`'s `includeIf`. Pointing `GIT_CONFIG_GLOBAL` at a file that itself

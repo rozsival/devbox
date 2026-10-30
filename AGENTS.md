@@ -158,7 +158,11 @@ the host's root Docker daemon.
   as `settings.json.bak`; invalid JSON registered as a manual action; a file already holding
   `permissions.deny` left alone), placed before §15 because `moshi-hook` merges its hooks into that same file, and
   Codex's `~/.codex/rules/devbox.rules` (the execpolicy guardrail, `home/.codex/rules/devbox.rules`: a file of
-  Codex's own, rewritten on every run - nothing seeded, merged or synced, so there is no `devbox sync codex`);
+  Codex's own, rewritten on every run - nothing seeded, merged or synced, so there is no `devbox sync codex`) and,
+  when `~/.codex/config.toml` does not mention it, `codex features disable daemon_auto_start` (Codex's shared
+  background server keeps the environment of the pane that first started it, so Moshi pins every session to that
+  pane; in the user file because Moshi's check reads only that one, and §15's `moshi-hook install` runs without the
+  terminal its own offer needs; a server already running needs `codex app-server daemon stop` once);
   then the agent context (`container/agent-context apply devbox`, below), its `check` failures - the image
   lacking `/etc/devbox-env`, OMP's config not reading `~/.claude/CLAUDE.md`, a `~/.codex/AGENTS.md` that is not the
   link, a non-empty `~/.codex/AGENTS.override.md` - registered as manual actions;
@@ -214,7 +218,9 @@ the host's root Docker daemon.
   `GIT_AUTHOR_*`/`GIT_CONFIG_COUNT`/`GIT_CONFIG_PARAMETERS` overrides that outrank every gitconfig
   (`GH_TOKEN` stays: the shim honours an explicit one as deliberate); `codex-launcher` also unsets `OPENAI_API_KEY`
   and `CODEX_API_KEY`, so a key from `secrets.env` or a shell is never billed instead of the ChatGPT sign-in (as
-  `claude-launcher` drops `ANTHROPIC_API_KEY`). Each launcher is reached as `omp`/`claude`/`codex` only
+  `claude-launcher` drops `ANTHROPIC_API_KEY`), and passes `--no-daemon`, because a session attached to Codex's shared
+  background server runs under that server's environment, unfenced if the desktop app or a bare `codex` started it.
+  Each launcher is reached as `omp`/`claude`/`codex` only
   through a symlink and never as a file named after its tool, because `omp update` resolves its install
   target by looking `omp` up on the PATH and takes a plain file there over in place - it once wrote the
   release binary onto the launcher, dropping agent sessions back on the user's gitconfig and SSH keys; the
