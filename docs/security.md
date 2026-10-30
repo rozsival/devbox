@@ -207,7 +207,12 @@ default seccomp profile refuses one without `CAP_SYS_ADMIN`, and this container 
 container is the boundary — OpenAI's own advice for a container that is — and Codex stands on the same footing as OMP and
 Claude Code here, which also run commands unsandboxed. Approvals keep their default, so the rules above still prompt and
 forbid. Your own `~/.codex/config.toml` or a `-c`/`--sandbox` flag overrides the layer; it is a default, not a guardrail.
-The laptop keeps Codex's own macOS Seatbelt sandbox defaults: nothing writes a config there.
+Codex's shared background server (0.157+) runs every attached session under the environment of whatever started it — the
+desktop app, a bare `~/.local/bin/codex` — so attaching would drop the fence. `codex-launcher` therefore passes
+`--no-daemon` on both machines, which keeps its sessions off a server even when one is running, and on the devbox
+`bootstrap` turns `daemon_auto_start` off in `~/.codex/config.toml` so none is started
+([Toolchain](toolchain.md#codex-background-server)). The laptop keeps Codex's own macOS Seatbelt sandbox defaults:
+nothing writes a config there.
 
 ## 🚫 Deliberate boundaries
 

@@ -16,10 +16,16 @@
 # exported from secrets.env or a shell would otherwise be billed instead of the
 # ChatGPT sign-in. Codex runs on the subscription; a project's own LLM calls take
 # their key from that project's .env, not from here.
+#
+# --no-daemon keeps the session off Codex's shared background server (0.157+),
+# even one already running. That server runs every attached session under the
+# environment of whatever started it - the desktop app, a bare ~/.local/bin/codex
+# - so attaching would drop the fence exported below. Every subcommand accepts it
+# before its name, `update` included.
 set -euo pipefail
 unset OPENAI_API_KEY CODEX_API_KEY
 
 self="$(readlink -f "${BASH_SOURCE[0]}")"
 # shellcheck source=agent-launch
 . "$(dirname "${self}")/agent-launch"
-agent_launch codex "${self}" 'install Codex (curl -fsSL https://chatgpt.com/codex/install.sh | sh)' "$@"
+agent_launch codex "${self}" 'install Codex (curl -fsSL https://chatgpt.com/codex/install.sh | sh)' --no-daemon "$@"

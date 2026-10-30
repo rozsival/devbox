@@ -299,6 +299,30 @@ The link points into the read-only `container/` bind mount, so editing the file 
 is needed once to create the link, and `doctor host` fails until `/etc/codex/config.toml` exists. The laptop writes no
 Codex config: it keeps Codex's own macOS Seatbelt sandbox defaults.
 
+### Codex background server
+
+Since 0.157 an interactive `codex` attaches to one shared background server (`codex app-server --managed-daemon`) that
+outlives the pane that started it and keeps that pane's environment for every later session. Moshi then attributes
+every Codex session to the first pane (its Hooks screen reports "Codex's shared background server is on"), an attached
+session runs under the server's environment rather than the fence, and the server's updater downloads ~370 MB releases
+into `~/.codex` and restarts mid-turn. Two settings keep it out:
+
+- `codex-launcher` passes `--no-daemon` on both machines, so a launcher session runs its own embedded server even while
+  a shared one is up — one started by the desktop app or a bare `~/.local/bin/codex` would otherwise drop the fence
+  ([Security](security.md#command-allowlists-are-a-guardrail-not-a-control)).
+- On the devbox, `bootstrap` runs `codex features disable daemon_auto_start` when `~/.codex/config.toml` does not
+  mention the key, so a bare `codex` starts no server either. It is the user file, not `/etc/codex/config.toml`, because
+  Moshi's check reads only that one; `moshi-hook install` would write the same, but only after asking, and `bootstrap`
+  runs it without a terminal. On the laptop, `moshi-hook install` or `moshi-hook doctor --yes` makes that change.
+
+A server already running keeps taking sessions started outside the launcher until it is stopped, which disconnects the
+Codex sessions attached to it:
+
+```bash
+codex app-server daemon stop
+pkill -f '[a]pp-server daemon pid-update-loop'   # `daemon stop` leaves the updater running
+```
+
 > [!WARNING]
 > Codex sessions started by the ChatGPT/Codex desktop app on the laptop are not fenced: there is no `claude-session-env`
 > for Codex (its `shell_environment_policy` could set the git exports but not the `gh` shim's `PATH`, and would need a
