@@ -97,7 +97,7 @@ doctor_host() {
   # shellcheck disable=SC2016 # the probe list must expand inside the container
   if ! compose exec -T "${SERVICE}" bash -lc '
     status=0
-    for probe in "herdr --version" "omp --version" "claude --version" "node -v" "pnpm -v" "corepack --version" "rustc --version" \
+    for probe in "herdr --version" "omp --version" "claude --version" "codex --version" "node -v" "pnpm -v" "corepack --version" "rustc --version" \
       "cargo --version" "ruby --version" "gh --version" "lazygit --version" "wt --version" "terraform version" \
       "shellcheck --version" "git --version" "docker --version" "docker compose version"; do
       # No pipe into head: a multi-line tool would take SIGPIPE (141) once head
@@ -118,12 +118,12 @@ doctor_host() {
     fail 'one or more toolchain probes failed'
   fi
 
-  # The agent git override: `omp` and `claude` on the PATH must be the
+  # The agent git override: `omp`, `claude` and `codex` on the PATH must be the
   # launchers, reached through symlinks. A plain file there is what `omp
   # update` takes over in place - agent sessions then read ~/.gitconfig and
   # reach for SSH keys.
   local agent launcher_state
-  for agent in omp claude; do
+  for agent in omp claude codex; do
     # shellcheck disable=SC2016,SC2018 # the body expands in the container; tr keeps the ASCII state word
     launcher_state="$(compose exec -T -e AGENT="${agent}" "${SERVICE}" bash -lc '
       agent_dir="$HOME/.local/libexec/devbox-agent"
@@ -141,6 +141,27 @@ doctor_host() {
     *) fail "agent git override: ${agent} does not resolve to the launcher - run './bin/devbox bootstrap'" ;;
     esac
   done
+
+  # Codex's guardrail is a file bootstrap rewrites on every run, so a stale one
+  # means bootstrap has not run since a deploy. Its sandbox default comes from
+  # the image (container/codex-config.toml): without /etc/codex/config.toml
+  # Codex tries its own bubblewrap sandbox, which this container cannot start.
+  local codex_state
+  # shellcheck disable=SC2016,SC2018 # the body expands in the container; tr keeps the ASCII state word
+  codex_state="$(compose exec -T "${SERVICE}" bash -c '
+    cmp -s /opt/devbox/home/.codex/rules/devbox.rules "$HOME/.codex/rules/devbox.rules" || { echo rules; exit 0; }
+    [[ -e /etc/codex/config.toml ]] || { echo image; exit 0; }
+    echo ok
+  ' 2>/dev/null | tr -cd 'a-z')"
+  case "${codex_state}" in
+  ok) log_success 'Codex guardrail current (~/.codex/rules/devbox.rules) and its sandbox left to the container (/etc/codex/config.toml)' ;;
+  rules)
+    # shellcheck disable=SC2088 # literal ~ in a message
+    fail "~/.codex/rules/devbox.rules is missing or differs from the repo's - run './bin/devbox bootstrap'"
+    ;;
+  image) fail "the image has no /etc/codex/config.toml, so every Codex command fails in its own sandbox - run './bin/devbox rebuild'" ;;
+  *) fail "could not check Codex's guardrail - run './bin/devbox bootstrap'" ;;
+  esac
 
   # The identity registry itself: every identity-derived file (SSH keys and
   # config, ~/.gitconfig's per-tree includes, allowed_signers, the agent
@@ -221,7 +242,7 @@ doctor_host() {
   local agent_context_out context_line
   if agent_context_out="$(compose exec -T "${SERVICE}" \
     bash /opt/devbox/container/agent-context check devbox /opt/devbox/home 2>&1)"; then
-    log_success 'agent context current (devbox): marker, ~/.config/devbox/agent-context.md, CLAUDE.md import, OMP reads it, devbox-runtime skill'
+    log_success 'agent context current (devbox): marker, ~/.config/devbox/agent-context.md, CLAUDE.md import, OMP reads it, ~/.codex/AGENTS.md link, devbox-runtime skill'
   else
     while IFS= read -r context_line; do
       [[ -z "${context_line}" ]] || fail "agent context: ${context_line}"

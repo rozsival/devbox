@@ -4,8 +4,8 @@
 > `Dockerfile` and is verified — upstream's checksum file, else GitHub's recorded asset digest, else a signed package
 > repository. The one download pinned by tag only is nvm's installer (fetched over TLS; upstream publishes no checksum
 > file or asset digest for it), and nvm then checks Node against nodejs.org's `SHASUMS256.txt`. This page covers the
-> pinned versions, where each tool lives, the agents (OMP, Claude Code, Moshi), skills and browser automation, and how
-> to add a tool.
+> pinned versions, where each tool lives, the agents (OMP, Claude Code, Codex, Moshi), skills and browser automation, and
+> how to add a tool.
 
 **Related:** [Installation](installation.md) · [Docker](docker.md) · [Secrets](secrets.md) ·
 [Git Identities](git.md) · [Security Model](security.md) · [CLI Reference](cli.md)
@@ -72,14 +72,14 @@ upstream renamed. After a merge: `./bin/devbox deploy <workstation> --start` (th
 
 ## 📍 Why tools live where they do
 
-| Location                                   | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/usr/local/bin`                           | Default _non-interactive_ SSH `PATH`; `herdr` needs it since non-interactive SSH uses only a pre-existing compatible binary and never installs — true of saved-machine background connections.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `/opt/nvm` + `/opt/corepack`               | Not `~/.nvm`: `/home/dev`'s bind mount would shadow anything the image installs there. `node`, `npm`, `npx`, `corepack`, `pnpm` symlink into `/usr/local/bin` to resolve without a login shell.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `/opt/rustup` + `/opt/cargo` + `/opt/ruby` | Same reason as `/opt/nvm`; owned by `dev`, so `rustup target add`, `cargo install` and `gem install` work until the next rebuild. Ruby's binaries symlink into `/usr/local/bin`; the rustup proxies get `sh` wrappers there instead, defaulting `RUSTUP_HOME`/`CARGO_HOME`, which a proxy otherwise reads as the empty `~/.rustup`/`~/.cargo`. `home/.bashrc.d/devbox.sh` exports both and puts `/opt/cargo/bin` and `/opt/ruby/bin` on `PATH` for what `cargo install`/`gem install` add.                                                                                                                                                                                                                                                                                                         |
-| `~/.local/bin`                             | OMP, Claude Code (`~/.local/bin/claude`, a symlink into `~/.local/share/claude/versions`) and `moshi-hook`, installed by `bootstrap` rather than baked in, so `omp update`, Claude's auto-update and `moshi-hook update` work without a rebuild. Also `devbox-gh-token`, the per-directory GitHub token resolver ([Secrets](secrets.md#-github-cli)), and `wt-herdr` ([below](#new-worktree-in-herdr)).                                                                                                                                                                                                                                                                                                                                                                                            |
-| `~/.local/libexec/devbox-agent`            | The agent launchers (`omp-launcher`, `claude-launcher`, and the `agent-launch` body they share), the `gh` shim, and two git-fencing scripts (`devbox-git-credential`, `devbox-git-no-ssh`), plus `omp` and `claude` symlinks to the launchers. `home/.bashrc.d/devbox.sh` puts it first on every devbox shell's `PATH`, shadowing `gh`, `omp` and `claude`; a launcher does likewise for its own process tree on the laptop (`./bin/devbox agent install`, where the `omp`/`claude` symlinks sit in a `launchers/` subdirectory of their own). `home/.bash_profile` re-asserts that order for login shells, where the distro's `~/.profile` prepends `~/.local/bin` _after_ sourcing `~/.bashrc` and would otherwise put the real binaries in front. See [Git Identities](git.md#-agent-sessions). |
-| `/usr/local/lib/docker/cli-plugins`        | Home for `docker compose`/`docker buildx` as CLI plugins; only the client ships in the image, the daemon is the host's rootless `dev` daemon ([below](#-project-containers)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Location                                   | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/usr/local/bin`                           | Default _non-interactive_ SSH `PATH`; `herdr` needs it since non-interactive SSH uses only a pre-existing compatible binary and never installs — true of saved-machine background connections.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `/opt/nvm` + `/opt/corepack`               | Not `~/.nvm`: `/home/dev`'s bind mount would shadow anything the image installs there. `node`, `npm`, `npx`, `corepack`, `pnpm` symlink into `/usr/local/bin` to resolve without a login shell.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `/opt/rustup` + `/opt/cargo` + `/opt/ruby` | Same reason as `/opt/nvm`; owned by `dev`, so `rustup target add`, `cargo install` and `gem install` work until the next rebuild. Ruby's binaries symlink into `/usr/local/bin`; the rustup proxies get `sh` wrappers there instead, defaulting `RUSTUP_HOME`/`CARGO_HOME`, which a proxy otherwise reads as the empty `~/.rustup`/`~/.cargo`. `home/.bashrc.d/devbox.sh` exports both and puts `/opt/cargo/bin` and `/opt/ruby/bin` on `PATH` for what `cargo install`/`gem install` add.                                                                                                                                                                                                                                                                                                                                                     |
+| `~/.local/bin`                             | OMP, Claude Code (`~/.local/bin/claude`, a symlink into `~/.local/share/claude/versions`), Codex (`~/.local/bin/codex`, a symlink into `~/.codex/packages/standalone`) and `moshi-hook`, installed by `bootstrap` rather than baked in, so `omp update`, Claude's auto-update, `codex update` and `moshi-hook update` work without a rebuild. Also `devbox-gh-token`, the per-directory GitHub token resolver ([Secrets](secrets.md#-github-cli)), and `wt-herdr` ([below](#new-worktree-in-herdr)).                                                                                                                                                                                                                                                                                                                                           |
+| `~/.local/libexec/devbox-agent`            | The agent launchers (`omp-launcher`, `claude-launcher`, `codex-launcher`, and the `agent-launch` body they share), the `gh` shim, and two git-fencing scripts (`devbox-git-credential`, `devbox-git-no-ssh`), plus `omp`, `claude` and `codex` symlinks to the launchers. `home/.bashrc.d/devbox.sh` puts it first on every devbox shell's `PATH`, shadowing `gh`, `omp`, `claude` and `codex`; a launcher does likewise for its own process tree on the laptop (`./bin/devbox agent install`, where the `omp`/`claude`/`codex` symlinks sit in a `launchers/` subdirectory of their own). `home/.bash_profile` re-asserts that order for login shells, where the distro's `~/.profile` prepends `~/.local/bin` _after_ sourcing `~/.bashrc` and would otherwise put the real binaries in front. See [Git Identities](git.md#-agent-sessions). |
+| `/usr/local/lib/docker/cli-plugins`        | Home for `docker compose`/`docker buildx` as CLI plugins; only the client ships in the image, the daemon is the host's rootless `dev` daemon ([below](#-project-containers)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## 🐳 Project containers
 
@@ -102,8 +102,8 @@ omp --version
 omp update          # updates ~/.local/bin/omp in place; no image rebuild
 ```
 
-From the workstation, `./bin/devbox update` runs `omp update`, `claude update` and `hook --update` in one go
-([CLI](cli.md#devbox-update)).
+From the workstation, `./bin/devbox update` runs `omp update`, `claude update`, `codex update` and `hook --update` in one
+go ([CLI](cli.md#devbox-update)).
 
 `omp` on the `PATH` is the agent launcher, not the binary; `omp update` passes through to the real install it shadows,
 which is why the launcher survives an update. See [Git Identities](git.md#updates-omp-update-claude-update).
@@ -226,6 +226,86 @@ What differs from OMP's guardrail, and what it does and does not stop: [Security
 The container is the sandbox, so bypass-permission mode (`claude --dangerously-skip-permissions`) is the same call here
 as it is for `omp`: it reaches the project tree, the internet and the rootless project daemon, never the host.
 
+## 🔷 Codex
+
+```bash
+codex                   # TUI; same agent git override as omp
+codex --version
+codex update            # updates the standalone install in place; no image rebuild
+codex login --device-auth   # the one-time login, below
+```
+
+`bootstrap` installs it with OpenAI's standalone installer
+(`curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh`) when `~/.local/bin/codex` is absent.
+The installer verifies its downloads against the release's SHA-256 digests itself, so it runs as published, like
+Claude's. Like OMP and Claude it carries no `ARG` pin, because it updates itself on the bind mount: `~/.local/bin/codex`
+is a symlink into `~/.codex/packages/standalone`, which the installer and `codex update` re-point at every release. A
+failed install skips Codex and leaves a checklist item; it never stops the rest of `bootstrap`.
+
+`codex` on the `PATH` is `~/.local/libexec/devbox-agent/codex` → `codex-launcher`, so every session commits and pushes
+as the identity's bot, exactly like an `omp` session ([Git Identities](git.md#-agent-sessions)); `codex update` passes
+through to the real install. The symlink never lives in `~/.local/bin`, because the installer re-points `codex` there.
+On the laptop `./bin/devbox agent install` links the launcher as `launchers/codex`; Codex itself may come from the
+standalone installer or Homebrew (`brew install --cask codex`).
+
+One manual step: log in once, with the ChatGPT subscription. Codex's default browser login calls back to `localhost`,
+which the container cannot receive, so use device-code sign-in: allow it in ChatGPT's security settings, then run
+`codex login --device-auth` in a pane and follow the printed URL in a laptop browser. The credentials land in
+`~/.codex/auth.json` on the bind mount and survive rebuilds ([Secrets](secrets.md#codex)); `bootstrap` lists the login
+as outstanding until that file exists. Everything else under `~/.codex` — sessions, config, credentials — is Codex's own
+state, never synced from the laptop; there is no `devbox sync codex`.
+
+> [!NOTE]
+> `OPENAI_API_KEY` and `CODEX_API_KEY` in the environment never reach Codex: `codex-launcher` unsets both, so Codex
+> always runs on the ChatGPT sign-in rather than billing a key ([Secrets](secrets.md#codex)).
+
+### Codex guardrail
+
+`home/.codex/rules/devbox.rules` is the Codex counterpart of the OMP and Claude Code guardrails: Codex execpolicy rules
+(Starlark `prefix_rule`, decisions `forbidden` and `prompt`) covering the same categories as [the table above](#-omp).
+Forbidden: the human `gh` login (`gh auth token|login|…`, an absolute-path `gh`), `env -u`/`unset` of the fence exports,
+keychain reads, `gh repo delete`/`secret`/`variable`/`api -X DELETE`, `terraform destroy`, force pushes, `--no-verify`,
+`docker system prune` and `docker volume rm`, Vercel/Neon project deletion and token or API-key minting. Prompting:
+`op`, `gcloud`, `terraform apply|import`, `gh workflow run`, and every Vercel/Neon invocation.
+
+It is a file of the repo's own, so nothing is seeded or merged: `bootstrap` (section 14) and `./bin/devbox agent install`
+rewrite `~/.codex/rules/devbox.rules` on every run. Codex loads every `*.rules` file in `~/.codex/rules` and the
+strictest match wins (`forbidden` over `prompt` over `allow`), so an "always allow" you click in the TUI — written to
+`default.rules` beside it — never lifts a `forbidden`. To change the guardrail, edit the repo file, never the installed
+copy:
+
+```bash
+make lint                  # loads it with `codex execpolicy check` (when codex is installed), running the inline examples
+./bin/devbox agent install # laptop
+./bin/devbox deploy <workstation> && ssh <workstation> 'cd ~/devbox && ./bin/devbox bootstrap'   # devbox
+```
+
+It is coarser than OMP's globs. A prefix rule sees only the start of the argument list, so a flag later in the line, an
+assignment (`GIT_CONFIG_GLOBAL=x git push`, `export …`) or a `bash -lc` script that is not a plain chain of words falls
+past it; and where OMP gates Vercel and Neon verb by verb, every invocation of either CLI prompts here, reads included.
+What it does and does not stop: [Security Model](security.md#command-allowlists-are-a-guardrail-not-a-control).
+
+### Codex sandbox
+
+On the devbox, `container/codex-config.toml` is symlinked by the `Dockerfile` to `/etc/codex/config.toml`, Codex's
+system configuration layer: root-owned, outside the bind mount and the lowest-precedence layer, so your
+`~/.codex/config.toml`, a trusted project's `.codex/config.toml` and `-c`/`--sandbox` all override it. It sets
+`sandbox_mode = "danger-full-access"`. Codex's Linux sandbox is bubblewrap, which needs a user namespace that Docker's
+default seccomp profile refuses without `CAP_SYS_ADMIN` — and the container runs with `cap_drop: ALL` and
+`no-new-privileges` — so left at its default every sandboxed command would fail. The container is the sandbox, as it is
+for `omp` and `claude`. Approvals keep their default (`on-request`), and the rules above still prompt and forbid.
+
+The link points into the read-only `container/` bind mount, so editing the file is live without a rebuild; one rebuild
+is needed once to create the link, and `doctor host` fails until `/etc/codex/config.toml` exists. The laptop writes no
+Codex config: it keeps Codex's own macOS Seatbelt sandbox defaults.
+
+> [!WARNING]
+> Codex sessions started by the ChatGPT/Codex desktop app on the laptop are not fenced: there is no `claude-session-env`
+> for Codex (its `shell_environment_policy` could set the git exports but not the `gh` shim's `PATH`, and would need a
+> TOML merge into the app's own `config.toml` - not done). They still read `~/.codex/AGENTS.md` — which
+> tells an agent with an empty `DEVBOX_ENV` to stop before any git push or `gh` write — and still load the rules file.
+> Only a launcher-started `codex` is fenced.
+
 ## 🧭 Which machine: the agent context
 
 Every agent session on either machine knows where it runs. That stops it assuming `sudo` in the container, a laptop path
@@ -236,13 +316,14 @@ on the devbox, or the user's own credentials on the laptop. Three pieces, each i
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DEVBOX_ENV`                              | `devbox` or `laptop`, exported by `agent-launch` for the session's process tree; in a Claude desktop app session on the laptop, by its `SessionStart` hook ([Git Identities](git.md#claude-desktop-app)). `devbox` means the image's root-owned `/etc/devbox-env` exists; nothing in the bind mount can set it |
 | `~/.config/devbox/agent-context.md`       | A short, always-loaded summary for this machine: what is there, what is missing, what not to try. Rendered on every run from `home/.config/devbox/agent-context/{devbox,laptop}.md`, plus a section about you from `~/.config/devbox/profile.json` when that exists ([below](#about-you-profilejson))          |
-| `devbox-runtime` skill                    | How-tos for both machines (missing tools, Docker, ports for the user, secrets, git and `gh` failures), from `home/.agents/skills/devbox-runtime`: copied to `~/.agents/skills`, linked from `~/.claude/skills`                                                                                                 |
+| `devbox-runtime` skill                    | How-tos for both machines (missing tools, Docker, ports for the user, secrets, git and `gh` failures), from `home/.agents/skills/devbox-runtime`: copied to `~/.agents/skills`, which OMP and Codex read, and linked from `~/.claude/skills`                                                                   |
 | `@~/.config/devbox/agent-context.md` line | Appended once to `~/.claude/CLAUDE.md`; the rest of that file stays yours (a dotfiles symlink is written through)                                                                                                                                                                                              |
+| `~/.codex/AGENTS.md` link                 | A symlink to `~/.config/devbox/agent-context.md`, for Codex, which reads that one global file and expands no `@` imports. Made only when `AGENTS.md` is absent, empty or a dangling link: a file with content is yours                                                                                         |
 
-One file reaches every session. Claude Code reads `~/.claude/CLAUDE.md` natively. OMP reads it because the shared preset
-lists `claude` under `enabledProviders`; OMP also expands the `@` import there and, unlike an `AGENTS.md`, hands it to
-task subagents. Two conditions in OMP's own config can still hide it, so both doctors and both installers report them
-rather than edit that file:
+One file reaches every session. Claude Code reads `~/.claude/CLAUDE.md` natively and Codex reads `~/.codex/AGENTS.md`.
+OMP reads the former because the shared preset lists `claude` under `enabledProviders`; OMP also expands the `@` import
+there and, unlike an `AGENTS.md`, hands it to task subagents. Two conditions in OMP's own config can still hide it, so
+both doctors and both installers report them rather than edit that file:
 
 - `claude` missing from `enabledProviders` (or listed in `disabledProviders`): `./bin/devbox sync omp` applies the
   preset.
@@ -286,14 +367,15 @@ sessions keep the context they started with.
 [Moshi](https://getmoshi.app) connects like any SSH client (`BIND_ADDR:2223`, user `dev`, authorized key) for a terminal
 and herdr panes only — not push notifications, lock-screen approvals or Chat View, which need `moshi-hook`, a companion
 daemon `bootstrap` installs into `~/.local/bin` and the entrypoint starts. `bootstrap` wires it into every agent whose
-config directory exists (`moshi-hook install`; `~/.claude`, `~/.omp`, … — a binary alone is not detected, and no
-directory is created).
+config directory exists (`moshi-hook install`; `~/.claude`, `~/.omp`, `~/.codex`, … — a binary alone is not detected,
+and no directory is created).
 
 | Piece                       | Where it lives                             | What breaks without it                |
 | --------------------------- | ------------------------------------------ | ------------------------------------- |
 | `moshi-hook` binary         | `~/.local/bin` (bind mount, self-updating) | Everything below                      |
 | OMP extension               | `~/.omp/agent/extensions/moshi-hooks.ts`   | No OMP lifecycle events emitted       |
 | Claude Code hooks           | `hooks` in `~/.claude/settings.json`       | No Claude lifecycle events emitted    |
+| Codex hooks                 | `~/.codex/hooks.json`                      | No Codex lifecycle events emitted     |
 | Daemon (`moshi-hook serve`) | Started by `container/entrypoint.sh`       | Events go nowhere; socket silence     |
 | Pairing                     | One manual `moshi-hook pair --token`       | Daemon runs, sends nothing to a phone |
 
@@ -318,7 +400,7 @@ lifetime to the container's. Restart a crashed/hand-killed one with `./bin/devbo
 `docker compose exec`: no recreate, no dropped SSH sessions); `./bin/devbox start` alone won't revive it unless compose
 recreates the container. A new release is `./bin/devbox hook --update`: `moshi-hook update`, every agent's hooks
 rewritten (`moshi-hook install`), then the same restart — `update` alone leaves the old version serving.
-`./bin/devbox update` does the same after updating OMP and Claude Code, and reinstalls the hooks even when the
+`./bin/devbox update` does the same after updating OMP, Claude Code and Codex, and reinstalls the hooks even when the
 `moshi-hook update` fails.
 
 A second daemon is harmless: `serve` exits with `another moshi-hook serve is already running (pid N, lock …)`, and a
@@ -342,8 +424,8 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox skills'
 ```
 
 `container/skills.sh` installs two skills with `--global --agent universal claude-code`: the skill itself lands in
-`~/.agents/skills`, which OMP reads, and a symlink to it in `~/.claude/skills`, the only skills directory Claude Code
-reads:
+`~/.agents/skills`, which OMP and Codex read, and a symlink to it in `~/.claude/skills`, the only skills directory
+Claude Code reads:
 
 | Skill           | Source, pinned at                                                          | What it is for                                  |
 | --------------- | -------------------------------------------------------------------------- | ----------------------------------------------- |
@@ -503,14 +585,14 @@ unmounted; nesting is impossible: rootless docker needs setuid helpers `newuidma
 No — the image rebuilds from scratch; `/home/dev` is a host bind mount, untouched. Only things installed _into the
 image_ disappear.
 
-### Why are `omp`, Claude Code and `moshi-hook` not pinned in the image?
+### Why are `omp`, Claude Code, Codex and `moshi-hook` not pinned in the image?
 
 So updates work without a rebuild: `bootstrap` installs each into `~/.local/bin` only if absent, never overwriting an
 install already there — a build-time pin would be shadowed on `PATH` and falsified by self-update anyway.
-`ARG <TOOL>_VERSION`'s only three exceptions, and all still verified: `moshi-hook` against upstream's `checksums.txt`,
+`ARG <TOOL>_VERSION`'s only four exceptions, and all still verified: `moshi-hook` against upstream's `checksums.txt`,
 OMP against GitHub's digest for its release asset — each fetched directly, since OMP's installer never checks and
-`moshi-hook`'s skips the check whenever it can't run it — and Claude Code by its own installer, against its manifest's
-checksum.
+`moshi-hook`'s skips the check whenever it can't run it — Claude Code by its own installer, against its manifest's
+checksum, and Codex by its own, against the release's SHA-256 digests.
 
 ### A different Node version for one project?
 

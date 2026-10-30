@@ -22,7 +22,7 @@ Only the runtime files travel (`bin/`, `container/`, `home/`, `Dockerfile`, `doc
 the workstation's copy is pruned to that list, so `docs/`, `.agents/` and the like are never there. `deploy` needs GNU
 rsync on the laptop (`brew install rsync`) — see the [CLI reference](cli.md#devbox-deploy). `--start` is `start` on the
 workstation: it applies the synced repo to the container. `./bin/devbox update` is the other direction — it upgrades OMP,
-Claude Code and moshi-hook inside the running container and applies no repo change.
+Claude Code, Codex and moshi-hook inside the running container and applies no repo change.
 
 A deploy that changes `cli/lib/docker_setup.sh` — the boundary ruleset, the daemon's unit, its user manager's drop-in —
 also needs `ssh -t <workstation> 'cd ~/devbox && sudo ./bin/devbox docker setup'`: until then the host keeps the old

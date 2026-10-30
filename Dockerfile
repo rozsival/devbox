@@ -347,6 +347,12 @@ RUN ln -sf /opt/devbox/container/devbox-ports /usr/local/bin/devbox-ports
 # because sshd starts every session with a fresh environment.
 RUN printf 'devbox\n' >/etc/devbox-env
 
+# Codex's system config layer (container/codex-config.toml): the container is
+# the sandbox, so Codex defaults to running commands without its own. A symlink
+# into the read-only container/ bind mount, like devbox-ports above: root-owned,
+# outside /home/dev, and a host edit is live without a rebuild.
+RUN mkdir -p /etc/codex && ln -sf /opt/devbox/container/codex-config.toml /etc/codex/config.toml
+
 # The container has no root process at runtime: sshd runs as `dev` and only ever
 # authenticates the user it already runs as (UsePAM no, pubkey-only), so it needs
 # neither /etc/shadow nor setuid. User namespaces are not configured on the host,

@@ -157,11 +157,12 @@ register on GitHub - already your normal, registered laptop keys.
    `devbox-gh-token --account` reports it. Skip `gh auth login`: its web flow can't scope below `repo` +
    `read:org` + `gist` - non-expiring, account-wide, plaintext (no keyring here). A box-wide `GH_TOKEN`
    works but overrides every identity's own, killing the per-directory choice.
-3. Log both agents in once from a pane: `/login` in `omp` and in `claude` (subscriptions, no API key
-   needed). Anything else in `~/.config/devbox/secrets.env` (mode 600) is optional, project-shared
-   `KEY=value` pairs - a model API key only for a provider used by key. Every shell sources it, interactive
-   or not. Never put one project's secrets here; those go in that project's `.env`. `claude-launcher`
-   unsets `ANTHROPIC_API_KEY` so Claude Code stays on its `/login` subscription.
+3. Log the agents in once from a pane: `/login` in `omp` and in `claude`, `codex login --device-auth` for Codex
+   (step 6) - subscriptions, no API key needed. Anything else in `~/.config/devbox/secrets.env` (mode 600) is optional,
+   project-shared `KEY=value` pairs - a model API key only for a provider used by key. Every shell sources it,
+   interactive or not. Never put one project's secrets here; those go in that project's `.env`. `claude-launcher`
+   unsets `ANTHROPIC_API_KEY` so Claude Code stays on its `/login` subscription; `codex-launcher` likewise unsets
+   `OPENAI_API_KEY` and `CODEX_API_KEY` so Codex stays on its ChatGPT sign-in.
 4. Place each identity's GitHub App credentials in _that identity's own_ `app` directory from
    `identities.conf` (`app-id`, `app.pem`, mode 600) - every identity has one, the personal account
    included. Bootstrap creates the directory, never fetches secrets; once present, the credential helper
@@ -169,6 +170,10 @@ register on GitHub - already your normal, registered laptop keys.
    issues) uses it too. Without it, or on a repo the App is not installed on, agents can only read.
 5. Log Claude Code in once (bootstrap installed it): `ssh -t devbox claude`, then `/login`, open the URL on
    the laptop, paste the code back. Lands in `~/.claude/.credentials.json`; survives rebuilds.
+6. Log Codex in once (bootstrap installed it, and lists this step while `~/.codex/auth.json` is missing): allow device
+   code sign-in in ChatGPT's security settings, then `ssh -t devbox codex login --device-auth` and enter the code in a
+   browser - the usual browser callback to localhost cannot reach the container. Lands in `~/.codex/auth.json` on the
+   bind mount; survives rebuilds. Codex runs on the ChatGPT subscription.
 
 No `op` step: the container holds no 1Password account or `op` binary. Project secrets render on the
 laptop (`op inject -i .env.tpl -o .env`), copy in; Google APIs need a per-project service-account key, never
@@ -177,7 +182,7 @@ laptop (`op inject -i .env.tpl -o .env`), copy in; Google APIs need a per-projec
 Manual git and signing need the agent forwarded (`ssh -A devbox`, not plain `ssh devbox`, herdr, or
 `./bin/devbox shell`): `ssh -T git@github.com` → `Hi <your-github-username>!`, `ssh -P work -T git@github.com`
 → `Hi <your-work-username>!` for any identity with its own key (`devbox-identities get work tag`). Agent
-sessions (`omp`/`claude` launchers) skip this, pushing HTTPS with a token minted per operation. Full mechanism:
+sessions (`omp`/`claude`/`codex` launchers) skip this, pushing HTTPS with a token minted per operation. Full mechanism:
 `docs/git.md`.
 
 ## Optional but recommended, after the phases pass

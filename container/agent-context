@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Installs and checks what tells an agent which machine it runs on - the devbox
-# or the laptop - for both Claude Code and OMP:
+# or the laptop - for Claude Code, OMP and Codex:
 #
 #   ~/.config/devbox/agent-context.md   the side's template plus a section rendered
 #                                       from the user's profile.json, rewritten
 #                                       every run
 #   ~/.claude/CLAUDE.md                 one import line for it, appended once;
 #                                       the rest of the file is the user's
-#   ~/.agents/skills/devbox-runtime     the how-to skill (OMP reads ~/.agents),
+#   ~/.codex/AGENTS.md                  a link to it: Codex reads that one file
+#                                       and expands no imports
+#   ~/.agents/skills/devbox-runtime     the how-to skill (OMP and Codex read it
+#                                       there),
 #   ~/.claude/skills/devbox-runtime     linked for Claude Code
 #
 # One file reaches every session because OMP reads ~/.claude/CLAUDE.md too once
@@ -113,6 +116,8 @@ readonly skill_dir="${HOME}/.agents/skills/devbox-runtime"
 readonly claude_skill="${HOME}/.claude/skills/devbox-runtime"
 readonly omp_config="${HOME}/.omp/agent/config.yml"
 readonly omp_native="${HOME}/.omp/agent/AGENTS.md"
+readonly codex_md="${HOME}/.codex/AGENTS.md"
+readonly codex_override="${HOME}/.codex/AGENTS.override.md"
 readonly profile="${HOME}/.config/devbox/profile.json"
 # shellcheck disable=SC2088 # a literal ~ in messages
 readonly profile_label='~/.config/devbox/profile.json'
@@ -214,6 +219,14 @@ apply() {
     ln -sfn "${skill_dir}" "${claude_skill}"
     printf 'linked %s\n' "${claude_skill}"
   fi
+  # Codex's one user-level instructions file: linked when absent, empty or a
+  # dangling link, so nothing of the user's is lost - a file (or a dotfiles
+  # link) with content is theirs, which `check` reports instead.
+  if [[ ! ${codex_md} -ef ${context} && ! -s ${codex_md} ]]; then
+    mkdir -p "${codex_md%/*}"
+    ln -sfn "${context}" "${codex_md}"
+    printf 'linked %s\n' "${codex_md}"
+  fi
 
   # Appended, never rewritten: CLAUDE.md is the user's file (or a dotfiles
   # symlink, written through). The import is the one line this owns.
@@ -250,6 +263,11 @@ check() {
       problems+=("~/.agents/skills/devbox-runtime is missing or stale - run ${fix}")
     [[ ${claude_skill} -ef ${skill_dir} ]] ||
       problems+=("~/.claude/skills/devbox-runtime is not a link to ~/.agents/skills/devbox-runtime, so Claude Code lacks the skill - move it aside and run ${fix}")
+    [[ ${codex_md} -ef ${context} ]] ||
+      problems+=("~/.codex/AGENTS.md is not a link to ~/.config/devbox/agent-context.md, so Codex sessions miss the agent context - move your own instructions out of it (a project's AGENTS.md, or your ~/.claude/CLAUDE.md for the other two agents), delete it and run ${fix}")
+    # Codex reads the override instead of AGENTS.md when it holds anything.
+    [[ ! -s ${codex_override} ]] ||
+      problems+=('~/.codex/AGENTS.override.md shadows ~/.codex/AGENTS.md in Codex, so Codex sessions miss the agent context - delete it')
     # OMP keeps one user-level context file and its own wins: this one would
     # silently replace ~/.claude/CLAUDE.md, the agent context included.
     [[ ! -s ${omp_native} ]] ||

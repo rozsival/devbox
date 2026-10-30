@@ -15,10 +15,10 @@ Any number of identities, chosen by directory. Each is a `[slug]` block in `~/.c
 `devbox-identities`, the one script that turns the registry into everything below. The devbox holds no private key for
 any of them; you and an agent session use them differently.
 
-| Who                                         | Default identity (everywhere)                                                                                           | A second identity (`~/projects/work/**`, org `your-org`)                                                                  |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **You** (manual, `ssh -A devbox` or laptop) | SSH `git@github.com:`, forwarded `id_personal.pub` (the host's plain key), author `Your Name <you@example.com>`, signed | SSH `git@github.com:`, forwarded `id_work.pub` (`ssh -P work` tags it), author `Your Name <you@work.example.com>`, signed |
-| **Agent session** (`omp`/`claude` launcher) | HTTPS, token from `devbox-git-credential`, author `your-agent <your-agent@users.noreply.github.com>`, unsigned          | HTTPS, same helper, author `your-app[bot] <00000000+your-app[bot]@users.noreply.github.com>`, unsigned                    |
+| Who                                                 | Default identity (everywhere)                                                                                           | A second identity (`~/projects/work/**`, org `your-org`)                                                                  |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **You** (manual, `ssh -A devbox` or laptop)         | SSH `git@github.com:`, forwarded `id_personal.pub` (the host's plain key), author `Your Name <you@example.com>`, signed | SSH `git@github.com:`, forwarded `id_work.pub` (`ssh -P work` tags it), author `Your Name <you@work.example.com>`, signed |
+| **Agent session** (`omp`/`claude`/`codex` launcher) | HTTPS, token from `devbox-git-credential`, author `your-agent <your-agent@users.noreply.github.com>`, unsigned          | HTTPS, same helper, author `your-app[bot] <00000000+your-app[bot]@users.noreply.github.com>`, unsigned                    |
 
 A `dir` in `identities.conf` picks the identity both ways: `includeIf gitdir:` in your own `~/.gitconfig`, the same
 prefix in `agent.gitconfig`'s `includeIf` for an agent. Exactly one block omits `dir` — that one is the default,
@@ -185,11 +185,11 @@ Without `-A`, a manual `git push` or signed commit fails on purpose — no key t
 
 ## 🤖 Agent sessions
 
-Every agent session — an OMP or Claude Code process started through its launcher, and everything it shells out to (`gh`,
-`wt`, `lazygit`, git itself) — runs under five exports the launcher sets for its process tree, before `exec`-ing the
-real binary. Both launchers (`omp-launcher`, `claude-launcher` in `~/.local/libexec/devbox-agent`, each reached as
-`omp`/`claude` through a symlink) are three lines around one shared body, `agent-launch`, so the two agents can never
-drift apart:
+Every agent session — an OMP, Claude Code or Codex process started through its launcher, and everything it shells out
+to (`gh`, `wt`, `lazygit`, git itself) — runs under five exports the launcher sets for its process tree, before
+`exec`-ing the real binary. All launchers (`omp-launcher`, `claude-launcher`, `codex-launcher` in
+`~/.local/libexec/devbox-agent`, each reached as `omp`/`claude`/`codex` through a symlink) are three lines around one
+shared body, `agent-launch`, so the agents can never drift apart:
 
 | Export                | Value                                  | What it does                            |
 | --------------------- | -------------------------------------- | --------------------------------------- |
@@ -209,6 +209,9 @@ on the laptop the session's own `ssh` still reaches 1Password through `IdentityA
 `GIT_CONFIG_PARAMETERS`, which outrank every config file. `GH_TOKEN` stays: the `gh` shim honours an explicit one as a
 deliberate choice. Clearing is a default, not a boundary — a forwarded agent's socket is still under `~/.ssh/agent/`
 (OpenSSH >= 10.1), on the bind mount, for anything that looks ([accepted limit 2](security.md#-accepted-limits)).
+
+`codex-launcher` also drops `OPENAI_API_KEY` and `CODEX_API_KEY`, so a key exported from `secrets.env` or a shell is
+never billed instead of Codex's ChatGPT sign-in (the mirror of `claude-launcher` dropping `ANTHROPIC_API_KEY`).
 
 `GIT_CONFIG_GLOBAL` beats `includeIf` via `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*`, which ignores `includeIf gitdir:` and
 can't follow the repo tree like `agent.gitconfig`'s `includeIf`. Pointing `GIT_CONFIG_GLOBAL` at a file that itself
@@ -232,6 +235,17 @@ It covers Bash commands only — git, `gh`, `wt` run by the agent. Claude Code's
 servers keep the app's environment, and so does anything the app itself runs outside the Bash tool. Without a readable
 `agent.gitconfig` the hook writes nothing and fails, so `DEVBOX_ENV` stays empty and the agent stops before any push.
 `devbox doctor laptop` fails while the entry is missing.
+
+### Codex desktop app
+
+There is no counterpart to `claude-session-env` for Codex, so sessions the ChatGPT/Codex desktop app starts are **not
+fenced** — git and `gh` act as you. This is an accepted limit: Codex's `shell_environment_policy` in
+`~/.codex/config.toml` could set the git exports for every command, but not put the `gh` shim ahead on the `PATH` (it
+takes literal values), and that file is the desktop app's own, so applying it would need a TOML merge - not done.
+They still read `~/.codex/AGENTS.md` (the laptop agent context), which tells an agent with an empty `DEVBOX_ENV` to stop
+before any git push or `gh` write, and they still load the guardrail rules in `~/.codex/rules/devbox.rules`
+([Toolchain](toolchain.md#codex-guardrail)). Only a `codex` started through its launcher is fenced; start Codex sessions
+from a terminal.
 
 ### Read-only by install
 
@@ -258,14 +272,15 @@ installers (`./bin/devbox agent install`, `./bin/devbox bootstrap`) lift the mod
 ### Updates: `omp update`, `claude update`
 
 `omp update` picks what to replace by looking `omp` up on the `PATH`, and takes over whatever it finds — a plain file in
-place, a symlink through its target. Both are the launcher, so each launcher drops its own `PATH` entries for `update`:
-any lookup then lands on the real install — bun/npm-managed or `~/.local/bin/omp` for OMP, the native install's
-`~/.local/bin/claude` for Claude Code — which is what the updater must replace. The same passthrough covers
-`claude update`; Claude's background auto-update re-points `~/.local/bin/claude` itself, which is exactly why no
-launcher symlink ever lives there. The other exports still apply, so a prompt that is literally `update` runs fenced,
-with a token-less `gh`, not as you.
+place, a symlink through its target. Every launcher is on that `PATH`, so each drops its own entries for `update`: any
+lookup then lands on the real install — bun/npm-managed or `~/.local/bin/omp` for OMP, the native install's
+`~/.local/bin/claude` for Claude Code, the standalone install's `~/.local/bin/codex` for Codex (Homebrew's on a laptop
+that has it from there) — which is what the updater must replace. The same passthrough covers `claude update` and
+`codex update`; Claude's background auto-update re-points `~/.local/bin/claude` itself, and Codex's installer and
+`codex update` re-point `~/.local/bin/codex`, which is exactly why no launcher symlink ever lives there. The other
+exports still apply, so a prompt that is literally `update` runs fenced, with a token-less `gh`, not as you.
 
-Belt and braces, because the failure was silent: `omp` and `claude` are **symlinks** to their launchers
+Belt and braces, because the failure was silent: `omp`, `claude` and `codex` are **symlinks** to their launchers
 (`~/.local/libexec/devbox-agent/<agent>` on the devbox, `~/.local/libexec/devbox-agent/launchers/<agent>` on the
 laptop), never files named after the tool. An argv shape the passthrough does not recognise therefore hits omp's own
 refusal to replace a script behind a symlink — a one-line error — instead of a release binary landing on top of the
@@ -390,17 +405,18 @@ bootstraps from:
 
 ### What the installer writes
 
-| Destination                                                                                   | Installed                                                                                                                                                                                                                                            |
-| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `~/.local/libexec/devbox-agent`                                                               | `agent-launch`, `omp-launcher`, `claude-launcher`, the `gh` shim, `devbox-git-credential`, `devbox-git-no-ssh`                                                                                                                                       |
-| `~/.local/bin`                                                                                | `devbox-gh-token`, `wt-herdr` (`wt herdr <branch>`, [Toolchain](toolchain.md#new-worktree-in-herdr))                                                                                                                                                 |
-| `~/.local/libexec`                                                                            | `devbox-identities`                                                                                                                                                                                                                                  |
-| `~/.local/libexec/devbox-agent/launchers`                                                     | `omp` and `claude` symlinks to their launchers (the pre-Claude `~/.local/bin/omp` symlink is removed once `omp` resolves through the new directory — until then that link is what keeps `omp` fenced)                                                |
-| `~/.config/devbox/git/`                                                                       | `agent*.gitconfig`, rendered from the registry; every file is regenerated each run and the directory is locked read-only afterwards                                                                                                                  |
-| `~/.config/devbox/identities.conf`                                                            | Never written — the installer names the `cp` command when it is absent (the example validates, so seeding it would author agent commits as `your-agent`)                                                                                             |
-| `~/.config/devbox/secrets.env`                                                                | Created from the example if absent and never overwritten either                                                                                                                                                                                      |
-| `~/.omp/agent/config.yml`, `~/.claude/settings.json`                                          | The agent guardrail presets: OMP's seeded only when absent, Claude Code's merged in with `jq` only when it holds no `permissions.deny` ([Toolchain](toolchain.md#-claude-code))                                                                      |
-| `~/.config/devbox/agent-context.md`, `~/.agents/skills/devbox-runtime`, `~/.claude/CLAUDE.md` | The agent context: the laptop template and the `devbox-runtime` skill (linked from `~/.claude/skills`), regenerated each run, plus one import line appended to `CLAUDE.md` when missing ([Toolchain](toolchain.md#-which-machine-the-agent-context)) |
+| Destination                                                                                   | Installed                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `~/.local/libexec/devbox-agent`                                                               | `agent-launch`, `omp-launcher`, `claude-launcher`, `codex-launcher`, the `gh` shim, `devbox-git-credential`, `devbox-git-no-ssh`                                                                                                                                         |
+| `~/.local/bin`                                                                                | `devbox-gh-token`, `wt-herdr` (`wt herdr <branch>`, [Toolchain](toolchain.md#new-worktree-in-herdr))                                                                                                                                                                     |
+| `~/.local/libexec`                                                                            | `devbox-identities`                                                                                                                                                                                                                                                      |
+| `~/.local/libexec/devbox-agent/launchers`                                                     | `omp`, `claude` and `codex` symlinks to their launchers (the pre-Claude `~/.local/bin/omp` symlink is removed once `omp` resolves through the new directory — until then that link is what keeps `omp` fenced)                                                           |
+| `~/.config/devbox/git/`                                                                       | `agent*.gitconfig`, rendered from the registry; every file is regenerated each run and the directory is locked read-only afterwards                                                                                                                                      |
+| `~/.config/devbox/identities.conf`                                                            | Never written — the installer names the `cp` command when it is absent (the example validates, so seeding it would author agent commits as `your-agent`)                                                                                                                 |
+| `~/.config/devbox/secrets.env`                                                                | Created from the example if absent and never overwritten either                                                                                                                                                                                                          |
+| `~/.omp/agent/config.yml`, `~/.claude/settings.json`                                          | The agent guardrail presets: OMP's seeded only when absent, Claude Code's merged in with `jq` only when it holds no `permissions.deny` ([Toolchain](toolchain.md#-claude-code))                                                                                          |
+| `~/.config/devbox/agent-context.md`, `~/.agents/skills/devbox-runtime`, `~/.claude/CLAUDE.md` | The agent context: the laptop template and the `devbox-runtime` skill (linked from `~/.claude/skills`), regenerated each run, plus one import line appended to `CLAUDE.md` when missing ([Toolchain](toolchain.md#-which-machine-the-agent-context))                     |
+| `~/.codex/rules/devbox.rules`, `~/.codex/AGENTS.md`                                           | The Codex guardrail ([Toolchain](toolchain.md#codex-guardrail)), a file of its own rewritten each run; and a link to the laptop agent context, made only when `AGENTS.md` is absent, empty or a dangling link — one with content is yours and `doctor laptop` reports it |
 
 The installer reads or edits nothing of yours in either file. It does **not** touch `~/.ssh/config` or `~/.gitconfig` —
 on the laptop they are yours (below); `bootstrap` renders them on the devbox because nothing there is meant to be
@@ -411,20 +427,21 @@ output.
 
 ### The launchers on your `PATH`
 
-On the laptop the launchers need their own directory, first on your `PATH`, holding nothing but the two symlinks:
+On the laptop the launchers need their own directory, first on your `PATH`, holding nothing but the three symlinks:
 `~/.local/bin` cannot carry them, because Claude's native install owns `~/.local/bin/claude` and re-points it on every
-update. Add, as the last line of `~/.zshrc`/`~/.bashrc` (after anything that prepends `~/.local/bin`; dotfiles'
-`env.sh` already does this):
+update, and Codex's installer does the same to `~/.local/bin/codex`. Add, as the last line of `~/.zshrc`/`~/.bashrc`
+(after anything that prepends `~/.local/bin`; dotfiles' `env.sh` already does this):
 
 ```bash
 export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"
 ```
 
 Only a launcher's own `PATH` puts the libexec directory itself first — an ordinary shell or IDE never resolves the `gh`
-shim, so your `gh` keeps its OAuth login. Whatever else resolves `omp`/`claude` is "the real" one; the installer reports
-which, whether each name resolves to its launcher, and prints the line above as a manual step until it does. An agent
-that is not installed is fine — its launcher waits for it, and until then prints how to install it (OMP's points the
-devbox at `./bin/devbox bootstrap`, the laptop at the `omp.sh` installer).
+shim, so your `gh` keeps its OAuth login. Whatever else resolves `omp`/`claude`/`codex` is "the real" one; the
+installer reports which, whether each name resolves to its launcher, and prints the line above as a manual step until
+it does. An agent that is not installed is fine — its launcher waits for it, and until then prints how to install it
+(OMP's points the devbox at `./bin/devbox bootstrap`, the laptop at the `omp.sh` installer; Codex's names its
+standalone installer).
 
 ### Remaining manual steps
 
@@ -572,9 +589,9 @@ Recognition cue: `./bin/devbox doctor laptop` reports the installed launcher no 
 `omp` symlink stays intact, it is the file behind it that became a ~180 MB binary. Inside a session,
 `echo $GIT_CONFIG_GLOBAL` printing nothing says the same thing.
 
-### Do OMP and Claude Code sessions commit as the same bot?
+### Do OMP, Claude Code and Codex sessions commit as the same bot?
 
-Yes. Both launchers source the same `agent-launch`, so they read the same `agent.gitconfig`, the same credential helper
+Yes. All launchers source the same `agent-launch`, so they read the same `agent.gitconfig`, the same credential helper
 and the same `gh` shim: the identity follows the tree a repository sits in, never the agent. Claude Code additionally
 adds its own `Co-Authored-By` trailer to commit messages (its `attribution` setting) — text in the message, not the
 author.

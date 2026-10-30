@@ -2,13 +2,13 @@
 # Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
 # edit home/.local/libexec/devbox-agent/agent-launch in the repo.
 #
-# The body every agent launcher shares (omp-launcher, claude-launcher): sourced,
-# never run. Everything an agent session does to git - clone, fetch, push,
-# commit, and every tool that shells out to git - runs under the exports below,
-# and nothing outside the session does. That is what lets one clone serve both
-# you (SSH remote, 1Password agent, signed commits) and the agent (HTTPS,
-# per-operation tokens, bot author, unsigned) with no per-repository setup. See
-# docs/git.md.
+# The body every agent launcher shares (omp-launcher, claude-launcher,
+# codex-launcher): sourced, never run. Everything an agent session does to git -
+# clone, fetch, push, commit, and every tool that shells out to git - runs under
+# the exports below, and nothing outside the session does. That is what lets one
+# clone serve both you (SSH remote, 1Password agent, signed commits) and the
+# agent (HTTPS, per-operation tokens, bot author, unsigned) with no
+# per-repository setup. See docs/git.md.
 #
 # A launcher is reached as `<tool>` through a symlink - `devbox-agent/<tool>` on
 # the devbox, where devbox.sh puts that directory first on the PATH, and

@@ -4,7 +4,7 @@
 # ~/.config/devbox/git/agent.gitconfig by container/bootstrap.sh and
 # `devbox agent install`. Edit this file in the repo, never the rendered one.
 #
-# The `omp` and `claude` launchers in ~/.local/libexec/devbox-agent export
+# The `omp`, `claude` and `codex` launchers in ~/.local/libexec/devbox-agent export
 # GIT_CONFIG_GLOBAL pointing at the rendered file, so every git the agent runs -
 # and every tool that shells out to git: gh, wt, lazygit, the agent itself -
 # reads it *instead of* ~/.gitconfig. Nothing else on the machine sees it: the

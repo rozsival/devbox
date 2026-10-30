@@ -36,7 +36,7 @@ devbox_usage() {
   printf "  %s   List the SSH sessions connected to the container\n" "sessions       "
   printf "  %s   Show the container logs (last 100 lines)\n" "logs           "
   printf "  %s   Restart the moshi-hook daemon in place, without touching SSH sessions\n" "hook           "
-  printf "  %s   Update OMP, Claude Code and moshi-hook in the running container and restart the hook daemon; no rebuild\n" "update         "
+  printf "  %s   Update OMP, Claude Code, Codex and moshi-hook in the running container and restart the hook daemon; no rebuild\n" "update         "
   printf "  %s   Print the installed identity public keys and the sshd host-key fingerprint\n" "keys           "
   printf "  %s   The rootless project Docker daemon\n" "docker         "
   printf "  %s   Provision the rootless project Docker daemon (needs sudo)\n" "docker setup   "
@@ -285,7 +285,7 @@ devbox_hook_usage() {
 }
 
 devbox_update_usage() {
-  printf "devbox update - Update OMP, Claude Code and moshi-hook in the running container and restart the hook daemon; no rebuild\n\n"
+  printf "devbox update - Update OMP, Claude Code, Codex and moshi-hook in the running container and restart the hook daemon; no rebuild\n\n"
 
   printf "%s\n" "Usage:"
   printf "  devbox update\n"
@@ -635,7 +635,7 @@ devbox_agent_usage() {
 devbox_agent_install_usage() {
   if [[ -n $long_usage ]]; then
     printf "devbox agent install\n\n"
-    printf "  Install the agent git override on this laptop\n  \n  From home/: the omp and claude launchers, the gh shim, the credential\n  helper, the SSH fence and the read-only rendered agent gitconfigs; the\n  OMP and Claude Code presets where no guardrail exists yet.\n  Idempotent; prints the manual steps that remain.\n\n"
+    printf "  Install the agent git override on this laptop\n  \n  From home/: the omp, claude and codex launchers, the gh shim, the\n  credential helper, the SSH fence and the read-only rendered agent\n  gitconfigs; the OMP and Claude Code presets where no guardrail exists\n  yet, and the Codex guardrail rules.\n  Idempotent; prints the manual steps that remain.\n\n"
   else
     printf "devbox agent install - Install the agent git override on this laptop\n\n"
   fi
@@ -1990,7 +1990,7 @@ doctor_host() {
   # shellcheck disable=SC2016 # the probe list must expand inside the container
   if ! compose exec -T "${SERVICE}" bash -lc '
     status=0
-    for probe in "herdr --version" "omp --version" "claude --version" "node -v" "pnpm -v" "corepack --version" "rustc --version" \
+    for probe in "herdr --version" "omp --version" "claude --version" "codex --version" "node -v" "pnpm -v" "corepack --version" "rustc --version" \
       "cargo --version" "ruby --version" "gh --version" "lazygit --version" "wt --version" "terraform version" \
       "shellcheck --version" "git --version" "docker --version" "docker compose version"; do
       # No pipe into head: a multi-line tool would take SIGPIPE (141) once head
@@ -2011,12 +2011,12 @@ doctor_host() {
     fail 'one or more toolchain probes failed'
   fi
 
-  # The agent git override: `omp` and `claude` on the PATH must be the
+  # The agent git override: `omp`, `claude` and `codex` on the PATH must be the
   # launchers, reached through symlinks. A plain file there is what `omp
   # update` takes over in place - agent sessions then read ~/.gitconfig and
   # reach for SSH keys.
   local agent launcher_state
-  for agent in omp claude; do
+  for agent in omp claude codex; do
     # shellcheck disable=SC2016,SC2018 # the body expands in the container; tr keeps the ASCII state word
     launcher_state="$(compose exec -T -e AGENT="${agent}" "${SERVICE}" bash -lc '
       agent_dir="$HOME/.local/libexec/devbox-agent"
@@ -2034,6 +2034,27 @@ doctor_host() {
     *) fail "agent git override: ${agent} does not resolve to the launcher - run './bin/devbox bootstrap'" ;;
     esac
   done
+
+  # Codex's guardrail is a file bootstrap rewrites on every run, so a stale one
+  # means bootstrap has not run since a deploy. Its sandbox default comes from
+  # the image (container/codex-config.toml): without /etc/codex/config.toml
+  # Codex tries its own bubblewrap sandbox, which this container cannot start.
+  local codex_state
+  # shellcheck disable=SC2016,SC2018 # the body expands in the container; tr keeps the ASCII state word
+  codex_state="$(compose exec -T "${SERVICE}" bash -c '
+    cmp -s /opt/devbox/home/.codex/rules/devbox.rules "$HOME/.codex/rules/devbox.rules" || { echo rules; exit 0; }
+    [[ -e /etc/codex/config.toml ]] || { echo image; exit 0; }
+    echo ok
+  ' 2>/dev/null | tr -cd 'a-z')"
+  case "${codex_state}" in
+  ok) log_success 'Codex guardrail current (~/.codex/rules/devbox.rules) and its sandbox left to the container (/etc/codex/config.toml)' ;;
+  rules)
+    # shellcheck disable=SC2088 # literal ~ in a message
+    fail "~/.codex/rules/devbox.rules is missing or differs from the repo's - run './bin/devbox bootstrap'"
+    ;;
+  image) fail "the image has no /etc/codex/config.toml, so every Codex command fails in its own sandbox - run './bin/devbox rebuild'" ;;
+  *) fail "could not check Codex's guardrail - run './bin/devbox bootstrap'" ;;
+  esac
 
   # The identity registry itself: every identity-derived file (SSH keys and
   # config, ~/.gitconfig's per-tree includes, allowed_signers, the agent
@@ -2114,7 +2135,7 @@ doctor_host() {
   local agent_context_out context_line
   if agent_context_out="$(compose exec -T "${SERVICE}" \
     bash /opt/devbox/container/agent-context check devbox /opt/devbox/home 2>&1)"; then
-    log_success 'agent context current (devbox): marker, ~/.config/devbox/agent-context.md, CLAUDE.md import, OMP reads it, devbox-runtime skill'
+    log_success 'agent context current (devbox): marker, ~/.config/devbox/agent-context.md, CLAUDE.md import, OMP reads it, ~/.codex/AGENTS.md link, devbox-runtime skill'
   else
     while IFS= read -r context_line; do
       [[ -z "${context_line}" ]] || fail "agent context: ${context_line}"
@@ -2505,7 +2526,7 @@ doctor_laptop() {
 
   # -- 4. Agent git override: installed and identical to the templates ---------
   log_info 'agent git override'
-  for agent in omp claude; do
+  for agent in omp claude codex; do
     if resolved="$(command -v "${agent}" 2>/dev/null)" && [[ ${resolved} -ef "${AGENT_DIR}/${agent}-launcher" ]]; then
       log_success "${agent} → ${resolved} → launcher"
     else
@@ -2532,8 +2553,9 @@ doctor_laptop() {
   fi
   stale=()
   for rel in .local/libexec/devbox-agent/agent-launch .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/claude-launcher \
-    .local/libexec/devbox-agent/claude-session-env .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
-    .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .local/bin/wt-herdr .local/libexec/devbox-identities; do
+    .local/libexec/devbox-agent/codex-launcher .local/libexec/devbox-agent/claude-session-env .local/libexec/devbox-agent/gh \
+    .local/libexec/devbox-agent/devbox-git-credential .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token \
+    .local/bin/wt-herdr .local/libexec/devbox-identities .codex/rules/devbox.rules; do
     cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
   done
   git_config_dir="${CONFIG_DIR}/git"
@@ -2575,7 +2597,7 @@ doctor_laptop() {
   if ((${#stale[@]})); then
     fail "differ from the repo templates: ${stale[*]} - run ./bin/devbox agent install"
   else
-    log_success 'launchers, Claude session hook, shim, helper, fence, devbox-identities, wt-herdr and agent gitconfigs match the repo templates'
+    log_success 'launchers, Claude session hook, shim, helper, fence, devbox-identities, wt-herdr, Codex rules and agent gitconfigs match the repo templates'
   fi
   # Claude sessions no launcher starts (the desktop app) get the fence only
   # from this SessionStart hook; without it they run git and gh as you.
@@ -2649,11 +2671,12 @@ doctor_laptop() {
   # Which machine an agent believes it is on comes from these files, not from
   # the launcher alone: the laptop template imported through ~/.claude/CLAUDE.md,
   # which OMP reads only with `claude` in its enabledProviders and only while no
-  # ~/.omp/agent/AGENTS.md shadows it, plus the devbox-runtime skill.
+  # ~/.omp/agent/AGENTS.md shadows it, linked as ~/.codex/AGENTS.md for Codex,
+  # plus the devbox-runtime skill.
   log_info 'agent context'
   local agent_context_out line
   if agent_context_out="$("${BASH}" "${REPO_ROOT}/container/agent-context" check laptop "${TEMPLATE_DIR}" 2>&1)"; then
-    log_success 'agent context current: ~/.config/devbox/agent-context.md (laptop), imported by ~/.claude/CLAUDE.md, read by OMP, devbox-runtime skill'
+    log_success 'agent context current: ~/.config/devbox/agent-context.md (laptop), imported by ~/.claude/CLAUDE.md, read by OMP, linked as ~/.codex/AGENTS.md, devbox-runtime skill'
   else
     while IFS= read -r line; do
       [[ -z ${line} ]] || fail "agent context: ${line}"
@@ -3119,13 +3142,13 @@ devbox_update_command() {
   require_env_file
   require_moshi_hook
   # One failed updater must not cost the others their run, so each failure is
-  # counted and the exit status comes last. `omp` and `claude` resolve to the
-  # launchers in a login shell; both pass `update` through to the real install
-  # (docs/git.md). The agents go first because `moshi-hook install` rewrites hooks
-  # into their configs; that install runs whether or not `moshi-hook update`
-  # succeeded, since the current binary can still repair the hooks. The daemon
-  # restart goes last because it is the one step that aborts, and is skipped after
-  # a failed update so the old daemon keeps serving.
+  # counted and the exit status comes last. `omp`, `claude` and `codex` resolve to
+  # the launchers in a login shell; all three pass `update` through to the real
+  # install (docs/git.md). The agents go first because `moshi-hook install`
+  # rewrites hooks into their configs; that install runs whether or not
+  # `moshi-hook update` succeeded, since the current binary can still repair the
+  # hooks. The daemon restart goes last because it is the one step that aborts,
+  # and is skipped after a failed update so the old daemon keeps serving.
   failures=0
 
   log_info 'Updating OMP...'
@@ -3137,6 +3160,12 @@ devbox_update_command() {
   log_info 'Updating Claude Code...'
   if ! compose exec -T "${SERVICE}" bash -lc 'claude update'; then
     log_warn 'claude update failed.'
+    failures=$((failures + 1))
+  fi
+
+  log_info 'Updating Codex...'
+  if ! compose exec -T "${SERVICE}" bash -lc 'codex update'; then
+    log_warn 'codex update failed.'
     failures=$((failures + 1))
   fi
 
@@ -3157,7 +3186,7 @@ devbox_update_command() {
   fi
 
   ((failures == 0)) || log_error "${failures} update(s) failed."
-  log_success 'OMP, Claude Code and moshi-hook are up to date.'
+  log_success 'OMP, Claude Code, Codex and moshi-hook are up to date.'
 
 }
 
@@ -3458,17 +3487,17 @@ devbox_sync_profile_command() {
 
 devbox_agent_install_command() {
 
-  local -r AGENTS=(omp claude)
+  local -r AGENTS=(omp claude codex)
 
   # -- Launchers, credential helper, fence, gh shim ------------------------------
   # Kept out of ~/.local/bin on purpose: only a launcher adds this directory to
   # the PATH, so the `gh` shim (tokens per directory) never intercepts your own
   # gh, which keeps its OAuth login.
   install -d -m 755 "${AGENT_DIR}"
-  for tool in omp-launcher claude-launcher claude-session-env gh devbox-git-credential devbox-git-no-ssh; do
+  for tool in omp-launcher claude-launcher codex-launcher claude-session-env gh devbox-git-credential devbox-git-no-ssh; do
     install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${AGENT_DIR}/${tool}"
   done
-  # Sourced by both launchers and claude-session-env, never run.
+  # Sourced by the launchers and claude-session-env, never run.
   install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${AGENT_DIR}/agent-launch"
 
   # The resolver is a user-facing command (`devbox-gh-token --account`), same
@@ -3479,16 +3508,17 @@ devbox_agent_install_command() {
     install -m 755 "${TEMPLATE_DIR}/.local/bin/${tool}" "${BIN_DIR}/${tool}"
   done
 
-  # `omp` and `claude` must shadow the real binaries, from a directory holding
-  # nothing else: it goes on your PATH ahead of ~/.local/bin, and anything more in
-  # it - the gh shim above all - would shadow your own tools too. Not
-  # ~/.local/bin itself: Claude's native install keeps its own `claude` symlink
-  # there and re-points it on every update, which would silently drop the
-  # launcher. Symlinks rather than copies, and no launcher script is itself named
-  # after its tool: `omp update` resolves its install target by looking `omp` up
-  # on the PATH and takes over a plain file it finds there in place - which used
-  # to be the launcher. The launchers drop their own PATH entries for `update`;
-  # reaching them only through a symlink is the backstop.
+  # `omp`, `claude` and `codex` must shadow the real binaries, from a directory
+  # holding nothing else: it goes on your PATH ahead of ~/.local/bin, and anything
+  # more in it - the gh shim above all - would shadow your own tools too. Not
+  # ~/.local/bin itself: Claude's native install and Codex's standalone one keep
+  # their own symlinks there and re-point them on every update, which would
+  # silently drop the launcher. Symlinks rather than copies, and no launcher
+  # script is itself named after its tool: `omp update` resolves its install
+  # target by looking `omp` up on the PATH and takes over a plain file it finds
+  # there in place - which used to be the launcher. The launchers drop their own
+  # PATH entries for `update`; reaching them only through a symlink is the
+  # backstop.
   install -d -m 755 "${LAUNCHER_DIR}"
   for agent in "${AGENTS[@]}"; do
     ln -sfn "${AGENT_DIR}/${agent}-launcher" "${LAUNCHER_DIR}/${agent}"
@@ -3645,11 +3675,20 @@ devbox_agent_install_command() {
     esac
   fi
 
+  # The same guardrail for Codex, as execpolicy rules in a file of its own:
+  # Codex loads every *.rules under ~/.codex/rules and the strictest match wins,
+  # so unlike the two above this is never anyone else's file and is rewritten on
+  # every run. The rules the TUI learns from "always allow" go to default.rules
+  # beside it and cannot lift a `forbidden`. The desktop app reads it too.
+  install -d -m 755 "${HOME}/.codex/rules"
+  install -m 644 "${TEMPLATE_DIR}/.codex/rules/devbox.rules" "${HOME}/.codex/rules/devbox.rules"
+
   # Which machine this is, for every agent session: the laptop template as
   # ~/.config/devbox/agent-context.md, one import line appended to your
   # ~/.claude/CLAUDE.md (Claude Code reads it, and OMP with `claude` in its
-  # enabledProviders), and the devbox-runtime skill. What it cannot fix - OMP's
-  # own config, a shadowing ~/.omp/agent/AGENTS.md - is listed below.
+  # enabledProviders), a ~/.codex/AGENTS.md link to it for Codex, and the
+  # devbox-runtime skill. What it cannot fix - OMP's own config, a shadowing
+  # ~/.omp/agent/AGENTS.md, a ~/.codex/AGENTS.md of your own - is listed below.
   agent_context="${REPO_ROOT}/container/agent-context"
   if agent_context_out="$("${BASH}" "${agent_context}" apply laptop "${TEMPLATE_DIR}" 2>&1)"; then
     [[ -z ${agent_context_out} ]] || while IFS= read -r line; do log_success "${line}"; done <<<"${agent_context_out}"
@@ -3663,7 +3702,7 @@ devbox_agent_install_command() {
     log_info "Optional: tell agents who you are and the tone to take - cp ${TEMPLATE_DIR}/.config/devbox/profile.json.example ${CONFIG_DIR}/profile.json, fill it in, then ./bin/devbox sync profile"
 
   # -- Report ---------------------------------------------------------------------
-  log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,claude-session-env,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only)"
+  log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,codex-launcher,claude-session-env,gh,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude,codex}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only), ~/.codex/rules/devbox.rules"
   path_fix=${legacy_kept}
   for agent in "${AGENTS[@]}"; do
     # Same rule as the launcher: the real binary is the first PATH entry that does

@@ -148,11 +148,11 @@ is why it is the recommended one.
 ### Which tools resolve in a non-interactive `ssh devbox '<cmd>'`?
 
 All of them: pinned binaries in `/usr/local/bin` (`node`/`npm`/`npx`/`corepack`/`pnpm`, symlinked from `/opt/nvm`);
-`~/.bashrc.d/devbox.sh` loads _above_ Ubuntu's non-interactive early return, putting `~/.local/bin` (OMP's and Claude
-Code's install dir) on `PATH`, and `~/.bash_profile` reasserts that order for login shells, where `~/.profile` would
-re-prepend `~/.local/bin` ahead of the agent launchers. Verify both routes:
-`ssh devbox 'command -v omp claude node pnpm herdr'` and `ssh devbox 'bash -lc "command -v omp claude"'` — the second
-must print `~/.local/libexec/devbox-agent/omp` and `…/claude`, the launchers.
+`~/.bashrc.d/devbox.sh` loads _above_ Ubuntu's non-interactive early return, putting `~/.local/bin` (OMP's, Claude
+Code's and Codex's install dir) on `PATH`, and `~/.bash_profile` reasserts that order for login shells, where
+`~/.profile` would re-prepend `~/.local/bin` ahead of the agent launchers. Verify both routes:
+`ssh devbox 'command -v omp claude codex node pnpm herdr'` and `ssh devbox 'bash -lc "command -v omp claude codex"'` —
+the second must print `~/.local/libexec/devbox-agent/omp`, `…/claude` and `…/codex`, the launchers.
 
 ### Can I use VS Code / JetBrains Remote?
 

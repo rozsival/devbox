@@ -250,7 +250,7 @@ doctor_laptop() {
 
   # -- 4. Agent git override: installed and identical to the templates ---------
   log_info 'agent git override'
-  for agent in omp claude; do
+  for agent in omp claude codex; do
     if resolved="$(command -v "${agent}" 2>/dev/null)" && [[ ${resolved} -ef "${AGENT_DIR}/${agent}-launcher" ]]; then
       log_success "${agent} → ${resolved} → launcher"
     else
@@ -277,8 +277,9 @@ doctor_laptop() {
   fi
   stale=()
   for rel in .local/libexec/devbox-agent/agent-launch .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/claude-launcher \
-    .local/libexec/devbox-agent/claude-session-env .local/libexec/devbox-agent/gh .local/libexec/devbox-agent/devbox-git-credential \
-    .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .local/bin/wt-herdr .local/libexec/devbox-identities; do
+    .local/libexec/devbox-agent/codex-launcher .local/libexec/devbox-agent/claude-session-env .local/libexec/devbox-agent/gh \
+    .local/libexec/devbox-agent/devbox-git-credential .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token \
+    .local/bin/wt-herdr .local/libexec/devbox-identities .codex/rules/devbox.rules; do
     cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
   done
   git_config_dir="${CONFIG_DIR}/git"
@@ -320,7 +321,7 @@ doctor_laptop() {
   if ((${#stale[@]})); then
     fail "differ from the repo templates: ${stale[*]} - run ./bin/devbox agent install"
   else
-    log_success 'launchers, Claude session hook, shim, helper, fence, devbox-identities, wt-herdr and agent gitconfigs match the repo templates'
+    log_success 'launchers, Claude session hook, shim, helper, fence, devbox-identities, wt-herdr, Codex rules and agent gitconfigs match the repo templates'
   fi
   # Claude sessions no launcher starts (the desktop app) get the fence only
   # from this SessionStart hook; without it they run git and gh as you.
@@ -394,11 +395,12 @@ doctor_laptop() {
   # Which machine an agent believes it is on comes from these files, not from
   # the launcher alone: the laptop template imported through ~/.claude/CLAUDE.md,
   # which OMP reads only with `claude` in its enabledProviders and only while no
-  # ~/.omp/agent/AGENTS.md shadows it, plus the devbox-runtime skill.
+  # ~/.omp/agent/AGENTS.md shadows it, linked as ~/.codex/AGENTS.md for Codex,
+  # plus the devbox-runtime skill.
   log_info 'agent context'
   local agent_context_out line
   if agent_context_out="$("${BASH}" "${REPO_ROOT}/container/agent-context" check laptop "${TEMPLATE_DIR}" 2>&1)"; then
-    log_success 'agent context current: ~/.config/devbox/agent-context.md (laptop), imported by ~/.claude/CLAUDE.md, read by OMP, devbox-runtime skill'
+    log_success 'agent context current: ~/.config/devbox/agent-context.md (laptop), imported by ~/.claude/CLAUDE.md, read by OMP, linked as ~/.codex/AGENTS.md, devbox-runtime skill'
   else
     while IFS= read -r line; do
       [[ -z ${line} ]] || fail "agent context: ${line}"

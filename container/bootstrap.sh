@@ -19,20 +19,22 @@ export PATH="${HOME_DIR}/.local/libexec/devbox-agent:${HOME_DIR}/.local/bin:${PA
 declare -a ACTIONS=()
 register_action() { ACTIONS+=("$1"); }
 
-# -- 1. Agents: OMP and Claude Code -------------------------------------------
-# Deliberately not in the image: both install to ~/.local/bin on the bind
+# -- 1. Agents: OMP, Claude Code and Codex ------------------------------------
+# Deliberately not in the image: all three install to ~/.local/bin on the bind
 # mount (Claude's native installer keeps ~/.local/bin/claude as a symlink into
-# ~/.local/share/claude/versions), so `omp update` and Claude's own auto-update
-# work without an image rebuild - which is also why neither has an ARG pin.
-# Checked by path, not `command -v`: the launchers installed in §13 answer to
-# both names on the PATH set above.
+# ~/.local/share/claude/versions, Codex's ~/.local/bin/codex into
+# ~/.codex/packages/standalone), so `omp update`, `codex update` and Claude's
+# own auto-update work without an image rebuild - which is also why none has an
+# ARG pin. Checked by path, not `command -v`: the launchers installed in §13
+# answer to all three names on the PATH set above.
 #
 # OMP is fetched directly instead of `curl https://omp.sh/install.sh | sh`:
 # upstream's installer downloads the release binary and installs it unchecked.
 # GitHub records a SHA-256 for every release asset (the release API's
 # `digest`), and both the binary URL and that digest come from one read of the
-# `latest` release, so they always describe the same build. Claude's installer
-# verifies its download against its own manifest, so it runs as published.
+# `latest` release, so they always describe the same build. Claude's and
+# Codex's installers verify their downloads against their own manifests (Codex:
+# the release's SHA-256 digests), so they run as published.
 install -d -m 755 "${HOME_DIR}/.local/bin"
 # A container stop SIGKILLs an in-flight bootstrap, so no cleanup runs and its
 # temp file (possibly the full asset) stays on the bind mount - also beside an
@@ -78,8 +80,8 @@ else
   [[ -z "${omp_new}" ]] || rm -f "${omp_new}"
   rm -rf "${omp_tmp}"
 fi
-# Non-fatal: a box without Claude Code still runs OMP, and everything below
-# (identities, the agent override) must not depend on a download.
+# Non-fatal: a box without Claude Code or Codex still runs OMP, and everything
+# below (identities, the agent override) must not depend on a download.
 if [[ -x "${HOME_DIR}/.local/bin/claude" ]]; then
   log_info "Claude Code already installed: ${HOME_DIR}/.local/bin/claude"
 else
@@ -90,6 +92,21 @@ else
 fi
 if [[ -x "${HOME_DIR}/.local/bin/claude" && ! -f "${HOME_DIR}/.claude/.credentials.json" ]]; then
   register_action "Log Claude Code in once: run 'claude' in a pane and follow /login (the credentials land in ~/.claude on the bind mount and survive rebuilds)"
+fi
+# Non-interactive: no prompt, and with ~/.local/bin already on the PATH set
+# above the installer appends no PATH block to a shell profile.
+if [[ -x "${HOME_DIR}/.local/bin/codex" ]]; then
+  log_info "Codex already installed: ${HOME_DIR}/.local/bin/codex"
+else
+  log_info 'Installing Codex...'
+  if ! curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh; then
+    log_warn 'Codex install failed; re-run ./bin/devbox bootstrap.'
+  fi
+fi
+# The browser sign-in calls back to localhost on this container, which a
+# laptop browser cannot reach; the device code flow needs no callback.
+if [[ -x "${HOME_DIR}/.local/bin/codex" && ! -f "${HOME_DIR}/.codex/auth.json" ]]; then
+  register_action "Log Codex in once: allow device code sign-in in ChatGPT's security settings, then run 'codex login --device-auth' in a pane (the credentials land in ~/.codex on the bind mount and survive rebuilds)"
 fi
 
 # -- 2. Identity registry -----------------------------------------------------
@@ -466,26 +483,27 @@ if ${identities_ok}; then
 fi
 
 # -- 13. Agent git override ---------------------------------------------------
-# What makes one clone serve both you and an agent: the `omp` and `claude`
-# launchers export GIT_CONFIG_GLOBAL=~/.config/devbox/git/agent.gitconfig (HTTPS
-# rewrites, the per-operation credential helper, the bot author, signing off)
-# and a GIT_SSH_COMMAND that refuses, for their own process trees only - the
-# shared body is agent-launch. The directory is first on the PATH from
-# devbox.sh so `omp` and `claude` resolve to the launchers ahead of the real
-# installs in ~/.local/bin (§1). All generated files: reinstalled on every run.
+# What makes one clone serve both you and an agent: the `omp`, `claude` and
+# `codex` launchers export GIT_CONFIG_GLOBAL=~/.config/devbox/git/agent.gitconfig
+# (HTTPS rewrites, the per-operation credential helper, the bot author, signing
+# off) and a GIT_SSH_COMMAND that refuses, for their own process trees only -
+# the shared body is agent-launch. The directory is first on the PATH from
+# devbox.sh so all three resolve to the launchers ahead of the real installs in
+# ~/.local/bin (§1). All generated files: reinstalled on every run.
 #
-# `omp` and `claude` here are symlinks to the launcher scripts, never the
-# scripts themselves: `omp update` resolves what to replace by looking `omp` up
-# on the PATH, and would take over a plain file in place. The launchers drop
+# `omp`, `claude` and `codex` here are symlinks to the launcher scripts, never
+# the scripts themselves: `omp update` resolves what to replace by looking `omp`
+# up on the PATH, and would take over a plain file in place. The launchers drop
 # their own PATH entries for `update` so it lands on the real install; the
 # symlink is the backstop, since omp's updater refuses to replace a script
 # behind one.
-for tool in omp-launcher claude-launcher devbox-git-credential devbox-git-no-ssh; do
+for tool in omp-launcher claude-launcher codex-launcher devbox-git-credential devbox-git-no-ssh; do
   install -m 755 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/${tool}" "${agent_dir}/${tool}"
 done
 install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${agent_dir}/agent-launch"
-ln -sfn "${agent_dir}/omp-launcher" "${agent_dir}/omp"
-ln -sfn "${agent_dir}/claude-launcher" "${agent_dir}/claude"
+for agent in omp claude codex; do
+  ln -sfn "${agent_dir}/${agent}-launcher" "${agent_dir}/${agent}"
+done
 
 # The gitconfigs and their directory are read-only: GIT_CONFIG_GLOBAL points in
 # there, so `git config --global` in a session would rewrite them - on the
@@ -527,7 +545,7 @@ fi
 rm -f "${secrets_dir}"/agent.gitconfig "${secrets_dir}"/agent-*.gitconfig
 chmod 500 "${git_config_dir}"
 
-# -- 14. Agent configs (OMP, Claude Code) -------------------------------------
+# -- 14. Agent configs (OMP, Claude Code, Codex) ------------------------------
 # Seeded once - `secrets.enabled` plus the bash approval guardrail (see the
 # template's comments and docs/security.md). OMP owns the file afterwards and
 # `devbox sync omp` may replace it with the repo preset, so an existing file is never
@@ -569,11 +587,22 @@ elif jq -e '.permissions.deny == null' "${claude_settings}" >/dev/null; then
   fi
 fi
 
+# The same guardrail for Codex, as execpolicy rules in a file of its own:
+# Codex loads every *.rules under ~/.codex/rules and the strictest match wins,
+# so unlike the two above this is never anyone else's file and is rewritten on
+# every run - nothing to seed, merge or sync. The rules the TUI learns from
+# "always allow" go to default.rules beside it and cannot lift a `forbidden`.
+# Codex's own sandbox is off here: /etc/codex/config.toml in the image.
+install -d -m 755 "${HOME_DIR}/.codex/rules"
+install -m 644 "${TEMPLATE_DIR}/.codex/rules/devbox.rules" "${HOME_DIR}/.codex/rules/devbox.rules"
+
 # Which machine this is, for every agent session: ~/.config/devbox/agent-context.md
-# (the devbox template), imported by one line in ~/.claude/CLAUDE.md that both
-# agents read, plus the devbox-runtime skill. What the script cannot fix -
-# OMP's own config not reading that file, an image without the marker - is
-# listed as a manual step. Never fatal: it costs agents context, not access.
+# (the devbox template), imported by one line in ~/.claude/CLAUDE.md that OMP
+# and Claude Code read and linked as ~/.codex/AGENTS.md for Codex, plus the
+# devbox-runtime skill. What the script cannot fix - OMP's own config not
+# reading that file, a ~/.codex/AGENTS.md of your own, an image without the
+# marker - is listed as a manual step. Never fatal: it costs agents context,
+# not access.
 agent_context=/opt/devbox/container/agent-context
 if agent_context_out="$(bash "${agent_context}" apply devbox "${TEMPLATE_DIR}" 2>&1)"; then
   [[ -z ${agent_context_out} ]] || while IFS= read -r line; do log_info "${line}"; done <<<"${agent_context_out}"
@@ -586,7 +615,7 @@ fi
 
 # -- 15. moshi-hook -----------------------------------------------------------
 # Companion daemon for the Moshi phone client: it owns the Unix socket the OMP
-# extension and the Claude Code hooks post lifecycle events to, serves the local gateway on
+# extension and the Claude Code and Codex hooks post lifecycle events to, serves the local gateway on
 # 127.0.0.1:24543 that the app reaches over its own SSH forward, and holds the
 # WebSocket that turns those events into push notifications and approvals.
 # Installed here rather than in the image for the same reason as the agents (§1): it
@@ -641,10 +670,11 @@ if command -v moshi-hook >/dev/null 2>&1; then
   # warning: the extension is generated by the installer, so it has to be
   # rewritten whenever the binary changes. Unscoped on purpose: it configures
   # every agent whose config directory already exists (~/.claude, ~/.omp,
-  # ~/.config/opencode, ...; a binary on the PATH alone is not detected) and
-  # creates none, while `--target` writes its agents' files even when absent.
-  # For Claude it merges hook entries into ~/.claude/settings.json, the one
-  # change made to a file Claude otherwise owns.
+  # ~/.codex, ~/.config/opencode, ...; a binary on the PATH alone is not
+  # detected) and creates none, while `--target` writes its agents' files even
+  # when absent. For Claude it merges hook entries into ~/.claude/settings.json,
+  # for Codex into ~/.codex/hooks.json - the one change made to files either
+  # agent otherwise owns.
   moshi-hook install >/dev/null 2>&1 ||
     log_warn 'moshi-hook install failed; agent events may be stale.'
   # Captured rather than piped into `grep -q`: status prints ~20 lines, grep

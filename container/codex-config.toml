@@ -1,0 +1,16 @@
+# Codex's system configuration layer on the devbox, /etc/codex/config.toml: a
+# symlink to this file (Dockerfile), so it is root-owned, outside the bind
+# mount and live without a rebuild. The lowest-precedence layer - your
+# ~/.codex/config.toml, a trusted project's .codex/config.toml and `-c`/`--sandbox`
+# all override it - so it sets machine defaults only, never a guardrail (that
+# is ~/.codex/rules/devbox.rules).
+#
+# The container is the sandbox. Codex's own Linux sandbox is bubblewrap, which
+# needs a user namespace; Docker's default seccomp profile refuses one without
+# CAP_SYS_ADMIN, and `cap_drop: ALL` plus `no-new-privileges` are what this
+# container is (docs/security.md). Left at its default, every sandboxed
+# command fails and Codex asks to rerun it unsandboxed. OpenAI's guidance for a
+# container that is the boundary is exactly this mode - the same footing as OMP
+# and Claude Code here, which run commands unsandboxed too. Approvals keep
+# their default: the execpolicy rules still prompt and forbid.
+sandbox_mode = "danger-full-access"

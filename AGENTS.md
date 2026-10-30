@@ -7,7 +7,7 @@ in this repository.
 
 `devbox` provisions a containerised remote development environment on the AI coding workstation: one
 Docker container running an unprivileged `sshd` published only on the node's Tailscale address, so a herdr
-client can attach to it as a saved machine and run OMP and Claude Code agents inside it. The container is the agent
+client can attach to it as a saved machine and run OMP, Claude Code and Codex agents inside it. The container is the agent
 sandbox -
 it reaches the project tree, the internet and a rootless project Docker daemon, never the host filesystem or
 the host's root Docker daemon.
@@ -19,8 +19,8 @@ the host's root Docker daemon.
   with the compose and buildx plugins, Node 26 (default) + 24 / pnpm 12 through nvm in `/opt/nvm`, Rust through rustup in
   `/opt/rustup` + `/opt/cargo` and Ruby built from source into `/opt/ruby`. No `op` and no
   `gcloud`: the container holds no vault and no Google account (see `docs/secrets.md`)
-- **Agents**: OMP and Claude Code, installed by bootstrap into `~/.local/bin` on the bind mount (unpinned,
-  like `moshi-hook`: each updates itself there), both started through the agent launchers
+- **Agents**: OMP, Claude Code and Codex, installed by bootstrap into `~/.local/bin` on the bind mount (unpinned,
+  like `moshi-hook`: each updates itself there), all three started through the agent launchers
 - **Runtime**: `sshd` on container port 2222, published as `${BIND_ADDR}:2223` and `127.0.0.1:2223`
 - **Project Docker**: a second, rootless `dockerd` owned by the dedicated host user `dev` (uid 1001), socket
   `/run/devbox/docker.sock` bind-mounted in; provisioned once by `sudo ./bin/devbox docker setup`
@@ -67,9 +67,9 @@ the host's root Docker daemon.
     reference
   - `docs/connecting.md` - herdr panes, `ssh devbox`, Moshi on a phone, `./bin/devbox shell`, cloning, port forwarding
   - `docs/git.md` - the identity registry, manual vs agent git, the credential helper, signing, laptop install
-  - `docs/toolchain.md` - pinned versions, install locations, OMP, Claude Code, Moshi/`moshi-hook`, agent skills, adding
+  - `docs/toolchain.md` - pinned versions, install locations, OMP, Claude Code, Codex, Moshi/`moshi-hook`, agent skills, adding
     a tool
-  - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, the Claude Code login, GCP ADC, App
+  - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, the Claude Code and Codex logins, GCP ADC, App
     credentials
   - `docs/cli.md` - the `bin/devbox` reference (cheat sheet, workstation, laptop and `doctor` commands),
     `devbox-identities`, and the maintainer workflow for editing the CLI
@@ -93,7 +93,8 @@ the host's root Docker daemon.
   home-directory install (the rustup proxies in `/usr/local/bin` are wrappers that default those two variables);
   `herdr` must land in `/usr/local/bin` because non-interactive SSH sessions get the default PATH;
   `/etc/devbox-env` is the root-owned marker behind `DEVBOX_ENV=devbox` (a file in the image, not `ENV`,
-  because sshd starts every session with a fresh environment and nothing in the bind mount may decide it)
+  because sshd starts every session with a fresh environment and nothing in the bind mount may decide it);
+  `/etc/codex/config.toml` is a symlink to `container/codex-config.toml` (below), made like the `devbox-ports` one
 - `docker-compose.yml` - `${BIND_ADDR}:${DEVBOX_SSH_PORT}:2222` is the entire network boundary, written
   `${BIND_ADDR:?...}` so compose itself refuses an empty address instead of publishing on `0.0.0.0`; `user:`,
   `cap_drop: [ALL]`, `no-new-privileges`, no root docker socket, no identity in `environment:` either - same
@@ -112,9 +113,14 @@ the host's root Docker daemon.
   place - upstream's `omp.sh` installer checks nothing - with a download that aborts only when stalled, never on
   a total time cap; every run, installed or not, first deletes `~/.local/bin/.omp.??????` temp files older than 5
   minutes, which only a killed run leaves (a live download writes at least every ~40 s), so a concurrent
-  bootstrap's download survives; plus Claude Code via
-  its native installer, which verifies its own download; both non-fatal, and Claude's one-time `/login`
-  registered as a manual step until `~/.claude/.credentials.json` exists); 2 the
+  bootstrap's download survives; plus Claude Code via its native installer, which verifies its own download, and
+  Codex via its standalone installer (`curl -fsSL https://chatgpt.com/codex/install.sh` with `CODEX_NON_INTERACTIVE=1`,
+  when `~/.local/bin/codex` is absent; it verifies its downloads against the release's SHA-256 digests, and
+  `~/.local/bin/codex` links into `~/.codex/packages/standalone`); all three non-fatal, Claude's one-time `/login`
+  registered as a manual step until `~/.claude/.credentials.json` exists and Codex's sign-in until
+  `~/.codex/auth.json` exists (allow device code sign-in in ChatGPT's security settings, then `codex login
+  --device-auth` in a pane - the browser callback to localhost cannot reach the container; Codex runs on the ChatGPT
+  subscription, the credentials live in `~/.codex` on the bind mount and survive rebuilds); 2 the
   identity registry (installs `devbox-identities` in `~/.local/libexec` and symlinks it into
   `~/.local/bin`, since `devbox.sh` puts only the latter on the PATH and every checklist tells people to
   run `devbox-identities check`, then `di_check`s
@@ -138,37 +144,59 @@ the host's root Docker daemon.
   `herdr worktree open`, focused unless `-n`);
   11 the box-wide `secrets.env`; 12 `gh` (the `~/.local/libexec/devbox-agent` shim plus the per-identity
   token checklist, each identity checked with its own `devbox-gh-token --identity <slug>` and `GH_HOST` set to
-  that identity's host, for every identity); 13 the agent git override (`agent-launch` and both launchers plus their `omp`/`claude`
+  that identity's host, for every identity); 13 the agent git override (`agent-launch` and the three launchers plus their `omp`/`claude`/`codex`
   symlinks, credential helper,
   fence, the *rendered* `agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir` -
   every one of them, inherited authors included, since git applies every matching `includeIf` and a nested
   tree would otherwise keep the outer author; the includes are emitted shortest `dir` first so the longest
   match is read last and wins); 14 agent configs: OMP's `~/.omp/agent/config.yml` (seeded if absent with the
   preset the laptop shares - model roles, feature flags, `secrets` and the `bash.patterns` guardrail - an
-  existing file lacking a `bash:` block reported, never merged into) and Claude Code's
+  existing file lacking a `bash:` block reported, never merged into), Claude Code's
   `~/.claude/settings.json` (the `home/.claude/settings.json` preset: `model` plus the `permissions.deny`/`ask`
   rules mirroring that guardrail, *merged* in with `jq` - never copied, since `moshi-hook` and IDE
   integrations write the same file - when the file is missing or has no `permissions.deny`, the old file kept
   as `settings.json.bak`; invalid JSON registered as a manual action; a file already holding
-  `permissions.deny` left alone), placed before §15 because `moshi-hook` merges its hooks into that same file;
+  `permissions.deny` left alone), placed before §15 because `moshi-hook` merges its hooks into that same file, and
+  Codex's `~/.codex/rules/devbox.rules` (the execpolicy guardrail, `home/.codex/rules/devbox.rules`: a file of
+  Codex's own, rewritten on every run - nothing seeded, merged or synced, so there is no `devbox sync codex`);
   then the agent context (`container/agent-context apply devbox`, below), its `check` failures - the image
-  lacking `/etc/devbox-env`, OMP's config not reading `~/.claude/CLAUDE.md` - registered as manual actions;
+  lacking `/etc/devbox-env`, OMP's config not reading `~/.claude/CLAUDE.md`, a `~/.codex/AGENTS.md` that is not the
+  link, a non-empty `~/.codex/AGENTS.override.md` - registered as manual actions;
   15 `moshi-hook` plus its hooks for every agent whose config directory exists (an unscoped `moshi-hook install`,
-  which creates none); 16 the printed manual checklist
+  which creates none - Codex's land in `~/.codex/hooks.json` once `~/.codex` exists); 16 the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels), `AllowAgentForwarding yes` (the `ssh -A devbox` escape hatch only - the
   container holds no private key of its own) and `MaxSessions 32` (herdr channels)
+- `container/codex-config.toml` - Codex's system config layer on the devbox, which the `Dockerfile` symlinks to
+  `/etc/codex/config.toml`: root-owned, outside the bind mount, and live without a rebuild because the link points
+  into the read-only `container/` bind mount (one rebuild creates the link). The lowest-precedence layer -
+  `~/.codex/config.toml`, a trusted project's `.codex/config.toml` and `-c`/`--sandbox` override it - so it sets
+  machine defaults only, never a guardrail (that is `~/.codex/rules/devbox.rules`): `sandbox_mode =
+  "danger-full-access"`, because Codex's Linux sandbox is bubblewrap, which needs a user namespace that Docker's
+  default seccomp profile refuses without `CAP_SYS_ADMIN` (`cap_drop: [ALL]`, `no-new-privileges`). The container is
+  the sandbox, the same footing as OMP and Claude Code here; approvals keep their default (`on-request`), so the rules
+  still prompt and forbid. The laptop gets no such file and keeps Codex's own macOS Seatbelt sandbox defaults
 - `container/skills.sh` - optional, explicitly invoked (`./bin/devbox skills`): pinned `agent-browser` CLI +
   Chrome build, then the `skill-creator` and `find-skills` skills via
   `npx skills add <github tree URL at a pinned ref> --global --agent universal claude-code --yes` - each skill
   pinned like a binary (find-skills at the tag of the skills CLI version already pinned there,
-  skill-creator at a commit) - `~/.agents/skills` for OMP, a symlink per
+  skill-creator at a commit) - `~/.agents/skills` for OMP and Codex, a symlink per
   skill in `~/.claude/skills` for Claude Code. Chrome's shared libraries are in the `Dockerfile`
   because `--with-deps` needs root. Global npm installs pass `--prefix "$HOME/.local"` per call so the bins
   stay on the bind mount; never export `NPM_CONFIG_PREFIX` - nvm then refuses to activate its default Node
 - `home/` - templates installed into `/home/dev` by bootstrap (and onto the laptop by `devbox agent install`);
   generated files, not user-edited. `home/.omp/agent/config.yml` and `home/.claude/settings.json` are the two
   agent presets, applied to both machines by `devbox sync omp` / `devbox sync claude`.
+  `home/.codex/rules/devbox.rules` is Codex's guardrail, not a preset: execpolicy `prefix_rule`s (Starlark,
+  decisions `forbidden`/`prompt`) in a file of its own that both installers rewrite on every run, so nothing is
+  seeded, merged or synced (there is no `devbox sync codex`). Codex loads every `*.rules` in `~/.codex/rules` and the
+  strictest match wins (forbidden > prompt > allow), so "always allow" clicks, which Codex writes to `default.rules`,
+  never lift a `forbidden`. Same categories as the OMP/Claude guardrail, but coarser than OMP's globs: a prefix rule
+  sees only the start of the argv, so a flag later in the line, an assignment (`GIT_CONFIG_GLOBAL=x git push`,
+  `export ...`) or a non-plain `bash -lc` script falls past it, and every Vercel/Neon invocation prompts (reads
+  included). `make lint` loads it with `codex execpolicy check` when `codex` is installed, which also runs its inline
+  match/not_match examples; to change it: edit, `make lint`, then `devbox agent install` (laptop) and `deploy` +
+  `bootstrap` (devbox).
   `home/.config/devbox/identities.conf.example` is the template for
   `~/.config/devbox/identities.conf` - the one file naming who this box is, per account and per directory
   tree. Neither installer copies it: it validates, so seeding it would hand git and every agent session the
@@ -176,22 +204,25 @@ the host's root Docker daemon.
   reader, used by `container/bootstrap.sh`, the launchers and the CLI (`di_slugs`, `di_get`, `di_for`,
   `di_check`, the `di_render_*` functions) and installed as the `devbox-identities` CLI; deliberately bash 3.2
   compatible, since the laptop-side launchers and shims run under whatever `/usr/bin/env bash` macOS provides.
-  `home/.local/libexec/devbox-agent/` holds `agent-launch`, the one body both launchers source (`omp-launcher`,
-  `claude-launcher` are three lines each): it exports `GIT_CONFIG_GLOBAL`, the SSH fence,
+  `home/.local/libexec/devbox-agent/` holds `agent-launch`, the one body the launchers source (`omp-launcher`,
+  `claude-launcher`, `codex-launcher` are three lines each): it exports `GIT_CONFIG_GLOBAL`, the SSH fence,
   `GIT_TERMINAL_PROMPT=0`, a login-less `GH_CONFIG_DIR` and `DEVBOX_ENV` (`devbox` when `/etc/devbox-env`
   exists, else `laptop`) for its own process tree only - on the laptop,
   bare `gh` would otherwise fall back to your OAuth login - and clears what the calling shell carries for
   you: an IDE terminal's askpass (`GIT_ASKPASS`, `SSH_ASKPASS`, `VSCODE_GIT_*` - it answers git with your own
   GitHub login), `GITHUB_TOKEN` and the two enterprise token variables, `SSH_AUTH_SOCK`, and the
   `GIT_AUTHOR_*`/`GIT_CONFIG_COUNT`/`GIT_CONFIG_PARAMETERS` overrides that outrank every gitconfig
-  (`GH_TOKEN` stays: the shim honours an explicit one as deliberate). Each launcher is reached as `omp`/`claude` only
+  (`GH_TOKEN` stays: the shim honours an explicit one as deliberate); `codex-launcher` also unsets `OPENAI_API_KEY`
+  and `CODEX_API_KEY`, so a key from `secrets.env` or a shell is never billed instead of the ChatGPT sign-in (as
+  `claude-launcher` drops `ANTHROPIC_API_KEY`). Each launcher is reached as `omp`/`claude`/`codex` only
   through a symlink and never as a file named after its tool, because `omp update` resolves its install
   target by looking `omp` up on the PATH and takes a plain file there over in place - it once wrote the
   release binary onto the launcher, dropping agent sessions back on the user's gitconfig and SSH keys; the
   launchers drop their own PATH entries for `update` (the exports still apply, so a misread argv stays
   fenced) so the updater lands on the real install, and the symlink confines a missed argv shape to omp's
   shebang refusal. Never put a launcher symlink in `~/.local/bin`: Claude's native install owns
-  `~/.local/bin/claude` and re-points it on every auto-update - on the devbox the symlinks live in
+  `~/.local/bin/claude` and re-points it on every auto-update, Codex's installer and `codex update` re-point
+  `~/.local/bin/codex` (on the laptop Codex may also come from Homebrew, `brew install --cask codex`) - on the devbox the symlinks live in
   `devbox-agent` itself, on the laptop in `devbox-agent/launchers`, a directory holding nothing else that
   the user puts first on the PATH. Beside them, the `gh` shim that deliberately shadows
   the real `gh` on the PATH: with `devbox-gh-token` it resolves `GH_TOKEN_<SLUG>` per invocation from the
@@ -218,7 +249,7 @@ the host's root Docker daemon.
     that from every login bash, putting the user's name and email on five agent commits, and git's lock file
     makes the directory mode the only thing that stops such a write. `home/.bash_profile` exists only to
     reassert the `PATH` order for login shells: bash prefers it over `~/.profile`, which it sources first,
-    because the distro's file prepends `~/.local/bin` *after* `~/.bashrc` and so put the real `omp`/`claude`
+    because the distro's file prepends `~/.local/bin` *after* `~/.bashrc` and so put the real `omp`/`claude`/`codex`
     ahead of the launchers in every interactive `ssh devbox`, herdr pane and `./bin/devbox shell`; `devbox.sh`
     therefore asserts the order (move to front) instead of prepending only when absent
 - `container/devbox-ports` - symlinked to `/usr/local/bin` by the `Dockerfile`, so a host edit is live
@@ -230,15 +261,18 @@ the host's root Docker daemon.
   the optional, never-seeded `~/.config/devbox/profile.json` (one object of non-empty `name`/`bio`/`tone`
   strings, read with jq; `home/.config/devbox/profile.json.example` is its template; one that does not
   validate is left out, never the machine half) - into
-  `~/.config/devbox/agent-context.md`, the `home/.agents/skills/devbox-runtime` skill into `~/.agents/skills`
-  with a `~/.claude/skills` link (only a link or nothing there is replaced), and appends one
+  `~/.config/devbox/agent-context.md`, the `home/.agents/skills/devbox-runtime` skill into `~/.agents/skills` (OMP
+  and Codex read it there) with a `~/.claude/skills` link (only a link or nothing there is replaced), appends one
   `@~/.config/devbox/agent-context.md` line to `~/.claude/CLAUDE.md` when missing - the rest of that file is
-  the user's. That one file reaches Claude Code natively and OMP through `enabledProviders: [claude]` in the
+  the user's - and links `~/.codex/AGENTS.md` to the context file when that is absent, empty or a dangling link (Codex
+  reads that one global file and expands no `@` imports; one with content is the user's, which `check` reports).
+  That one file reaches Claude Code natively and OMP through `enabledProviders: [claude]` in the
   shared preset (OMP expands the import and, unlike an `AGENTS.md`, passes it to task subagents); `check`
   prints one problem per line: stale files, an invalid profile, a missing import, `claude` absent from OMP's `enabledProviders`
   or present in `disabledProviders` (parsed with awk, no YAML tool on either machine), a non-empty
-  `~/.omp/agent/AGENTS.md` (OMP keeps one user-level context file and its own wins), and the
-  `/etc/devbox-env` marker missing on the devbox or present on the laptop. It never edits OMP's config.
+  `~/.omp/agent/AGENTS.md` (OMP keeps one user-level context file and its own wins), a `~/.codex/AGENTS.md` that is
+  not a link to the context file, a non-empty `~/.codex/AGENTS.override.md` (Codex reads it instead of `AGENTS.md`),
+  and the `/etc/devbox-env` marker missing on the devbox or present on the laptop. It never edits OMP's config.
   Bash >= 4.2 and BSD tools, since the laptop runs it under `bin/devbox`
 - `bashly-settings.yml`, `cli/` and `bin/devbox` - the one CLI for both machines. `bashly-settings.yml` points
   bashly at `cli/` and writes `bin/`; `cli/bashly.yml` declares the commands, `cli/commands/` holds their
@@ -261,7 +295,7 @@ the host's root Docker daemon.
     container (build, recreate), where `update` only upgrades the agent tools in place; `hook` restarts the `moshi-hook`
     daemon with a detached `exec` precisely so it does not have to (`--update` runs `moshi-hook update` and
     rewrites every agent's hooks first, aborting before the old daemon is stopped if the update
-    fails); `update` runs `omp update` and `claude update` (through the launchers' `update` passthrough), then
+    fails); `update` runs `omp update`, `claude update` and `codex update` (through the launchers' `update` passthrough), then
     `moshi-hook update`, `moshi-hook install` (every agent's hooks, run even when the update failed) and the
     restart, each failure counted rather than fatal and a failed `moshi-hook update` skipping the restart; `keys`
     prints every identity's installed public keys (or "not set") plus the sshd host-key
@@ -339,9 +373,9 @@ the host's root Docker daemon.
     remotely) and re-runs only `agent-context apply devbox` there - nothing else depends on the profile, so
     no bootstrap. The devbox renders with its deployed `agent-context`, so a changed script needs `deploy` first
   - `devbox agent install` - idempotent: installs the same agent git override the devbox bootstraps (`agent-launch`,
-    `omp-launcher`, `claude-launcher`, `claude-session-env`, `gh` shim, credential helper, fence,
+    `omp-launcher`, `claude-launcher`, `codex-launcher`, `claude-session-env`, `gh` shim, credential helper, fence,
     `devbox-gh-token`, `wt-herdr`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin` symlink so it answers
-    by name, the read-only *rendered* `git/agent*.gitconfig`, and `omp`/`claude` symlinks to the launchers in
+    by name, the read-only *rendered* `git/agent*.gitconfig`, and `omp`/`claude`/`codex` symlinks to the launchers in
     `~/.local/libexec/devbox-agent/launchers` - removing the pre-Claude `~/.local/bin/omp` symlink only once
     `omp` already resolves through that directory, since until the PATH line exists the old link is what
     keeps `omp` fenced), and prints the `cp` command for `~/.config/devbox/identities.conf` rather than
@@ -354,7 +388,12 @@ the host's root Docker daemon.
     a `SessionStart` hook running `claude-session-env` to `~/.claude/settings.json`: it sources `agent-launch`, runs
     the `agent_fence` both launchers run and writes its exports and unsets into the session's `CLAUDE_ENV_FILE`, which
     Claude Code runs before every Bash command - the fence and `DEVBOX_ENV=laptop` for Claude desktop app sessions no
-    launcher starts (Bash commands only); reports whether `omp` and `claude` resolve to their launchers -
+    launcher starts (Bash commands only; there is no Codex counterpart - `shell_environment_policy` could set the git
+    exports but not the `gh` shim's `PATH` and would need a TOML merge into the desktop app's `config.toml` - so sessions the ChatGPT/Codex
+    desktop app starts stay unfenced - they still read `~/.codex/AGENTS.md`, whose laptop context tells an agent with
+    an empty `DEVBOX_ENV` to stop before any git push or `gh` write, and still load the rules file; only
+    launcher-started `codex` is fenced); installs `~/.codex/rules/devbox.rules` (rewritten every run);
+    reports whether `omp`, `claude` and `codex` resolve to their launchers (`codex` not installed: "launcher ready") -
     printing the one `PATH` line for the user's shell rc until they do - and the remaining manual steps (PATs,
     App credentials); also runs `container/agent-context apply laptop` and lists its `check` failures as
     manual steps
@@ -369,9 +408,10 @@ the host's root Docker daemon.
     remote per pattern (email, signing key, `core.sshCommand`), no
     clone left on a stale SSH-alias remote or setting its own `user.name`/`user.email` (which outranks the agent author), the registry itself (`devbox-identities check`), every gitconfig
     signing via `op-ssh-sign` with the right `signing_*.pub` (the base `[user]` name/email being the default
-    identity's), the agent override installed - the static files
+    identity's), the agent override installed - the static files (`codex-launcher` and `~/.codex/rules/devbox.rules`
+    included)
     byte-identical to `home/`'s templates, the agent gitconfigs byte-identical to a fresh
-    `devbox-identities render agent-gitconfig` - with `omp` and `claude` resolving through
+    `devbox-identities render agent-gitconfig` - with `omp`, `claude` and `codex` resolving through
     `devbox-agent/launchers` symlinks (a plain file is an `omp update` takeover), the `claude-session-env`
     `SessionStart` hook present in `~/.claude/settings.json`, and
     `~/.local/bin/devbox-identities` still a symlink onto the libexec reader (the only hop that makes
@@ -384,8 +424,10 @@ the host's root Docker daemon.
     `DEVBOX_HOST` from the environment or `.push.env` - the same per-laptop value `devbox deploy` resolves,
     deliberately one name and one file rather than two - and skips that one check when it is unset. Unsets
     the launcher's exports and strips its PATH entry first, so it is meaningful from inside an agent session.
-    Also fails each `container/agent-context check laptop` problem; `doctor host` runs `check devbox` in the
-    container the same way.
+    Also fails each `container/agent-context check laptop` problem (the `~/.codex/AGENTS.md` link included); `doctor
+    host` runs `check devbox` in the container the same way, probes `codex --version`, requires `codex` to resolve to
+    its launcher through a symlink, and fails when `~/.codex/rules/devbox.rules` differs from the repo's (run
+    bootstrap) or `/etc/codex/config.toml` is missing (rebuild).
     `file_mode` (`cli/lib/machine.sh`) uses perl because BSD and GNU `stat` disagree and both can be on a macOS
     PATH
   - `devbox deploy` - rsync of an allowlist, not the tree: only `bin/`, `container/`, `home/`, `Dockerfile`,
