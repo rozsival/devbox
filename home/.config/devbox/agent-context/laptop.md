@@ -16,8 +16,8 @@ tell the user before any git push or `gh` write.
 - **Git and GitHub:** the same fence as on the devbox. git runs over HTTPS with per-repo GitHub App tokens, and SSH
   remote URLs are rewritten to HTTPS, so never change a remote URL; the user's own work uses it. Commits use the bot
   author and are unsigned. `gh` gets a scoped token, never the user's own login. Run git and `gh` from the shell tool:
-  a 403 "Resource not accessible by personal access token" or "Could not resolve to a Repository" means a call ran
-  outside the fence, not that a permission is missing (the `devbox-runtime` skill has the check).
+  on a 403 "Resource not accessible by personal access token" or "Could not resolve to a Repository", first suspect a
+  call outside the fence; `devbox-git-credential explain <owner>/<repo>` tells which (the `devbox-runtime` skill).
   Never run `gh auth login`, read the keychain, or run `op`. The user's 1Password and personal credentials are off
   limits even though they are on this machine.
 - **Docker and ports:** whatever the user runs locally. `localhost` is the laptop itself, not the devbox.
