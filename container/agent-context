@@ -29,7 +29,8 @@
 # <template-dir> is the repo's home/ (/opt/devbox/home in the container).
 #
 # ~/.config/devbox/profile.json is the user's own, optional file - who they are
-# and the tone agents should take with them (name, bio, tone; the template is
+# and the tone agents should take with them (name, nickname, pronouns,
+# job_title, birthday, bio, tone; the template is
 # home/.config/devbox/profile.json.example). Never seeded: the example's
 # placeholders would become what every session believes about the user. Absent
 # means no section; invalid means no section and a `check` problem, never a
@@ -43,7 +44,7 @@ usage() {
   exit 2
 }
 
-readonly profile_keys='name bio tone'
+readonly profile_keys='name nickname pronouns job_title birthday bio tone'
 
 # Prints why a profile is unusable and returns 1; silent for a usable one.
 # $1 the file, $2 how messages name it.
@@ -70,6 +71,9 @@ profile_problem() {
       | if ($unknown | length) > 0 then
           "unknown key \($unknown | map(@json) | join(", ")) - only \($known | join(", "))"
         elif ($bad | length) > 0 then "\($bad | join(", ")) must be a non-empty string"
+        elif .birthday != null
+          and (.birthday | test("^([0-9]{4}-)?(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$") | not) then
+          "birthday must be YYYY-MM-DD, or MM-DD to leave the year out"
         elif length == 0 then "sets none of \($known | join(", "))"
         else empty end
       end
@@ -131,11 +135,23 @@ render_context() {
   profile_problem "${profile}" "${profile_label}" >/dev/null || return 0
   jq -r '
     def trim: gsub("^\\s+|\\s+$"; "");
+    def months: ["January", "February", "March", "April", "May", "June", "July",
+      "August", "September", "October", "November", "December"];
+    # MM-DD or YYYY-MM-DD as "March 14" or "March 14, 1985": unambiguous to read.
+    def day: split("-") | map(tonumber) as $p
+      | if ($p | length) == 3 then "\(months[$p[1] - 1]) \($p[2]), \($p[0])"
+        else "\(months[$p[0] - 1]) \($p[1])" end;
     "",
     "## The user",
     "",
     "<!-- Rendered from ~/.config/devbox/profile.json; edit it on the laptop and run devbox sync profile, not this file. -->",
-    (if .name then "", "Their name is \(.name | trim)." else empty end),
+    ([
+      (if .name then "Their name is \(.name | trim)." else empty end),
+      (if .nickname then "Address them as \(.nickname | trim)." else empty end),
+      (if .pronouns then "Their pronouns are \(.pronouns | trim)." else empty end),
+      (if .job_title then "Their job title is \(.job_title | trim)." else empty end),
+      (if .birthday then "Their birthday is \(.birthday | day)." else empty end)
+    ] | if length > 0 then "", join(" ") else empty end),
     (if .bio then "", "### About them", "", (.bio | trim) else empty end),
     (if .tone then
       "", "### Tone",

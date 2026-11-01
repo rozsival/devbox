@@ -269,8 +269,9 @@ the host's root Docker daemon.
   in place (never installed) by bootstrap, `devbox agent install`, `devbox sync profile` and both doctors:
   tells every agent session which machine it runs on and who the user is.
   `apply` renders the side's `home/.config/devbox/agent-context/<side>.md` - plus a `## The user` section from
-  the optional, never-seeded `~/.config/devbox/profile.json` (one object of non-empty `name`/`bio`/`tone`
-  strings, read with jq; `home/.config/devbox/profile.json.example` is its template; one that does not
+  the optional, never-seeded `~/.config/devbox/profile.json` (one object of non-empty `name`/`nickname`/`pronouns`/
+  `job_title`/`birthday`/`bio`/`tone` strings, `birthday` as `YYYY-MM-DD` or `MM-DD`, read with jq;
+  `home/.config/devbox/profile.json.example` is its template; one that does not
   validate is left out, never the machine half) - into
   `~/.config/devbox/agent-context.md`, the `home/.agents/skills/devbox-runtime` skill into `~/.agents/skills` (OMP
   and Codex read it there) with a `~/.claude/skills` link (only a link or nothing there is replaced), appends one

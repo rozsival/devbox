@@ -207,9 +207,10 @@ commands:
         help: |-
           Apply your profile to the agent context on this laptop and the devbox
 
-          Validates ~/.config/devbox/profile.json (name, bio, tone), re-renders
-          the laptop's ~/.config/devbox/agent-context.md with it, copies it to
-          the devbox (keeping one profile.json.bak there) and re-renders there.
+          Validates ~/.config/devbox/profile.json (who you are and the tone
+          agents take), re-renders the laptop's ~/.config/devbox/agent-context.md
+          with it, copies it to the devbox (keeping one profile.json.bak there)
+          and re-renders there.
         filters: [laptop]
         dependencies:
           jq: brew install jq

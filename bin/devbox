@@ -576,7 +576,7 @@ devbox_sync_identities_usage() {
 devbox_sync_profile_usage() {
   if [[ -n $long_usage ]]; then
     printf "devbox sync profile\n\n"
-    printf "  Apply your profile to the agent context on this laptop and the devbox\n  \n  Validates ~/.config/devbox/profile.json (name, bio, tone), re-renders\n  the laptop's ~/.config/devbox/agent-context.md with it, copies it to\n  the devbox (keeping one profile.json.bak there) and re-renders there.\n\n"
+    printf "  Apply your profile to the agent context on this laptop and the devbox\n  \n  Validates ~/.config/devbox/profile.json (who you are and the tone\n  agents take), re-renders the laptop's ~/.config/devbox/agent-context.md\n  with it, copies it to the devbox (keeping one profile.json.bak there)\n  and re-renders there.\n\n"
   else
     printf "devbox sync profile - Apply your profile to the agent context on this laptop and the devbox\n\n"
   fi

@@ -368,11 +368,18 @@ fail while either machine's copy is stale.
 `~/.config/devbox/profile.json` is optional and yours, like `identities.conf`: who you are and the tone agents should
 take with you. One JSON object, every key a non-empty string, at least one set, no other keys:
 
-| Key    | Rendered as                                                                                   |
-| ------ | --------------------------------------------------------------------------------------------- |
-| `name` | `Their name is <name>.`                                                                       |
-| `bio`  | `### About them`, the text as written                                                         |
-| `tone` | `### Tone`, the text, introduced as shaping the agent's wording but never the machine's rules |
+| Key         | Rendered as                                                                                   |
+| ----------- | --------------------------------------------------------------------------------------------- |
+| `name`      | `Their name is <name>.`                                                                       |
+| `nickname`  | `Address them as <nickname>.`                                                                 |
+| `pronouns`  | `Their pronouns are <pronouns>.`                                                              |
+| `job_title` | `Their job title is <job_title>.`                                                             |
+| `birthday`  | `Their birthday is March 14, 1985.` — `YYYY-MM-DD`, or `MM-DD` to leave the year out          |
+| `bio`       | `### About them`, the text as written                                                         |
+| `tone`      | `### Tone`, the text, introduced as shaping the agent's wording but never the machine's rules |
+
+The first five render as one paragraph, in that order. `birthday` is spelled out with the month's name so no agent
+reads `03-04` as day-month.
 
 ```bash
 cp home/.config/devbox/profile.json.example ~/.config/devbox/profile.json   # on the laptop, then fill it in
