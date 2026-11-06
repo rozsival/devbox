@@ -92,7 +92,7 @@ checked by `devbox doctor laptop` against a fresh `devbox-identities render …`
 
 `<dir>` is any directory: the devbox uses `~/.config/devbox/git`, dotfiles `~/.config/git/identities`.
 
-`devbox-identities org-urls work` prints the three `hasconfig:` patterns for `work`'s `orgs`;
+`devbox-identities org-urls work` prints the four `hasconfig:` patterns for `work`'s `orgs`;
 `devbox-identities render user-gitconfig work` / `render org-gitconfig work` print the two files' content -
 `org-<slug>.gitconfig` is the only one carrying `core.sshCommand`, so the ssh tag follows the repository's
 owner, not the tree it was cloned into.

@@ -103,7 +103,7 @@ a bad edit costs configuration, never SSH access.
 | `devbox-identities for <dir>`                     | Inspect the resolved registry — who owns a directory                                         |
 | `devbox-identities get <slug> <field>`            | Inspect the resolved registry — one field                                                    |
 | `devbox-identities show <slug>`                   | Inspect the resolved registry — every resolved field for an identity                         |
-| `devbox-identities org-urls <slug>`               | Inspect the resolved registry — the three `hasconfig:` patterns for an identity's `orgs`     |
+| `devbox-identities org-urls <slug>`               | Inspect the resolved registry — the four `hasconfig:` patterns for an identity's `orgs`      |
 | `devbox-identities alias-remotes`                 | Inspect the resolved registry — old clones left on a `git@<slug>.<host>:` remote             |
 | `devbox-identities local-user-overrides`          | Inspect the resolved registry — clones whose own `.git/config` sets `user.name`/`user.email` |
 | `devbox-identities render ssh-config`             | Print exactly what `bootstrap` installs                                                      |
@@ -131,10 +131,10 @@ and pick the right identity, both live from the very first clone:
   whose key differs from the plain one gets a tag (`devbox-identities get work tag`; empty means no tag, and none
   needed).
 - **Which author and signing key sign it.** `~/.gitconfig`'s `includeIf "hasconfig:remote.*.url:<pattern>"` (one per URL
-  form git accepts for a GitHub remote — `git@github.com:<org>/**`, `ssh://git@github.com/<org>/**`,
-  `https://github.com/<org>/**`, from `devbox-identities org-urls work`) loads `org-work.gitconfig`. `hasconfig:`
-  matches the remote URL the clone itself writes, before the first fetch — unlike `includeIf gitdir:`, which only starts
-  matching once the directory already exists.
+  form git accepts for a GitHub remote — `git@github.com:<org>/**`, `git@github.com:/<org>/**` (the form JetBrains IDEs
+  clone with), `ssh://git@github.com/<org>/**`, `https://github.com/<org>/**`, from `devbox-identities org-urls work`)
+  loads `org-work.gitconfig`. `hasconfig:` matches the remote URL the clone itself writes, before the first fetch —
+  unlike `includeIf gitdir:`, which only starts matching once the directory already exists.
 - Matching is exact text, case-sensitive: `orgs = your-org` in `identities.conf` must be spelled exactly as GitHub
   spells the owner (`ApiTreeCZ`, not `apitreecz`).
 - Directory-independent: an org's repository gets that org's identity wherever it is cloned to. The `dir` prefix only
@@ -500,7 +500,7 @@ not theoretical. A `Match … tagged` block is the only thing that overrides it.
 The laptop side of the _manual_ identity isn't installed by this repo either — it's your own `~/.gitconfig` — but
 `devbox doctor laptop` holds it to the same layout the devbox bootstraps: a base `[user]` that is the default
 identity's, since every repository no include claims commits as it, one `includeIf "gitdir:…"` per tree (author and
-signing key only — the SSH key follows the repository's owner, not the tree), and one triple of
+signing key only — the SSH key follows the repository's owner, not the tree), and one set of four
 `includeIf "hasconfig:remote.*.url:…"` per identity with `orgs` (author, signing key, and the ssh tag):
 
 ```
@@ -513,11 +513,12 @@ user.signingkey = ~/.ssh/signing_personal.pub
 gpg.ssh.allowedSignersFile = ~/.ssh/allowed_signers
 includeIf "gitdir:~/projects/work/"                                 → user-work.gitconfig ([user] only)
 includeIf "hasconfig:remote.*.url:git@github.com:your-org/**"       → org-work.gitconfig
+includeIf "hasconfig:remote.*.url:git@github.com:/your-org/**"      → org-work.gitconfig
 includeIf "hasconfig:remote.*.url:ssh://git@github.com/your-org/**" → org-work.gitconfig
 includeIf "hasconfig:remote.*.url:https://github.com/your-org/**"   → org-work.gitconfig
 ```
 
-`devbox-identities org-urls work` prints the three patterns for an identity's `orgs`;
+`devbox-identities org-urls work` prints the four patterns for an identity's `orgs`;
 `devbox-identities render org-gitconfig work` prints the file they point at — any path; the devbox keeps them in
 `~/.config/devbox/git/`, dotfiles in `~/.config/git/identities/`, both named `org-<slug>.gitconfig`:
 

@@ -227,12 +227,16 @@ di_host_default() {
 
 # Every remote URL an identity's orgs claim, as `hasconfig:remote.*.url:`
 # patterns. Matched as text and case-sensitively, so one per form git accepts
-# for a GitHub remote, spelled as GitHub spells the owner (docs/git.md).
+# for a GitHub remote, spelled as GitHub spells the owner (docs/git.md). The
+# scp form also with a slash after the colon: JetBrains IDEs clone that way,
+# GitHub serves it, and without its own pattern such a clone pushes with the
+# default identity's key.
 di_org_urls() {
   local slug="$1" host org
   host="$(di_get "${slug}" host)"
   for org in $(di_get "${slug}" orgs); do
     printf 'git@%s:%s/**\n' "${host}" "${org}"
+    printf 'git@%s:/%s/**\n' "${host}" "${org}"
     printf 'ssh://git@%s/%s/**\n' "${host}" "${org}"
     printf 'https://%s/%s/**\n' "${host}" "${org}"
   done
