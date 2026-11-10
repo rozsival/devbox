@@ -7,9 +7,9 @@
 # this one first (`make fmt`; `dot doctor` flags any difference), or the sync replaces it.
 modelRoles:
   default: anthropic/claude-opus-5-5:medium
-  advisor: anthropic/claude-fable-5-1:high
+  advisor: anthropic/claude-fable-5-2:medium
   task: anthropic/claude-sonnet-5-5:high
-  plan: anthropic/claude-opus-5-5:high
+  plan: anthropic/claude-fable-5-2:high
   commit: anthropic/claude-haiku-5-5:medium
   smol: anthropic/claude-haiku-5-5:medium
   tiny: anthropic/claude-haiku-5-5:low
@@ -18,7 +18,7 @@ modelRoles:
 symbolPreset: unicode
 theme:
   dark: titanium
-setupVersion: 2
+setupVersion: 3
 memory:
   backend: mnemopi
 autolearn:
@@ -58,6 +58,8 @@ github:
   enabled: true
 tier:
   advisor: none
+update:
+  auto: false
 
 # `secrets.enabled` obfuscates any API key found in the environment - from
 # ~/.config/devbox/secrets.env or a project .env - before it can reach a provider.
