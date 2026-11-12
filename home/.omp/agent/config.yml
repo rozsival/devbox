@@ -20,7 +20,7 @@ theme:
   dark: titanium
 setupVersion: 3
 memory:
-  backend: mnemopi
+  backend: 'off'
 autolearn:
   enabled: false
   autoContinue: false
@@ -31,8 +31,6 @@ display:
   showTokenUsage: true
 checkpoint:
   enabled: true
-mnemopi:
-  scoping: per-project-tagged
 power:
   sleepPrevention: idle
 features:
