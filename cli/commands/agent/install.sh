@@ -198,7 +198,8 @@ install -m 644 "${TEMPLATE_DIR}/.codex/rules/devbox.rules" "${HOME}/.codex/rules
 # Which machine this is, for every agent session: the laptop template as
 # ~/.config/devbox/agent-context.md, one import line appended to your
 # ~/.claude/CLAUDE.md (Claude Code reads it, and OMP with `claude` in its
-# enabledProviders), a ~/.codex/AGENTS.md link to it for Codex, and the
+# enabledProviders), a copy of that file with its imports expanded as
+# ~/.codex/AGENTS.md for Codex, and the
 # devbox-runtime skill. What it cannot fix - OMP's own config, a shadowing
 # ~/.omp/agent/AGENTS.md, a ~/.codex/AGENTS.md of your own - is listed below.
 agent_context="${REPO_ROOT}/container/agent-context"

@@ -188,8 +188,9 @@ And it tells laptop agents where they run (`container/agent-context apply laptop
 `~/.claude/skills` (Claude Code; Codex reads `~/.agents/skills` directly), and appends one `@~/.config/devbox/agent-context.md` line to `~/.claude/CLAUDE.md`. Claude Code reads
 that file natively. OMP reads it only with `claude` in `enabledProviders`, which the shared preset sets and
 `./bin/devbox sync omp` applies to an existing config, and only while no `~/.omp/agent/AGENTS.md` shadows it. Codex reads
-no `@` imports, so the same run links `~/.codex/AGENTS.md` to the file - only when that is absent, empty or a dangling
-link; a file of yours with content is left alone and listed as a manual step, as is a non-empty
+no `@` imports, so the same run writes `~/.codex/AGENTS.md` as a copy of `~/.claude/CLAUDE.md` with its imports
+expanded - re-run it after editing `CLAUDE.md` or a file it imports; a file of yours without the marker comment is left
+alone and listed as a manual step, as is a non-empty
 `~/.codex/AGENTS.override.md`, which shadows it. Launcher and Claude desktop app sessions also get `DEVBOX_ENV=laptop`. On a dotfiles laptop where `~/.claude/CLAUDE.md` is a symlink, the line lands in
 the dotfiles repo: commit it there.
 

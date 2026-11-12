@@ -164,8 +164,8 @@ the host's root Docker daemon.
   pane; in the user file because Moshi's check reads only that one, and §15's `moshi-hook install` runs without the
   terminal its own offer needs; a server already running needs `codex app-server daemon stop` once);
   then the agent context (`container/agent-context apply devbox`, below), its `check` failures - the image
-  lacking `/etc/devbox-env`, OMP's config not reading `~/.claude/CLAUDE.md`, a `~/.codex/AGENTS.md` that is not the
-  link, a non-empty `~/.codex/AGENTS.override.md` - registered as manual actions;
+  lacking `/etc/devbox-env`, OMP's config not reading `~/.claude/CLAUDE.md`, a `~/.codex/AGENTS.md` of the user's
+  own, a non-empty `~/.codex/AGENTS.override.md` - registered as manual actions;
   15 `moshi-hook` plus its hooks for every agent whose config directory exists (an unscoped `moshi-hook install`,
   which creates none - Codex's land in `~/.codex/hooks.json` once `~/.codex` exists); 16 the printed manual checklist
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
@@ -276,14 +276,16 @@ the host's root Docker daemon.
   `~/.config/devbox/agent-context.md`, the `home/.agents/skills/devbox-runtime` skill into `~/.agents/skills` (OMP
   and Codex read it there) with a `~/.claude/skills` link (only a link or nothing there is replaced), appends one
   `@~/.config/devbox/agent-context.md` line to `~/.claude/CLAUDE.md` when missing - the rest of that file is
-  the user's - and links `~/.codex/AGENTS.md` to the context file when that is absent, empty or a dangling link (Codex
-  reads that one global file and expands no `@` imports; one with content is the user's, which `check` reports).
+  the user's - and writes `~/.codex/AGENTS.md` as a copy of that `CLAUDE.md` with its whole-line `@` imports
+  expanded (Codex reads that one global file and expands no imports), so whatever the user adds to `CLAUDE.md`
+  reaches Codex after the next run. The copy starts with a marker comment: only a file with it, the link earlier
+  versions made, or an absent or empty one is rewritten; any other holds the user's own text, which `check` reports.
   That one file reaches Claude Code natively and OMP through `enabledProviders: [claude]` in the
   shared preset (OMP expands the import and, unlike an `AGENTS.md`, passes it to task subagents); `check`
   prints one problem per line: stale files, an invalid profile, a missing import, `claude` absent from OMP's `enabledProviders`
   or present in `disabledProviders` (parsed with awk, no YAML tool on either machine), a non-empty
   `~/.omp/agent/AGENTS.md` (OMP keeps one user-level context file and its own wins), a `~/.codex/AGENTS.md` that is
-  not a link to the context file, a non-empty `~/.codex/AGENTS.override.md` (Codex reads it instead of `AGENTS.md`),
+  stale or the user's own, a non-empty `~/.codex/AGENTS.override.md` (Codex reads it instead of `AGENTS.md`),
   and the `/etc/devbox-env` marker missing on the devbox or present on the laptop. It never edits OMP's config.
   Bash >= 4.2 and BSD tools, since the laptop runs it under `bin/devbox`
 - `bashly-settings.yml`, `cli/` and `bin/devbox` - the one CLI for both machines. `bashly-settings.yml` points
@@ -436,7 +438,7 @@ the host's root Docker daemon.
     `DEVBOX_HOST` from the environment or `.push.env` - the same per-laptop value `devbox deploy` resolves,
     deliberately one name and one file rather than two - and skips that one check when it is unset. Unsets
     the launcher's exports and strips its PATH entry first, so it is meaningful from inside an agent session.
-    Also fails each `container/agent-context check laptop` problem (the `~/.codex/AGENTS.md` link included); `doctor
+    Also fails each `container/agent-context check laptop` problem (the `~/.codex/AGENTS.md` copy included); `doctor
     host` runs `check devbox` in the container the same way, probes `codex --version`, requires `codex` to resolve to
     its launcher through a symlink, and fails when `~/.codex/rules/devbox.rules` differs from the repo's (run
     bootstrap) or `/etc/codex/config.toml` is missing (rebuild).

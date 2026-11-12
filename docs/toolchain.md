@@ -342,9 +342,11 @@ on the devbox, or the user's own credentials on the laptop. Three pieces, each i
 | `~/.config/devbox/agent-context.md`       | A short, always-loaded summary for this machine: what is there, what is missing, what not to try. Rendered on every run from `home/.config/devbox/agent-context/{devbox,laptop}.md`, plus a section about you from `~/.config/devbox/profile.json` when that exists ([below](#about-you-profilejson))          |
 | `devbox-runtime` skill                    | How-tos for both machines (missing tools, Docker, ports for the user, secrets, git and `gh` failures), from `home/.agents/skills/devbox-runtime`: copied to `~/.agents/skills`, which OMP and Codex read, and linked from `~/.claude/skills`                                                                   |
 | `@~/.config/devbox/agent-context.md` line | Appended once to `~/.claude/CLAUDE.md`; the rest of that file stays yours (a dotfiles symlink is written through)                                                                                                                                                                                              |
-| `~/.codex/AGENTS.md` link                 | A symlink to `~/.config/devbox/agent-context.md`, for Codex, which reads that one global file and expands no `@` imports. Made only when `AGENTS.md` is absent, empty or a dangling link: a file with content is yours                                                                                         |
+| `~/.codex/AGENTS.md`                      | A copy of `~/.claude/CLAUDE.md` with its `@` imports expanded, for Codex, which reads that one global file and expands no imports. Rewritten on every run; a file without the marker comment on its first line is yours and left alone                                                                         |
 
-One file reaches every session. Claude Code reads `~/.claude/CLAUDE.md` natively and Codex reads `~/.codex/AGENTS.md`.
+One file reaches every session: `~/.claude/CLAUDE.md`, so what you add to it - your own instructions, more imports -
+reaches all three agents. Claude Code reads it natively and Codex reads the copy in `~/.codex/AGENTS.md`, which is as
+fresh as the last `bootstrap` or `agent install`; both doctors report a stale one.
 OMP reads the former because the shared preset lists `claude` under `enabledProviders`; OMP also expands the `@` import
 there and, unlike an `AGENTS.md`, hands it to task subagents. Two conditions in OMP's own config can still hide it, so
 both doctors and both installers report them rather than edit that file:

@@ -396,12 +396,12 @@ doctor_laptop() {
   # Which machine an agent believes it is on comes from these files, not from
   # the launcher alone: the laptop template imported through ~/.claude/CLAUDE.md,
   # which OMP reads only with `claude` in its enabledProviders and only while no
-  # ~/.omp/agent/AGENTS.md shadows it, linked as ~/.codex/AGENTS.md for Codex,
+  # ~/.omp/agent/AGENTS.md shadows it, copied with its imports expanded to ~/.codex/AGENTS.md for Codex,
   # plus the devbox-runtime skill.
   log_info 'agent context'
   local agent_context_out line
   if agent_context_out="$("${BASH}" "${REPO_ROOT}/container/agent-context" check laptop "${TEMPLATE_DIR}" 2>&1)"; then
-    log_success 'agent context current: ~/.config/devbox/agent-context.md (laptop), imported by ~/.claude/CLAUDE.md, read by OMP, linked as ~/.codex/AGENTS.md, devbox-runtime skill'
+    log_success 'agent context current: ~/.config/devbox/agent-context.md (laptop), imported by ~/.claude/CLAUDE.md, read by OMP, copied to ~/.codex/AGENTS.md, devbox-runtime skill'
   else
     while IFS= read -r line; do
       [[ -z ${line} ]] || fail "agent context: ${line}"

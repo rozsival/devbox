@@ -233,8 +233,8 @@ match:
   `~/.claude/settings.json` when that has no `permissions.deny` (needs `jq`; see [Toolchain](toolchain.md#-claude-code))
 - a `SessionStart` hook in `~/.claude/settings.json` that fences Claude desktop app sessions the way the launcher fences
   terminal ones ([Git Identities](git.md#claude-desktop-app))
-- the Codex guardrail, `~/.codex/rules/devbox.rules` (execpolicy rules, rewritten every run), and a `~/.codex/AGENTS.md`
-  link to the agent context when that file is absent, empty or a dangling link
+- the Codex guardrail, `~/.codex/rules/devbox.rules` (execpolicy rules, rewritten every run), and `~/.codex/AGENTS.md`, a
+  copy of `~/.claude/CLAUDE.md` with its imports expanded, unless that file holds text of your own
 
 `identities.conf` is never created for you — it prints the `cp` command instead, so placeholder values can never become
 your agent's author. Idempotent: regenerates generated files, keeps `secrets.env` and `identities.conf`, touches nothing

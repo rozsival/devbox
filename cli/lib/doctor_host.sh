@@ -242,7 +242,7 @@ doctor_host() {
   local agent_context_out context_line
   if agent_context_out="$(compose exec -T "${SERVICE}" \
     bash /opt/devbox/container/agent-context check devbox /opt/devbox/home 2>&1)"; then
-    log_success 'agent context current (devbox): marker, ~/.config/devbox/agent-context.md, CLAUDE.md import, OMP reads it, ~/.codex/AGENTS.md link, devbox-runtime skill'
+    log_success 'agent context current (devbox): marker, ~/.config/devbox/agent-context.md, CLAUDE.md import, OMP reads it, ~/.codex/AGENTS.md copy, devbox-runtime skill'
   else
     while IFS= read -r context_line; do
       [[ -z "${context_line}" ]] || fail "agent context: ${context_line}"
