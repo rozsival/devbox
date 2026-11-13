@@ -162,7 +162,10 @@ the host's root Docker daemon.
   when `~/.codex/config.toml` does not mention it, `codex features disable daemon_auto_start` (Codex's shared
   background server keeps the environment of the pane that first started it, so Moshi pins every session to that
   pane; in the user file because Moshi's check reads only that one, and §15's `moshi-hook install` runs without the
-  terminal its own offer needs; a server already running needs `codex app-server daemon stop` once);
+  terminal its own offer needs; a server already running needs `codex app-server daemon stop` once) and, when
+  `codex features list` reports memories on, `codex features disable memories` (removes the enable from the user
+  file, which outranks the system layer's `memories = false`; `devbox agent install` does the same on the laptop,
+  which has no system layer);
   then the agent context (`container/agent-context apply devbox`, below), its `check` failures - the image
   lacking `/etc/devbox-env`, OMP's config not reading `~/.claude/CLAUDE.md`, a `~/.codex/AGENTS.md` of the user's
   own, a non-empty `~/.codex/AGENTS.override.md` - registered as manual actions;
@@ -179,7 +182,9 @@ the host's root Docker daemon.
   "danger-full-access"`, because Codex's Linux sandbox is bubblewrap, which needs a user namespace that Docker's
   default seccomp profile refuses without `CAP_SYS_ADMIN` (`cap_drop: [ALL]`, `no-new-privileges`). The container is
   the sandbox, the same footing as OMP and Claude Code here; approvals keep their default (`on-request`), so the rules
-  still prompt and forbid. The laptop gets no such file and keeps Codex's own macOS Seatbelt sandbox defaults
+  still prompt and forbid; and `[features] memories = false`, no agent keeping a memory store of its own (OMP's preset
+  sets `memory.backend: 'off'`, Claude Code's `autoMemoryEnabled: false`). The laptop gets no such file and keeps
+  Codex's own macOS Seatbelt sandbox defaults
 - `container/skills.sh` - optional, explicitly invoked (`./bin/devbox skills`): pinned `agent-browser` CLI +
   Chrome build, then the `skill-creator` and `find-skills` skills via
   `npx skills add <github tree URL at a pinned ref> --global --agent universal claude-code --yes` - each skill
@@ -265,14 +270,10 @@ the host's root Docker daemon.
     therefore asserts the order (move to front) instead of prepending only when absent
 - `container/devbox-ports` - symlinked to `/usr/local/bin` by the `Dockerfile`, so a host edit is live
   without a rebuild; mirrors published project ports onto the container's own `127.0.0.1`
-- `container/agent-context` - `apply|check devbox|laptop <template-dir>` (plus `validate-profile <file>`), run
-  in place (never installed) by bootstrap, `devbox agent install`, `devbox sync profile` and both doctors:
-  tells every agent session which machine it runs on and who the user is.
-  `apply` renders the side's `home/.config/devbox/agent-context/<side>.md` - plus a `## The user` section from
-  the optional, never-seeded `~/.config/devbox/profile.json` (one object of non-empty `name`/`nickname`/`pronouns`/
-  `job_title`/`birthday`/`bio`/`tone` strings, `birthday` as `YYYY-MM-DD` or `MM-DD`, read with jq;
-  `home/.config/devbox/profile.json.example` is its template; one that does not
-  validate is left out, never the machine half) - into
+- `container/agent-context` - `apply|check devbox|laptop <template-dir>`, run
+  in place (never installed) by bootstrap, `devbox agent install` and both doctors:
+  tells every agent session which machine it runs on.
+  `apply` renders the side's `home/.config/devbox/agent-context/<side>.md` into
   `~/.config/devbox/agent-context.md`, the `home/.agents/skills/devbox-runtime` skill into `~/.agents/skills` (OMP
   and Codex read it there) with a `~/.claude/skills` link (only a link or nothing there is replaced), appends one
   `@~/.config/devbox/agent-context.md` line to `~/.claude/CLAUDE.md` when missing - the rest of that file is
@@ -282,7 +283,7 @@ the host's root Docker daemon.
   versions made, or an absent or empty one is rewritten; any other holds the user's own text, which `check` reports.
   That one file reaches Claude Code natively and OMP through `enabledProviders: [claude]` in the
   shared preset (OMP expands the import and, unlike an `AGENTS.md`, passes it to task subagents); `check`
-  prints one problem per line: stale files, an invalid profile, a missing import, `claude` absent from OMP's `enabledProviders`
+  prints one problem per line: stale files, a missing import, `claude` absent from OMP's `enabledProviders`
   or present in `disabledProviders` (parsed with awk, no YAML tool on either machine), a non-empty
   `~/.omp/agent/AGENTS.md` (OMP keeps one user-level context file and its own wins), a `~/.codex/AGENTS.md` that is
   stale or the user's own, a non-empty `~/.codex/AGENTS.override.md` (Codex reads it instead of `AGENTS.md`),
@@ -294,7 +295,7 @@ the host's root Docker daemon.
   generated, committed result. Commands by group:
   - **Workstation** (Linux host outside a container only): `env`, `start`, `stop`, `rebuild`, `bootstrap`,
     `skills`, `shell`, `sessions`, `logs`, `hook`, `update`, `keys`, `docker setup`
-  - **Laptop** (macOS only): `deploy`, `sync omp`, `sync claude`, `sync identities`, `sync profile`, `agent install`
+  - **Laptop** (macOS only): `deploy`, `sync omp`, `sync claude`, `sync identities`, `agent install`
   - **Both**: `install`, `doctor` (`host` or `laptop`, defaulting to the side the machine is), `completions
     [bash|zsh]` (the `[host]` of `deploy`/`sync` completes from `~/.ssh/config`)
 
@@ -382,10 +383,6 @@ the host's root Docker daemon.
     file catches up; validates locally with `devbox-identities check` first, the same reader that runs on both
     sides, so a broken registry never becomes the one the devbox boots from. `sync` host: argument, then
     `DEVBOX_SSH_HOST` (environment or `.push.env`), then `devbox`
-  - `devbox sync profile` - validates `~/.config/devbox/profile.json` (`agent-context validate-profile`),
-    re-renders the laptop's agent context with it, copies it into the devbox (one `profile.json.bak` kept
-    remotely) and re-runs only `agent-context apply devbox` there - nothing else depends on the profile, so
-    no bootstrap. The devbox renders with its deployed `agent-context`, so a changed script needs `deploy` first
   - `devbox agent install` - idempotent: installs the same agent git override the devbox bootstraps (`agent-launch`,
     `omp-launcher`, `claude-launcher`, `codex-launcher`, `claude-session-env`, `gh` shim, `fenced/git` shim, credential helper, fence,
     `devbox-gh-token`, `wt-herdr`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin` symlink so it answers

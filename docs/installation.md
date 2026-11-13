@@ -140,7 +140,7 @@ same on the workstation, so from then on `devbox <TAB>` works in any new shell o
 `Dockerfile`, `docker-compose.yml`, `.env.example`), not `docs/` or the agent skills.
 
 `.push.env` (gitignored) holds `DEVBOX_HOST`, the default for `deploy`'s `<workstation>` argument, and optionally
-`DEVBOX_SSH_HOST`, the `~/.ssh/config` host every `sync` (`omp`, `claude`, `identities`, `profile`) uses for the container
+`DEVBOX_SSH_HOST`, the `~/.ssh/config` host every `sync` (`omp`, `claude`, `identities`) uses for the container
 (default `devbox`).
 
 `env` creates `.env` from `.env.example`: `BIND_ADDR` from `tailscale ip -4`, `HOST_UID`/`HOST_GID` from `dev` (else

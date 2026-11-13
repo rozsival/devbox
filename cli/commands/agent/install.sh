@@ -195,6 +195,22 @@ fi
 install -d -m 755 "${HOME}/.codex/rules"
 install -m 644 "${TEMPLATE_DIR}/.codex/rules/devbox.rules" "${HOME}/.codex/rules/devbox.rules"
 
+# No Codex memories, as OMP (memory.backend: off) and Claude Code
+# (autoMemoryEnabled: false) have none through their presets: what an agent
+# should know lives in ~/.claude/CLAUDE.md, not in a store of its own. The
+# laptop has no Codex system layer to set it in (/etc/codex needs root), so an
+# enable in ~/.codex/config.toml - the desktop app's Settings toggle writes one
+# - is removed, leaving Codex's default, off. Only when the effective value is
+# on: `disable` deletes the key, so an explicit `memories = false` would go too.
+codex_real="$(real_agent_binary codex)"
+if [[ -n ${codex_real} ]] && [[ "$("${codex_real}" features list 2>/dev/null | awk '$1 == "memories" { print $NF }')" == true ]]; then
+  if "${codex_real}" features disable memories >/dev/null 2>&1; then
+    log_success 'Turned off Codex memories in ~/.codex/config.toml.'
+  else
+    log_warn "Could not turn off Codex memories; run 'codex features disable memories'."
+  fi
+fi
+
 # Which machine this is, for every agent session: the laptop template as
 # ~/.config/devbox/agent-context.md, one import line appended to your
 # ~/.claude/CLAUDE.md (Claude Code reads it, and OMP with `claude` in its
@@ -209,25 +225,12 @@ else
   log_warn "Installing the agent context failed: ${agent_context_out}"
 fi
 agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_DIR}" 2>&1 || true)"
-# Optional, so a hint rather than a manual step; never seeded, since the
-# example's placeholders would become what every session believes about you.
-[[ -e ${CONFIG_DIR}/profile.json ]] ||
-  log_info "Optional: tell agents who you are and the tone to take - cp ${TEMPLATE_DIR}/.config/devbox/profile.json.example ${CONFIG_DIR}/profile.json, fill it in, then ./bin/devbox sync profile"
 
 # -- Report ---------------------------------------------------------------------
 log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,codex-launcher,claude-session-env,gh,fenced/git,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude,codex}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only), ~/.codex/rules/devbox.rules"
 path_fix=${legacy_kept}
 for agent in "${AGENTS[@]}"; do
-  # Same rule as the launcher: the real binary is the first PATH entry that does
-  # not resolve to the launcher script, so this also holds when run from inside
-  # an agent session.
-  real=''
-  IFS=: read -ra path_dirs <<<"${PATH}"
-  for dir in "${path_dirs[@]}"; do
-    [[ -f ${dir}/${agent} && -x ${dir}/${agent} && ! ${dir}/${agent} -ef "${AGENT_DIR}/${agent}-launcher" ]] || continue
-    real="${dir}/${agent}"
-    break
-  done
+  real="$(real_agent_binary "${agent}")"
   if [[ -z ${real} ]]; then
     log_info "${agent} is not installed - its launcher is ready and takes over once it is."
   elif resolved="$(command -v "${agent}" 2>/dev/null)" && [[ ${resolved} -ef "${AGENT_DIR}/${agent}-launcher" ]]; then

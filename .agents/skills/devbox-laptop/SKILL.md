@@ -182,9 +182,7 @@ sign-in, and passes `--no-daemon`, so a session never attaches to a shared backg
 (that server's environment, not the fence, would apply).
 
 And it tells laptop agents where they run (`container/agent-context apply laptop`). It installs the laptop template as
-`~/.config/devbox/agent-context.md` - with a `## The user` section appended from the optional
-`~/.config/devbox/profile.json` (`name`, `nickname`, `pronouns`, `job_title`, `birthday`, `bio`, `tone`; never seeded,
-`./bin/devbox sync profile` pushes it to the devbox) - plus the `devbox-runtime` skill in `~/.agents/skills` with a link in
+`~/.config/devbox/agent-context.md` - plus the `devbox-runtime` skill in `~/.agents/skills` with a link in
 `~/.claude/skills` (Claude Code; Codex reads `~/.agents/skills` directly), and appends one `@~/.config/devbox/agent-context.md` line to `~/.claude/CLAUDE.md`. Claude Code reads
 that file natively. OMP reads it only with `claude` in `enabledProviders`, which the shared preset sets and
 `./bin/devbox sync omp` applies to an existing config, and only while no `~/.omp/agent/AGENTS.md` shadows it. Codex reads

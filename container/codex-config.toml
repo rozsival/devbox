@@ -14,3 +14,12 @@
 # and Claude Code here, which run commands unsandboxed too. Approvals keep
 # their default: the execpolicy rules still prompt and forbid.
 sandbox_mode = "danger-full-access"
+
+# No local memories, as OMP (memory.backend: off) and Claude Code
+# (autoMemoryEnabled: false) have none through their presets: what an agent
+# should know lives in ~/.claude/CLAUDE.md, not in a store of its own. Off is
+# Codex's default today; set here so a changed default does not turn it on.
+# bootstrap removes an enable from ~/.codex/config.toml, which would outrank
+# this.
+[features]
+memories = false

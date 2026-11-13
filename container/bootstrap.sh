@@ -618,6 +618,19 @@ if [[ -x "${HOME_DIR}/.local/bin/codex" ]] && ! grep -qs 'daemon_auto_start' "${
   fi
 fi
 
+# No Codex memories: /etc/codex/config.toml (container/codex-config.toml) turns
+# them off, but ~/.codex/config.toml outranks it, so an enable there is removed
+# - only when the effective value across both is on, as `devbox agent install`
+# does on the laptop.
+codex_bin="${HOME_DIR}/.local/bin/codex"
+if [[ -x ${codex_bin} ]] && [[ "$("${codex_bin}" features list 2>/dev/null | awk '$1 == "memories" { print $NF }')" == true ]]; then
+  if "${codex_bin}" features disable memories >/dev/null 2>&1; then
+    log_success "Turned off Codex memories in ${codex_config}."
+  else
+    log_warn "Could not turn off Codex memories; run 'codex features disable memories'."
+  fi
+fi
+
 # Which machine this is, for every agent session: ~/.config/devbox/agent-context.md
 # (the devbox template), imported by one line in ~/.claude/CLAUDE.md that OMP
 # and Claude Code read and linked as ~/.codex/AGENTS.md for Codex, plus the

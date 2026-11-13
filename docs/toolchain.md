@@ -330,6 +330,24 @@ pkill -f '[a]pp-server daemon pid-update-loop'   # `daemon stop` leaves the upda
 > tells an agent with an empty `DEVBOX_ENV` to stop before any git push or `gh` write — and still load the rules file.
 > Only a launcher-started `codex` is fenced.
 
+### No agent memory
+
+None of the three agents keeps a memory store of its own: what an agent should know lives in `~/.claude/CLAUDE.md`
+(which reaches all three, [below](#-which-machine-the-agent-context)) and in your shared notes, not in per-agent,
+per-machine state.
+
+| Agent       | Setting                                                        | Applied by                                                                     |
+| ----------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| OMP         | `memory.backend: 'off'` in `home/.omp/agent/config.yml`        | `sync omp`                                                                     |
+| Claude Code | `autoMemoryEnabled: false` in `home/.claude/settings.json`     | `sync claude`                                                                  |
+| Codex       | `[features] memories = false` in `container/codex-config.toml` | the image's `/etc/codex/config.toml` (devbox); `bootstrap` and `agent install` |
+
+Codex's system layer is outranked by `~/.codex/config.toml`, and the laptop has no system layer at all (`/etc/codex`
+needs root), so `bootstrap` and `./bin/devbox agent install` run `codex features disable memories` whenever
+`codex features list` reports memories on: it removes the enable from `~/.codex/config.toml` — the desktop app's **Enable
+Codex memories** toggle writes one — leaving Codex's default, off. Only then, since `disable` deletes the key and would
+strip an explicit `memories = false` too.
+
 ## 🧭 Which machine: the agent context
 
 Every agent session on either machine knows where it runs. That stops it assuming `sudo` in the container, a laptop path
@@ -339,7 +357,7 @@ on the devbox, or the user's own credentials on the laptop. Three pieces, each i
 | Piece                                     | What it holds                                                                                                                                                                                                                                                                                                  |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DEVBOX_ENV`                              | `devbox` or `laptop`, exported by `agent-launch` for the session's process tree; in a Claude desktop app session on the laptop, by its `SessionStart` hook ([Git Identities](git.md#claude-desktop-app)). `devbox` means the image's root-owned `/etc/devbox-env` exists; nothing in the bind mount can set it |
-| `~/.config/devbox/agent-context.md`       | A short, always-loaded summary for this machine: what is there, what is missing, what not to try. Rendered on every run from `home/.config/devbox/agent-context/{devbox,laptop}.md`, plus a section about you from `~/.config/devbox/profile.json` when that exists ([below](#about-you-profilejson))          |
+| `~/.config/devbox/agent-context.md`       | A short, always-loaded summary for this machine: what is there, what is missing, what not to try. Rendered on every run from `home/.config/devbox/agent-context/{devbox,laptop}.md`                                                                                                                            |
 | `devbox-runtime` skill                    | How-tos for both machines (missing tools, Docker, ports for the user, secrets, git and `gh` failures), from `home/.agents/skills/devbox-runtime`: copied to `~/.agents/skills`, which OMP and Codex read, and linked from `~/.claude/skills`                                                                   |
 | `@~/.config/devbox/agent-context.md` line | Appended once to `~/.claude/CLAUDE.md`; the rest of that file stays yours (a dotfiles symlink is written through)                                                                                                                                                                                              |
 | `~/.codex/AGENTS.md`                      | A copy of `~/.claude/CLAUDE.md` with its `@` imports expanded, for Codex, which reads that one global file and expands no imports. Rewritten on every run; a file without the marker comment on its first line is yours and left alone                                                                         |
@@ -364,36 +382,6 @@ both doctors and both installers report them rather than edit that file:
 sessions on the devbox get `laptop`, and `doctor host` and `bootstrap` say so. To change what agents are told, edit the
 templates or the skill, commit, deploy, and re-run `bootstrap` and `agent install`; `doctor host` and `doctor laptop`
 fail while either machine's copy is stale.
-
-### About you: `profile.json`
-
-`~/.config/devbox/profile.json` is optional and yours, like `identities.conf`: who you are and the tone agents should
-take with you. One JSON object, every key a non-empty string, at least one set, no other keys:
-
-| Key         | Rendered as                                                                                   |
-| ----------- | --------------------------------------------------------------------------------------------- |
-| `name`      | `Their name is <name>.`                                                                       |
-| `nickname`  | `Address them as <nickname>.`                                                                 |
-| `pronouns`  | `Their pronouns are <pronouns>.`                                                              |
-| `job_title` | `Their job title is <job_title>.`                                                             |
-| `birthday`  | `Their birthday is March 14, 1985.` — `YYYY-MM-DD`, or `MM-DD` to leave the year out          |
-| `bio`       | `### About them`, the text as written                                                         |
-| `tone`      | `### Tone`, the text, introduced as shaping the agent's wording but never the machine's rules |
-
-The first five render as one paragraph, in that order. `birthday` is spelled out with the month's name so no agent
-reads `03-04` as day-month.
-
-```bash
-cp home/.config/devbox/profile.json.example ~/.config/devbox/profile.json   # on the laptop, then fill it in
-./bin/devbox sync profile                                                    # render it on the laptop, copy and render on the devbox
-```
-
-`container/agent-context` appends it to the machine template as a `## The user` section, worded the same on both
-machines, so the one imported file carries both. Nothing seeds it: the example's placeholders would become what every
-session believes about you. Absent means no section and no complaint. One that does not validate is left out — the
-machine half is still installed — and both doctors, `bootstrap` and `agent install` report why. Edit it on the laptop:
-`sync profile` copies laptop → devbox, while `bootstrap` only re-renders whatever copy the devbox holds. Running
-sessions keep the context they started with.
 
 ## 📱 Moshi and `moshi-hook`
 
