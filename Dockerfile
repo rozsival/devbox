@@ -19,9 +19,9 @@ ARG NVM_VERSION=0.40.8
 # kept installed for `nvm use` until its end of life (renovate.json holds it on
 # its major).
 # renovate: datasource=node-version depName=node versioning=node
-ARG NODE_VERSION=26.13.0
+ARG NODE_VERSION=26.13.1
 # renovate: datasource=node-version depName=node versioning=node
-ARG NODE_MAINTENANCE_VERSION=24.22.2
+ARG NODE_MAINTENANCE_VERSION=24.22.3
 # renovate: datasource=npm depName=pnpm
 ARG PNPM_VERSION=12.11.2
 # renovate: datasource=npm depName=corepack
