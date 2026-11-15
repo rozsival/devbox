@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Matches the workstation host OS.
-FROM ubuntu:26.04
+FROM ubuntu:26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96
 
 # Kept in sync with the host user so the bind-mounted home needs no chown.
 ARG HOST_UID=1000
