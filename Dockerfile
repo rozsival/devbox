@@ -49,7 +49,7 @@ ARG SHELLCHECK_VERSION=0.11.0
 # renovate: datasource=github-tags depName=docker-cli packageName=docker/cli
 ARG DOCKER_CLI_VERSION=29.9.0
 # renovate: datasource=github-releases depName=docker-compose packageName=docker/compose
-ARG DOCKER_COMPOSE_VERSION=5.6.0
+ARG DOCKER_COMPOSE_VERSION=5.7.1
 # renovate: datasource=github-releases depName=docker-buildx packageName=docker/buildx
 ARG DOCKER_BUILDX_VERSION=0.38.0
 
