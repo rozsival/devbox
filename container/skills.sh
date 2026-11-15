@@ -16,7 +16,7 @@ log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
 # renovate: datasource=github-tags depName=skills packageName=vercel-labs/skills
 SKILLS_CLI_VERSION="${SKILLS_CLI_VERSION:-1.5.26}"
 # renovate: datasource=npm depName=agent-browser
-AGENT_BROWSER_VERSION="${AGENT_BROWSER_VERSION:-0.37.1}"
+AGENT_BROWSER_VERSION="${AGENT_BROWSER_VERSION:-0.43.0}"
 # The skills too: a bare `owner/repo` installs whatever the default branch holds
 # at that moment, and a skill is instructions an agent follows. A GitHub tree
 # URL pins the ref (the CLI fails on one that does not exist). Where the
