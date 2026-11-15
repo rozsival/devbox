@@ -24,7 +24,7 @@ AGENT_BROWSER_VERSION="${AGENT_BROWSER_VERSION:-0.37.1}"
 # used, so a skill and the CLI it drives move together; anthropics/skills has
 # no tags, hence a commit - Renovate proposes the branch head as a new digest.
 # renovate: datasource=git-refs depName=anthropic-skills packageName=https://github.com/anthropics/skills branch=main
-SKILL_CREATOR_REF="${SKILL_CREATOR_REF:-683bc88e56f3e09ba94f7055977f3d3aa499f202}"
+SKILL_CREATOR_REF="${SKILL_CREATOR_REF:-1780c5e5a552fd4d1c9d6a7b0cab26b0c2bef064}"
 
 readonly HOME_DIR="${HOME:-/home/dev}"
 export PATH="${HOME_DIR}/.local/bin:${PATH}"
