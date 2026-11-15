@@ -12,7 +12,7 @@ ARG HOST_GID=1000
 # Renovate (renovate.json) where the ARG below it is released; keep it directly
 # above its ARG.
 # renovate: datasource=github-releases depName=herdr packageName=herdrdev/herdr
-ARG HERDR_VERSION=0.9.4
+ARG HERDR_VERSION=0.9.5
 # renovate: datasource=github-releases depName=nvm packageName=nvm-sh/nvm
 ARG NVM_VERSION=0.41.0
 # NODE_VERSION is the default Node; NODE_MAINTENANCE_VERSION is the previous LTS,
