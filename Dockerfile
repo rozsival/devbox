@@ -39,7 +39,7 @@ ARG LAZYGIT_VERSION=0.66.1
 # renovate: datasource=github-releases depName=worktrunk packageName=max-sixty/worktrunk
 ARG WORKTRUNK_VERSION=0.80.0
 # renovate: datasource=github-releases depName=terraform packageName=hashicorp/terraform
-ARG TERRAFORM_VERSION=1.16.6
+ARG TERRAFORM_VERSION=1.17.2
 # renovate: datasource=github-releases depName=shellcheck packageName=koalaman/shellcheck
 ARG SHELLCHECK_VERSION=0.11.0
 # Client only - the daemon lives on the host as the `dev` user (docs/docker.md).
