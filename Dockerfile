@@ -35,7 +35,7 @@ ARG RUBY_VERSION=4.0.9
 # renovate: datasource=github-releases depName=gh packageName=cli/cli
 ARG GH_VERSION=2.102.0
 # renovate: datasource=github-releases depName=lazygit packageName=jesseduffield/lazygit
-ARG LAZYGIT_VERSION=0.66.1
+ARG LAZYGIT_VERSION=0.66.3
 # renovate: datasource=github-releases depName=worktrunk packageName=max-sixty/worktrunk
 ARG WORKTRUNK_VERSION=0.80.0
 # renovate: datasource=github-releases depName=terraform packageName=hashicorp/terraform
