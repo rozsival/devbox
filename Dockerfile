@@ -14,7 +14,7 @@ ARG HOST_GID=1000
 # renovate: datasource=github-releases depName=herdr packageName=herdrdev/herdr
 ARG HERDR_VERSION=0.9.4
 # renovate: datasource=github-releases depName=nvm packageName=nvm-sh/nvm
-ARG NVM_VERSION=0.40.8
+ARG NVM_VERSION=0.41.0
 # NODE_VERSION is the default Node; NODE_MAINTENANCE_VERSION is the previous LTS,
 # kept installed for `nvm use` until its end of life (renovate.json holds it on
 # its major).
