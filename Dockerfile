@@ -29,7 +29,7 @@ ARG COREPACK_VERSION=0.36.0
 # renovate: datasource=github-tags depName=rustup packageName=rust-lang/rustup
 ARG RUSTUP_VERSION=1.29.2
 # renovate: datasource=github-releases depName=rust packageName=rust-lang/rust
-ARG RUST_VERSION=1.99.1
+ARG RUST_VERSION=1.100.0
 # renovate: datasource=ruby-version depName=ruby versioning=ruby
 ARG RUBY_VERSION=4.0.9
 # renovate: datasource=github-releases depName=gh packageName=cli/cli
