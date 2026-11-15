@@ -23,7 +23,7 @@ ARG NODE_VERSION=26.13.1
 # renovate: datasource=node-version depName=node versioning=node
 ARG NODE_MAINTENANCE_VERSION=24.22.3
 # renovate: datasource=npm depName=pnpm
-ARG PNPM_VERSION=12.11.2
+ARG PNPM_VERSION=12.21.0
 # renovate: datasource=npm depName=corepack
 ARG COREPACK_VERSION=0.36.0
 # renovate: datasource=github-tags depName=rustup packageName=rust-lang/rustup
