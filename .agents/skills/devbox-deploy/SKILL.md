@@ -24,7 +24,7 @@ Full reference: `docs/cli.md` (flags), `docs/operations.md` (restart, backup, tr
 `docker-compose.yml` and `.env.example` (`.DS_Store` excluded inside them), as `rsync -az --delete
 --delete-excluded`. Everything else on the workstation - `docs/`, `.agents/`, `.claude/`, `.idea/`, `Makefile`,
 prettier and editor configs, `README.md`, leftovers of earlier deploys - is removed, except the protected host state:
-`/.env`, `/data/`, `/docker-compose.override.yml`, `/.git/`. A new runtime path has to be added to the `filters`
+`/.env`, `/data/`, `/docker-compose.override.yml`, `/docker-compose.tailnet.yml`, `/.git/`. A new runtime path has to be added to the `filters`
 array in `cli/commands/deploy.sh`. It needs **GNU rsync** on the laptop (`brew install rsync`, Homebrew's bin ahead
 of `/usr/bin`): macOS's `/usr/bin/rsync` is openrsync, which silently ignores the protect rules and would delete the
 remote `.env`, `data/` and `.git`, so `deploy` refuses it with `... is not GNU rsync`. Host defaults to
@@ -100,7 +100,8 @@ create-if-absent: editing those templates doesn't reach an existing home - delet
 This matters: "will I lose my keys / repos / gh login" is a flat no, by construction:
 
 - `.env` is gitignored **and** protected from the sync, so host-local config survives every deploy; so do
-  `docker-compose.override.yml`, `data/` and `.git/` on the workstation.
+  `docker-compose.override.yml`, `docker-compose.tailnet.yml` (`docker setup`'s hosts entries for
+  `DEVBOX_TAILNET_ALLOW`), `data/` and `.git/` on the workstation.
 - `${DEVBOX_DATA_DIR}` is a host bind mount, not the image: `~/.ssh/id_*.pub`,
   `~/.ssh/signing_*.pub` (public keys only - devbox holds no private key), sshd host key under
   `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/identities.conf`, `~/.config/devbox/secrets.env`,
@@ -120,7 +121,8 @@ What does **not** survive a recreate: anything in the container's writable layer
 
 ```bash
 rsync -azni --delete --delete-excluded \
-  --filter 'P /.env' --filter 'P /data/' --filter 'P /docker-compose.override.yml' --filter 'P /.git/' \
+  --filter 'P /.env' --filter 'P /data/' --filter 'P /docker-compose.override.yml' \
+  --filter 'P /docker-compose.tailnet.yml' --filter 'P /.git/' \
   --exclude .DS_Store --include '/bin/***' --include '/container/***' --include '/home/***' \
   --include /Dockerfile --include /docker-compose.yml --include /.env.example --exclude '*' \
   ./ <workstation>:devbox/

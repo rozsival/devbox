@@ -333,7 +333,7 @@ would expose devbox publicly.
 
 ### Does `devbox deploy` overwrite my host configuration?
 
-No — it never touches `.env`, `data/`, `docker-compose.override.yml` or `.git/`, and it only syncs the runtime files
+No — it never touches `.env`, `data/`, `docker-compose.override.yml`, `docker-compose.tailnet.yml` or `.git/`, and it only syncs the runtime files
 (`bin/`, `container/`, `home/`, `Dockerfile`, `docker-compose.yml`, `.env.example`). Anything else in `~/devbox` on the
 workstation is removed by the next deploy.
 

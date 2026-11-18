@@ -64,7 +64,8 @@ There is no CI and no test suite: `make check` proves the source, and a change i
 
 There are no releases: `./bin/devbox deploy` rsyncs the runtime files of the working tree to `~/devbox` on the
 workstation — an allowlist (`bin/`, `container/`, `home/`, `Dockerfile`, `docker-compose.yml`, `.env.example`), with
-everything else on the remote removed except `.env`, `data/`, `docker-compose.override.yml` and `.git/` — and `--start`
+everything else on the remote removed except `.env`, `data/`, `docker-compose.override.yml`, `docker-compose.tailnet.yml`
+and `.git/` — and `--start`
 applies it. A new runtime path must be added to the `filters` array in `cli/commands/deploy.sh`, or it never ships. It
 needs GNU rsync on the laptop (`brew install rsync`): macOS's openrsync would ignore the protect rules. What a change
 needs after the sync — `start`, `rebuild`, `bootstrap` or nothing — is in [Operations](operations.md#-redeploy) and the

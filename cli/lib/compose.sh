@@ -1,5 +1,12 @@
+# Naming files turns off compose's own discovery, so the override goes back in
+# by hand; the Tailnet hosts file joins only when `docker setup` wrote one. Every
+# command passes the same set, or an `up` from one of them would recreate the
+# container without the hosts entries.
 compose() {
-  (cd "${REPO_ROOT}" && docker compose "$@")
+  local files=(-f docker-compose.yml)
+  [[ -f "${REPO_ROOT}/docker-compose.override.yml" ]] && files+=(-f docker-compose.override.yml)
+  [[ -f "${REPO_ROOT}/${TAILNET_HOSTS_FILE}" ]] && files+=(-f "${TAILNET_HOSTS_FILE}")
+  (cd "${REPO_ROOT}" && docker compose "${files[@]}" "$@")
 }
 
 # Counts client connections to the container's sshd. Every recreate, stop or
