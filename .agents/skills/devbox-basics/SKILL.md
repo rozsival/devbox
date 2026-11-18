@@ -44,7 +44,8 @@ Four facts:
    LAN, and neither the devbox nor its project containers - `--network host` ones included - reach the
    host's own services (sshd included; dev's uid and its `/etc/subuid` ranges get no host address, loopback
    included, but systemd-resolved's DNS stub) or a Tailnet peer
-   over the overlay (`tailscale0`, Tailscale's ranges). Accepted limits (`docs/security.md`): peers stay
+   over the overlay (`tailscale0`, Tailscale's ranges) - bar the TCP `<peer>:<port>` services `.env`'s
+   `DEVBOX_TAILNET_ALLOW` opens to the devbox container alone. Accepted limits (`docs/security.md`): peers stay
    reachable at LAN or public addresses; a project container can relay to them through `tailscaled`'s
    world-accessible LocalAPI socket (Tailnet routes only from Tailscale 1.98, which `doctor host` requires;
    older versions also reached the host's own services), or drive dev's user manager through `/run/user/1001`.

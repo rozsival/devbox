@@ -88,7 +88,8 @@ the tree; installs the nftables table and `devbox-docker-firewall.service`, keep
 Tailnet and LAN, the host's own services (its sshd, anything on loopback) out of reach of the devbox, its
 project containers (a `--network host` one shares the host's network namespace, and the rules match dev's
 uid plus every subordinate uid in its `/etc/subuid` ranges, so it is covered too) and anything else running
-as those uids, and the Tailnet overlay (`tailscale0`, Tailscale's address ranges) closed to them - peers' LAN
+as those uids, and the Tailnet overlay (`tailscale0`, Tailscale's address ranges) closed to them, bar the
+`<peer>:<port>` services `.env`'s `DEVBOX_TAILNET_ALLOW` opens to the devbox container - peers' LAN
 and public addresses stay
 reachable like the rest of the network, and tailscaled's world-accessible LocalAPI socket can still relay to
 peers for a project container that bind-mounts it (accepted limits, `docs/security.md`); enables a lingering

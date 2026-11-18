@@ -333,7 +333,10 @@ the host's root Docker daemon.
     port 53, loopback included, because a project container can drive that user manager, below; the set is
     rendered from `/etc/subuid` at run time, `{ 1001, 165536-231071 }` by default) and both off the Tailnet (no
     new connection from `docker0` or those uids through `tailscale0` or to `100.64.0.0/10`/`fd7a:115c:a1e0::/48`,
-    evaluated after Docker's DNAT so a root-daemon port on the host's Tailscale address still works). That covers
+    evaluated after Docker's DNAT so a root-daemon port on the host's Tailscale address still works; the one
+    exception is `.env`'s `DEVBOX_TAILNET_ALLOW`, space-separated `<peer>:<port>` entries resolved with
+    `tailscale ip -4` when the table is written and accepted as TCP from `docker0` only - the devbox reaching the
+    LLM stack's own Tailscale sidecar - whose malformed or unresolvable entries setup and `doctor host` fail). That covers
     direct connections to the overlay only: tailscaled's LocalAPI socket is world-accessible and dials Tailnet
     peers for any local caller, so a project container that bind-mounts `/run/tailscale` relays through it, and
     peers stay reachable at their LAN or public addresses (accepted limits, `docs/security.md`); before 1.98

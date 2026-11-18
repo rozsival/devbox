@@ -59,9 +59,9 @@ identity's `gh` token, each configured App's private key, every project's `.env`
 LAN (Tailnet peers included, at their LAN addresses) and the rootless project Docker daemon ([Docker](docker.md)).
 
 **Cannot**: the host filesystem outside the data dir and world-readable paths, the host's **root** Docker daemon, the
-host's own services (its sshd included), other Tailnet machines over the overlay (accepted limits 1 and 8 name the
-routes that remain), the devbox container's own lifecycle, root inside the container, any unpublished port, and any
-1Password vault.
+host's own services (its sshd included), other Tailnet machines over the overlay beyond the ports `DEVBOX_TAILNET_ALLOW`
+names (accepted limits 1 and 8 name the routes that remain), the devbox container's own lifecycle, root inside the
+container, any unpublished port, and any 1Password vault.
 
 The consequence: an agent with shell access can push through the same App token `git`/`gh` already resolve, and read
 each configured App's private key, every identity's PAT, and every project's `.env` and GCP key directly. None of that

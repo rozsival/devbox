@@ -309,6 +309,10 @@ doctor_host() {
   # ruleset rendered from the world-readable /etc/subuid, exactly as setup
   # renders it: a ruleset or unit this checkout changed stays inert until
   # `docker setup` runs again.
+  local tailnet_problem
+  while IFS= read -r tailnet_problem; do
+    fail "${tailnet_problem} - the devbox cannot reach it"
+  done < <(tailnet_allow_problems)
   if ! systemctl is-active --quiet "${NFT_SERVICE}"; then
     fail 'devbox-docker-firewall is inactive - project ports would reach the Tailnet and the LAN:'' sudo ./bin/devbox docker setup'
   elif [[ "$(cat "${NFT_CONF}" 2>/dev/null)" != "$(netfilter_ruleset)" ]]; then
