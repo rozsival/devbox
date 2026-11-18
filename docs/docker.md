@@ -193,6 +193,15 @@ runs again, and `./bin/devbox doctor host` reports the stale ruleset — and an 
 meanwhile. The connection leaves masqueraded as the workstation, so the Tailnet policy sees the workstation's node and
 must grant it the port.
 
+The address alone isn't enough: the devbox resolves names through the LAN's DNS, never MagicDNS (`100.100.100.100` is
+in the range the forward chain drops), and a `ts.net` name's public record points at Tailscale's own servers — so
+`https://panther-minor.<tailnet>.ts.net:8000`, the name on the peer's certificate, would hang. `docker setup` therefore
+also writes `docker-compose.tailnet.yml`: an `extra_hosts` entry for every peer given by name, as written and, for a
+bare name, under the tailnet's MagicDNS suffix, from the same resolution as the table. Every `bin/devbox` command loads
+the file (a bare `docker compose` doesn't); `./bin/devbox start` recreates the devbox with it, and `doctor host` checks
+each name resolves to its address inside the container. Like `.env`, it's host state: gitignored, and `deploy` never
+touches it.
+
 These rules stop direct connections over the overlay, nothing more. A peer stays reachable at its LAN or public
 address, like the rest of the network. And `tailscaled`'s LocalAPI socket, `/run/tailscale/tailscaled.sock`, is
 world-accessible (`0666`): its `dial` endpoint has `tailscaled`, as root, open a connection for any local caller, and a

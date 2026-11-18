@@ -17,6 +17,7 @@ if getent passwd "${DEV_USER}" >/dev/null; then
 fi
 step_firewall
 step_netfilter
+step_tailnet_hosts
 if getent passwd "${DEV_USER}" >/dev/null; then
   step_socket_dir
   step_daemon

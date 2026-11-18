@@ -439,7 +439,7 @@ netfilter_ruleset() {
   ids="$(dev_ids)"
   # Each accept ends in its own newline so an empty allowlist renders the exact
   # table hosts without one already run.
-  while read -r addr port; do
+  while read -r addr port _; do
     allow+="    iifname \"${DEVBOX_BRIDGE}\" ct state new ip daddr ${addr} tcp dport ${port} accept"$'\n'
   done < <(tailnet_allow_targets)
   cat <<NFT_BODY
@@ -529,15 +529,15 @@ dev_ids() {
 # boot: a peer that changes address leaves the old one in the table until
 # `docker setup` runs again, and doctor reports the mismatch meanwhile.
 #
-# Prints `<ipv4> <port>` per usable entry; tailnet_allow_problems names the
-# rest, since this runs inside a command substitution where `fail` is lost.
+# Prints `<ipv4> <port> <peer>` per usable entry; tailnet_allow_problems names
+# the rest, since this runs inside a command substitution where `fail` is lost.
 tailnet_allow_targets() {
   local entries entry addr
   read -ra entries <<<"$(env_get DEVBOX_TAILNET_ALLOW)"
   for entry in "${entries[@]}"; do
     tailnet_allow_valid "${entry}" || continue
     addr="$(tailnet_allow_resolve "${entry%:*}")" || continue
-    printf '%s %s\n' "${addr}" "${entry##*:}"
+    printf '%s %s %s\n' "${addr}" "${entry##*:}" "${entry%:*}"
   done
 }
 
@@ -562,6 +562,66 @@ tailnet_allow_resolve() {
   addr="$(tailscale ip -4 "$1" 2>/dev/null | head -1)"
   [[ "${addr}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
   printf '%s' "${addr}"
+}
+
+# The firewall opens the address; this gives the devbox the name. Its DNS is
+# the LAN's, never MagicDNS - 100.100.100.100 sits in the range the forward
+# chain drops - and a ts.net name's public record points at Tailscale's own
+# servers, not the peer, so a client using the name on the peer's certificate
+# (<peer>.<tailnet>.ts.net) hangs. So every allowlisted peer named by a name,
+# not an address, becomes an extra_hosts entry: the name as written and, for a
+# bare one, the same name under the tailnet's MagicDNS suffix. Empty output: no
+# file. Resolved with the table, by the same tailnet_allow_targets, so the two
+# never disagree.
+tailnet_hosts_compose() {
+  local addr port peer suffix hosts=()
+  suffix="$(tailscale status --json 2>/dev/null |
+    sed -n 's/^  "MagicDNSSuffix": *"\([^"]*\)".*/\1/p' | head -1 || true)"
+  while read -r addr port peer; do
+    [[ "${peer}" =~ ^[0-9.]+$ ]] && continue
+    hosts+=("${peer}:${addr}")
+    [[ "${peer}" == *.* || -z "${suffix}" ]] || hosts+=("${peer}.${suffix}:${addr}")
+  done < <(tailnet_allow_targets)
+  ((${#hosts[@]} > 0)) || return 0
+  cat <<HOSTS_HEAD
+# Managed by ./bin/devbox docker setup from .env's DEVBOX_TAILNET_ALLOW - do not edit.
+# The devbox's DNS cannot resolve these Tailnet names; './bin/devbox start' applies a change.
+services:
+  ${SERVICE}:
+    extra_hosts:
+HOSTS_HEAD
+  printf '%s\n' "${hosts[@]}" | sort -u | sed "s/.*/      - '&'/"
+}
+
+# After step_netfilter, from the same resolution. Owned like .env, which the
+# deploying user's `deploy` and compose read beside it. The running container
+# keeps its old hosts until `./bin/devbox start` recreates it, which doctor
+# checks from inside.
+step_tailnet_hosts() {
+  local file="${REPO_ROOT}/${TAILNET_HOSTS_FILE}" want
+  want="$(tailnet_hosts_compose)"
+  if [[ -z "${want}" ]]; then
+    [[ -e "${file}" ]] || return 0
+    if [[ "${CHECK_ONLY}" == 'true' ]]; then
+      fail "${file} names Tailnet peers DEVBOX_TAILNET_ALLOW no longer allows"
+      return 0
+    fi
+    rm -f "${file}"
+    log_success "Removed ${file} - './bin/devbox start' drops its hosts from the devbox"
+    return 0
+  fi
+  if [[ -f "${file}" ]] && [[ "$(cat "${file}")" == "${want}" ]]; then
+    log_success "${file} current"
+    return 0
+  fi
+  if [[ "${CHECK_ONLY}" == 'true' ]]; then
+    fail "${file} missing or stale - the devbox cannot resolve its allowlisted Tailnet peers"
+    return 0
+  fi
+  printf '%s\n' "${want}" >"${file}"
+  chown --reference="${ENV_FILE}" "${file}"
+  chmod 644 "${file}"
+  log_success "Wrote ${file} - './bin/devbox start' recreates the devbox with these hosts"
 }
 
 # nft resolves the `socket cgroupv2` path to a cgroup *id* when the table

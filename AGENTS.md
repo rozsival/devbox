@@ -336,7 +336,10 @@ the host's root Docker daemon.
     evaluated after Docker's DNAT so a root-daemon port on the host's Tailscale address still works; the one
     exception is `.env`'s `DEVBOX_TAILNET_ALLOW`, space-separated `<peer>:<port>` entries resolved with
     `tailscale ip -4` when the table is written and accepted as TCP from `docker0` only - the devbox reaching the
-    LLM stack's own Tailscale sidecar - whose malformed or unresolvable entries setup and `doctor host` fail). That covers
+    LLM stack's own Tailscale sidecar - whose malformed or unresolvable entries setup and `doctor host` fail; since
+    the devbox's DNS is the LAN's, never MagicDNS, setup also writes `docker-compose.tailnet.yml`, the peers' names as
+    `extra_hosts`, which `compose()` in `cli/lib/compose.sh` adds to every compose call and `doctor host` resolves
+    inside the container). That covers
     direct connections to the overlay only: tailscaled's LocalAPI socket is world-accessible and dials Tailnet
     peers for any local caller, so a project container that bind-mounts `/run/tailscale` relays through it, and
     peers stay reachable at their LAN or public addresses (accepted limits, `docs/security.md`); before 1.98
@@ -448,7 +451,8 @@ the host's root Docker daemon.
     `docker-compose.yml` and `.env.example` (`.DS_Store` excluded inside them), with `--delete --delete-excluded`, so
     anything else on the workstation (`docs/`, `.agents/`, `Makefile`, editor configs, leftovers of earlier deploys)
     is removed and only the protected host state survives: `/.env`, `/data/`, `/docker-compose.override.yml`,
-    `/.git/`. A new runtime path must be added to the `filters` array in `cli/commands/deploy.sh`. Needs GNU rsync on
+    `/docker-compose.tailnet.yml`, `/.git/`. A new runtime path must be added to the `filters` array in
+    `cli/commands/deploy.sh`. Needs GNU rsync on
     the laptop (`brew install rsync`, Homebrew's bin ahead of `/usr/bin`): macOS's `/usr/bin/rsync` is openrsync, which
     ignores the protect rules and would delete the remote `.env`, `data/` and `.git`, so `deploy` refuses it. It then
     runs `bin/devbox install` on the workstation (a failure there warns, never aborts). `--start` runs the remote

@@ -323,6 +323,26 @@ doctor_host() {
     log_success 'project port boundary active and current (devbox-docker-firewall)'
   fi
 
+  # The allowlisted peers' names: the file setup writes has to match the
+  # allowlist, and the running container has to resolve each name to the
+  # address the table opens - a container created before the file still asks
+  # the LAN's DNS and hangs on Tailscale's public servers. </dev/null keeps
+  # compose exec off the loop's input.
+  local hosts_file="${REPO_ROOT}/${TAILNET_HOSTS_FILE}" host_name host_addr resolved
+  if [[ "$(cat "${hosts_file}" 2>/dev/null)" != "$(tailnet_hosts_compose)" ]]; then
+    fail "${TAILNET_HOSTS_FILE} does not match DEVBOX_TAILNET_ALLOW:"' sudo ./bin/devbox docker setup, then ./bin/devbox start'
+  else
+    while read -r host_name host_addr; do
+      resolved="$(compose exec -T "${SERVICE}" getent ahostsv4 "${host_name}" </dev/null 2>/dev/null |
+        awk '{ print $1; exit }' || true)"
+      if [[ "${resolved}" == "${host_addr}" ]]; then
+        log_success "${host_name} resolves to ${host_addr} inside the container"
+      else
+        fail "${host_name} resolves to ${resolved:-nothing} inside the container, not ${host_addr}:"' ./bin/devbox start'
+      fi
+    done < <(sed -n "s/^      - '\(.*\):\([0-9.]*\)'\$/\1 \2/p" "${hosts_file}" 2>/dev/null)
+  fi
+
   # The daemon's own configuration has to stay out of the container's reach:
   # dev's user manager reads its units and environment.d from the root-owned
   # directories the drop-in names, never from the bind mount. The file is

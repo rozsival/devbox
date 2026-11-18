@@ -23,6 +23,7 @@ filters=(
   --filter 'P /.env'
   --filter 'P /data/'
   --filter 'P /docker-compose.override.yml'
+  --filter "P /${TAILNET_HOSTS_FILE}"
   --filter 'P /.git/'
   --exclude '.DS_Store'
   --include '/bin/***'

@@ -7,6 +7,10 @@ readonly ENV_FILE="${REPO_ROOT}/.env"
 readonly ENV_EXAMPLE="${REPO_ROOT}/.env.example"
 readonly TEMPLATE_DIR="${REPO_ROOT}/home"
 readonly SERVICE='devbox'
+# Written by `docker setup` from .env's DEVBOX_TAILNET_ALLOW (tailnet_hosts_compose):
+# the names of the Tailnet peers the devbox may reach, which its own DNS cannot
+# resolve. Host state, like .env - gitignored and protected from `deploy`.
+readonly TAILNET_HOSTS_FILE='docker-compose.tailnet.yml'
 
 # The laptop's install layout - the same one bootstrap creates in the container.
 readonly LIBEXEC_DIR="${HOME}/.local/libexec"

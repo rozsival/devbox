@@ -8,6 +8,7 @@
 
 # Docker
 docker-compose.override.yml
+docker-compose.tailnet.yml
 
 # Local state
 data/

@@ -583,8 +583,10 @@ Add a probe to `doctor`'s list in `cli/lib/doctor_host.sh` if the version matter
 
 ### Host-specific tweaks
 
-Host-specific tweaks go in `docker-compose.override.yml`: compose auto-loads it, gitignored, so extra mounts, env vars
-or resource limits stay local to one workstation.
+Host-specific tweaks go in `docker-compose.override.yml`: every `bin/devbox` command loads it (as a bare `docker compose`
+does), gitignored, so extra mounts, env vars or resource limits stay local to one workstation. Its sibling
+`docker-compose.tailnet.yml` is `docker setup`'s, not yours: the hosts entries for `DEVBOX_TAILNET_ALLOW`
+([Docker](docker.md#2-the-boundary)), which only `bin/devbox` commands load.
 
 ---
 

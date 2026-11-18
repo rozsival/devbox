@@ -14,7 +14,7 @@
 ./bin/devbox deploy <workstation> --start
 ```
 
-Repeatable and non-destructive: `.env`, `docker-compose.override.yml`, `data/`, `.git/`, `${DEVBOX_DATA_DIR}`, identity
+Repeatable and non-destructive: `.env`, `docker-compose.override.yml`, `docker-compose.tailnet.yml`, `data/`, `.git/`, `${DEVBOX_DATA_DIR}`, identity
 public keys and the sshd host key survive; `bootstrap` re-runs as a no-op. Verify with `./bin/devbox keys` — public keys
 and host-key fingerprint must match before and after.
 
@@ -206,7 +206,8 @@ Rehearse the sync with `-n`, using the same filters as `cli/commands/deploy.sh` 
 
 ```bash
 rsync -azni --delete --delete-excluded \
-  --filter 'P /.env' --filter 'P /data/' --filter 'P /docker-compose.override.yml' --filter 'P /.git/' \
+  --filter 'P /.env' --filter 'P /data/' --filter 'P /docker-compose.override.yml' \
+  --filter 'P /docker-compose.tailnet.yml' --filter 'P /.git/' \
   --exclude .DS_Store --include '/bin/***' --include '/container/***' --include '/home/***' \
   --include /Dockerfile --include /docker-compose.yml --include /.env.example --exclude '*' \
   ./ <workstation>:devbox/
