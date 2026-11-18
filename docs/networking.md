@@ -143,10 +143,11 @@ new boundary to audit each time. SSH forwarding needs no configuration and inher
 No — it sits on Docker's default bridge (`docker0`); the Tailnet terminates on the host, DNATing in. Outbound internet
 works normally; outbound over the Tailnet overlay does not — `devbox-docker-firewall` drops every new connection from
 `docker0` through `tailscale0` or to a Tailscale address, so a peer can reach the devbox but the devbox can't reach a
-peer's Tailscale address. That peer's LAN or public address stays reachable like the rest of the network, and
-`tailscaled`'s world-accessible LocalAPI socket can relay to it from a project container — both accepted limits
-([Security Model](security.md#-accepted-limits)). A port the host's root daemon publishes on the host's own Tailscale
-address still works, rewritten to its container on the host ([Docker](docker.md#2-the-boundary)).
+peer's Tailscale address, except the `<peer>:<port>` services `.env`'s `DEVBOX_TAILNET_ALLOW` names (the local LLMs'
+sidecar, say; [Docker](docker.md#2-the-boundary)). That peer's LAN or public address stays reachable like the rest of
+the network, and `tailscaled`'s world-accessible LocalAPI socket can relay to it from a project container — both
+accepted limits ([Security Model](security.md#-accepted-limits)). A port the host's root daemon publishes on the host's
+own Tailscale address still works, rewritten to its container on the host ([Docker](docker.md#2-the-boundary)).
 
 ### Is IPv6 published?
 

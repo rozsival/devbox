@@ -267,16 +267,17 @@ fixes. Details: [CLI Reference](cli.md#-devbox-doctor).
 
 ## 🧾 `.env` reference
 
-| Variable                       | Default                | Purpose                                                         |
-| ------------------------------ | ---------------------- | --------------------------------------------------------------- |
-| `BIND_ADDR`                    | _(empty)_              | Publish address; empty = `start`, `stop`, `logs`, `ps` refuse   |
-| `DEVBOX_SSH_PORT`              | `2223`                 | Host port (container always uses `2222`)                        |
-| `DEVBOX_DATA_DIR`              | `/home/dev`            | Host path; must equal container home (path identity)            |
-| `HOST_UID` / `HOST_GID`        | `1001`                 | Dedicated `dev` host user; owns the data dir and project daemon |
-| `DEVBOX_DOCKER_SOCKET_DIR`     | `/run/devbox`          | Project daemon socket dir, bind-mounted into the container      |
-| `TZ`                           | `Europe/Prague`        | Container timezone                                              |
-| `DEVBOX_GITHUB_USER`           | `your-github-username` | Seeds keys from `github.com/<user>.keys`                        |
-| `DEVBOX_EXTRA_AUTHORIZED_KEYS` | _(empty)_              | Extra keys, newline-separated                                   |
+| Variable                       | Default                | Purpose                                                                         |
+| ------------------------------ | ---------------------- | ------------------------------------------------------------------------------- |
+| `BIND_ADDR`                    | _(empty)_              | Publish address; empty = `start`, `stop`, `logs`, `ps` refuse                   |
+| `DEVBOX_SSH_PORT`              | `2223`                 | Host port (container always uses `2222`)                                        |
+| `DEVBOX_DATA_DIR`              | `/home/dev`            | Host path; must equal container home (path identity)                            |
+| `HOST_UID` / `HOST_GID`        | `1001`                 | Dedicated `dev` host user; owns the data dir and project daemon                 |
+| `DEVBOX_DOCKER_SOCKET_DIR`     | `/run/devbox`          | Project daemon socket dir, bind-mounted into the container                      |
+| `DEVBOX_TAILNET_ALLOW`         | _(empty)_              | `<peer>:<port>` Tailnet services the devbox may open; applied by `docker setup` |
+| `TZ`                           | `Europe/Prague`        | Container timezone                                                              |
+| `DEVBOX_GITHUB_USER`           | `your-github-username` | Seeds keys from `github.com/<user>.keys`                                        |
+| `DEVBOX_EXTRA_AUTHORIZED_KEYS` | _(empty)_              | Extra keys, newline-separated                                                   |
 
 `.env` carries no git identity: who this box is, per account and per directory tree, lives in
 `~/.config/devbox/identities.conf` (see [step 3](#3-deploy-and-configure)), never in `.env` or `docker-compose.yml`.

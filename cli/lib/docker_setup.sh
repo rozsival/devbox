@@ -414,11 +414,17 @@ step_firewall() {
 # connection leaves the bridge, or leaves as dev or one of its subordinate
 # uids, through the Tailscale interface or towards a Tailscale address; replies
 # to inbound sessions are established, so they pass. Both run after Docker's
-# DNAT, so a root-daemon port published on the host's Tailscale address - the
-# local LLMs - is already rewritten to its container and never matches. The
-# address rules also cover tailscaled being down: the address is then no
-# longer local and a packet to it would follow the default route out to the
-# ISP.
+# DNAT, so a root-daemon port published on the host's Tailscale address is
+# already rewritten to its container and never matches. The address rules also
+# cover tailscaled being down: the address is then no longer local and a packet
+# to it would follow the default route out to the ISP.
+#
+# The one way through is .env's DEVBOX_TAILNET_ALLOW (tailnet_allow_targets):
+# a peer:port the devbox container itself may open - a service another Tailnet
+# node serves, such as the LLM stack's own Tailscale sidecar. Accepted in the
+# forward chain ahead of its drops, TCP to that address and port only; the
+# output chain gets no exception, so project containers and dev's uids stay off
+# the Tailnet entirely.
 #
 # Its own `inet` table at a lower priority than ufw's chains, so the two never
 # touch each other's rules; ufw still needs its one allow rule, because a table
@@ -429,8 +435,13 @@ step_firewall() {
 # runs again. /etc/subuid is world-readable, so doctor renders the same set
 # without privileges.
 netfilter_ruleset() {
-  local ids
+  local ids allow='' addr port
   ids="$(dev_ids)"
+  # Each accept ends in its own newline so an empty allowlist renders the exact
+  # table hosts without one already run.
+  while read -r addr port; do
+    allow+="    iifname \"${DEVBOX_BRIDGE}\" ct state new ip daddr ${addr} tcp dport ${port} accept"$'\n'
+  done < <(tailnet_allow_targets)
   cat <<NFT_BODY
 #!/usr/sbin/nft -f
 # Managed by ./bin/devbox docker setup - do not edit.
@@ -450,7 +461,8 @@ netfilter_ruleset() {
 # And it keeps both off the Tailnet: no new connection from the devbox bridge or
 # from those uids through ${TAILNET_IFACE} or to a Tailscale address. Docker's
 # DNAT runs first, so a root-daemon port published on the host's Tailscale
-# address still works - it has become a container address by then.
+# address still works - it has become a container address by then. The devbox
+# bridge may open only the peer ports .env's DEVBOX_TAILNET_ALLOW names.
 #
 # The conntrack rule is load-bearing: with --detach-netns the daemon runs in the
 # *host* netns, so every reply to a pull, a DNS lookup or an outbound connection
@@ -472,7 +484,7 @@ table inet devbox {
 
   chain forward {
     type filter hook forward priority filter - 10; policy accept;
-    iifname "${DEVBOX_BRIDGE}" ct state new oifname "${TAILNET_IFACE}" drop
+${allow}    iifname "${DEVBOX_BRIDGE}" ct state new oifname "${TAILNET_IFACE}" drop
     iifname "${DEVBOX_BRIDGE}" ct state new ip daddr ${TAILNET_IPV4} drop
     iifname "${DEVBOX_BRIDGE}" ct state new ip6 daddr ${TAILNET_IPV6} drop
   }
@@ -508,6 +520,48 @@ dev_ids() {
     done </etc/subuid
   fi
   printf '{ %s }' "${ids}"
+}
+
+# DEVBOX_TAILNET_ALLOW: space-separated <peer>:<port> entries, the peer a
+# Tailscale name or address. Resolved to IPv4 through `tailscale ip -4`, which
+# asks tailscaled's world-accessible LocalAPI, so doctor renders the same table
+# without privileges. Resolution happens when the table is written, never at
+# boot: a peer that changes address leaves the old one in the table until
+# `docker setup` runs again, and doctor reports the mismatch meanwhile.
+#
+# Prints `<ipv4> <port>` per usable entry; tailnet_allow_problems names the
+# rest, since this runs inside a command substitution where `fail` is lost.
+tailnet_allow_targets() {
+  local entries entry addr
+  read -ra entries <<<"$(env_get DEVBOX_TAILNET_ALLOW)"
+  for entry in "${entries[@]}"; do
+    tailnet_allow_valid "${entry}" || continue
+    addr="$(tailnet_allow_resolve "${entry%:*}")" || continue
+    printf '%s %s\n' "${addr}" "${entry##*:}"
+  done
+}
+
+tailnet_allow_problems() {
+  local entries entry
+  read -ra entries <<<"$(env_get DEVBOX_TAILNET_ALLOW)"
+  for entry in "${entries[@]}"; do
+    if ! tailnet_allow_valid "${entry}"; then
+      printf "DEVBOX_TAILNET_ALLOW entry '%s' is not <peer>:<port>\n" "${entry}"
+    elif ! tailnet_allow_resolve "${entry%:*}" >/dev/null; then
+      printf "DEVBOX_TAILNET_ALLOW peer '%s' has no Tailscale IPv4 address (tailscale ip -4)\n" "${entry%:*}"
+    fi
+  done
+}
+
+tailnet_allow_valid() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*:([1-9][0-9]{0,4})$ ]] && ((BASH_REMATCH[1] <= 65535))
+}
+
+tailnet_allow_resolve() {
+  local addr
+  addr="$(tailscale ip -4 "$1" 2>/dev/null | head -1)"
+  [[ "${addr}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  printf '%s' "${addr}"
 }
 
 # nft resolves the `socket cgroupv2` path to a cgroup *id* when the table
@@ -556,8 +610,13 @@ UNIT_BODY
 }
 
 step_netfilter() {
-  local want
+  local want problem
   want="$(netfilter_ruleset)"
+  # The table is still written without them: a typo must not hold back the
+  # rest of the boundary.
+  while IFS= read -r problem; do
+    fail "${problem} - left out of the table"
+  done < <(tailnet_allow_problems)
 
   if ! command -v nft >/dev/null 2>&1; then
     fail 'nft is not installed - project ports would be published on every interface'

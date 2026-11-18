@@ -178,6 +178,21 @@ already become a container address and never matches: that traffic stays on the 
 `tailscaled` being down, when the host's Tailscale address stops being local and a packet to it would follow the
 default route out to the ISP.
 
+The one way through is `DEVBOX_TAILNET_ALLOW` in `.env`: space-separated `<peer>:<port>` entries, each a Tailnet
+service the devbox container itself may open — the LLM stack behind its own Tailscale sidecar, say
+(`panther-minor:8000 panther-minor:8001`). `docker setup` resolves each peer with `tailscale ip -4` and puts one accept
+per entry at the head of the forward chain, TCP to that address and port only:
+
+```
+    iifname "docker0" ct state new ip daddr 100.80.134.108 tcp dport 8000 accept
+```
+
+The output chain gets no exception, so project containers and dev's uids stay off the Tailnet. The address is fixed
+when the table is written: a peer that moves keeps its old address in the table until `sudo ./bin/devbox docker setup`
+runs again, and `./bin/devbox doctor host` reports the stale ruleset — and an entry it cannot parse or resolve —
+meanwhile. The connection leaves masqueraded as the workstation, so the Tailnet policy sees the workstation's node and
+must grant it the port.
+
 These rules stop direct connections over the overlay, nothing more. A peer stays reachable at its LAN or public
 address, like the rest of the network. And `tailscaled`'s LocalAPI socket, `/run/tailscale/tailscaled.sock`, is
 world-accessible (`0666`): its `dial` endpoint has `tailscaled`, as root, open a connection for any local caller, and a
