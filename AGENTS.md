@@ -6,8 +6,9 @@ in this repository.
 ## Project Overview
 
 `devbox` provisions a containerised remote development environment on the AI coding workstation: one
-Docker container running an unprivileged `sshd` published only on the node's Tailscale address, so a herdr
-client can attach to it as a saved machine and run OMP, Claude Code and Codex agents inside it. The container is the agent
+Docker container running an unprivileged `sshd` published only on the node's Tailscale address, so Moshi can
+connect straight to it and run OMP, Claude Code and Codex agents inside it, in herdr panes (the laptop's herdr does not
+register it as a saved machine). The container is the agent
 sandbox -
 it reaches the project tree, the internet and a rootless project Docker daemon, never the host filesystem or
 the host's root Docker daemon.
@@ -65,7 +66,7 @@ the host's root Docker daemon.
   - `docs/architecture.md` - system map, components, container startup order, ways in, repository layout
   - `docs/installation.md` - prerequisites, laptop key, `~/.ssh/config`, first deploy, laptop agent install, `.env`
     reference
-  - `docs/connecting.md` - herdr panes, `ssh devbox`, Moshi on a phone, `./bin/devbox shell`, cloning, port forwarding
+  - `docs/connecting.md` - Moshi, `ssh devbox`, `./bin/devbox shell`, cloning, port forwarding
   - `docs/git.md` - the identity registry, manual vs agent git, the credential helper, signing, laptop install
   - `docs/toolchain.md` - pinned versions, install locations, OMP, Claude Code, Codex, Moshi/`moshi-hook`, agent skills, adding
     a tool

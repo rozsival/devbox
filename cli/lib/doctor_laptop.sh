@@ -97,8 +97,8 @@ doctor_laptop() {
 
   # -- 2. ssh config: every host selects one public key through the agent ------
   log_info 'ssh config'
-  # A config that does not parse kills every ssh client before it reaches the agent - herdr then reports
-  # "connection was lost" and 1Password never prompts. Name that once instead of failing every host below.
+  # A config that does not parse kills every ssh client before it reaches the agent, so 1Password never
+  # prompts. Name that once instead of failing every host below.
   if ! config_err="$(ssh -G localhost 2>&1 >/dev/null)"; then
     # shellcheck disable=SC2088  # literal ~ in a message
     fail "~/.ssh/config does not parse: ${config_err//$'\n'/; }"
@@ -166,7 +166,7 @@ doctor_laptop() {
   fi
   check_host devbox '' devbox
   if [[ "$(ssh -G devbox 2>/dev/null | sed -n 's/^forwardagent //p')" == yes ]]; then
-    fail 'Host devbox: ForwardAgent yes - herdr would carry your agent into every session; forward explicitly with ssh -A instead'
+    fail 'Host devbox: ForwardAgent yes - every ssh devbox would carry your agent; forward explicitly with ssh -A instead'
   fi
 
   # -- 3. git: sign with the account signing key, through op-ssh-sign ----------

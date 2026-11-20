@@ -94,8 +94,8 @@ These are known and deliberate, not gaps to be closed later:
    registered on GitHub, and `Host <workstation>` uses the default identity's key rather than `devbox.pub`. That
    narrows, not closes: a key used through `ssh -A devbox` stays approved for the terminal app until 1Password locks,
    so it can sign from the devbox too — what keeps the devbox off the workstation's sshd is `devbox-docker-firewall`.
-   What a forwarded agent still reaches is your GitHub push authority, for the connection's lifetime. Plain `herdr`
-   panes, `./bin/devbox shell` and a bare `ssh devbox` never forward one.
+   What a forwarded agent still reaches is your GitHub push authority, for the connection's lifetime. Moshi (its own
+   device, no laptop agent), `./bin/devbox shell` and a bare `ssh devbox` never forward one.
 3. **No isolation between projects.** One container, one `dev` user, one bind mount: an agent in project A can read
    project B's `.env` and GCP key. Cloning something less trusted is where per-project containers or separate users stop
    being over-engineering.

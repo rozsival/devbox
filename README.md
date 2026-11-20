@@ -9,9 +9,9 @@
 ![Network](https://img.shields.io/badge/Network-Tailscale%20only-4CAF50)
 ![Agents](https://img.shields.io/badge/Agents-OMP%20%2B%20Claude%20Code%20%2B%20Codex-F46800)
 
-One Docker container with its own unprivileged `sshd`, published only on the node's Tailscale address. A
-[herdr](https://herdr.dev) client on a laptop attaches to it as a saved machine and runs **OMP**, **Claude Code** and
-**Codex** agents inside — the container is the agent sandbox.
+One Docker container with its own unprivileged `sshd`, published only on the node's Tailscale address. Moshi connects
+straight to it over SSH and drives **OMP**, **Claude Code** and **Codex** agents inside, in herdr panes that keep running
+across disconnects — the container is the agent sandbox.
 
 **[📚 Documentation](docs/README.md)** · [Installation](docs/installation.md) · [Connecting](docs/connecting.md) ·
 [Git identities](docs/git.md) · [CLI](docs/cli.md)
@@ -29,7 +29,7 @@ One Docker container with its own unprivileged `sshd`, published only on the nod
 | **No private keys**      | Public keys only; manual git borrows the laptop's 1Password agent, agent git gets HTTPS and per-operation tokens         |
 | **Multiple identities**  | One `identities.conf` routes git author, signing key and GitHub token by directory and GitHub owner                      |
 | **Project Docker**       | `docker compose` against a rootless sibling daemon, with path identity and project ports kept off the Tailnet            |
-| **Persistent workspace** | herdr panes survive client exit; `/home/dev` is a host bind mount that survives every rebuild                            |
+| **Persistent workspace** | herdr panes in the container survive client exit; `/home/dev` is a host bind mount that survives every rebuild           |
 | **One CLI, both sides**  | `./bin/devbox` for workstation and laptop, with a `doctor` acceptance test on each                                       |
 
 > [!IMPORTANT]
@@ -56,8 +56,8 @@ items and approvals, sudo passwords, interactive logins, tokens and identities.c
 Done means `./bin/devbox doctor` passes on the workstation and `./bin/devbox doctor laptop` here.
 ```
 
-Then run `herdr` and open panes on the **Devbox** machine, or `ssh devbox` for a plain shell. Prefer doing it by hand?
-Every step is in [Installation](docs/installation.md).
+Then connect Moshi to the devbox ([Connecting](docs/connecting.md#-moshi)), or `ssh devbox` for a plain shell. Prefer
+doing it by hand? Every step is in [Installation](docs/installation.md).
 
 > [!WARNING]
 > `start`, `stop` and `rebuild` recreate or stop the container and drop every live SSH session and herdr pane; they ask

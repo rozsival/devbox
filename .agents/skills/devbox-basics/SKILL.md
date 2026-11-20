@@ -1,13 +1,13 @@
 ---
 name: devbox-basics
-description: Explains how the devbox works - the container-as-sandbox model, the Tailnet-only exposure boundary, the four ways in, which machine owns which files, and how the identity registry routes Git identities by directory. Use this whenever someone asks what the devbox is, how it is isolated, "where do I actually work", why a repo or tool is missing from the laptop, whether the devbox is reachable from the internet, or is reading this repo for the first time. Also use it before answering any devbox question from memory, so the answer matches what the repo actually does.
+description: Explains how the devbox works - the container-as-sandbox model, the Tailnet-only exposure boundary, the three ways in, which machine owns which files, and how the identity registry routes Git identities by directory. Use this whenever someone asks what the devbox is, how it is isolated, "where do I actually work", why a repo or tool is missing from the laptop, whether the devbox is reachable from the internet, or is reading this repo for the first time. Also use it before answering any devbox question from memory, so the answer matches what the repo actually does.
 ---
 
 # devbox basics
 
 `devbox` provisions one Docker container on `<workstation>`: its own unprivileged `sshd`, published only on
-its Tailscale address. A [herdr](https://herdr.dev) laptop client attaches to it as a saved machine, running
-OMP, Claude Code and Codex agents inside.
+its Tailscale address. Moshi connects straight to it over SSH, running OMP, Claude Code and Codex agents
+inside, in herdr panes that survive disconnects. The laptop's herdr does not register it as a saved machine.
 
 **The container is the sandbox.** A bypassed-permission agent reaches the project tree, internet, and a
 rootless project Docker daemon - never the host filesystem or its root Docker daemon.
@@ -15,8 +15,8 @@ rootless project Docker daemon - never the host filesystem or its root Docker da
 ## The mental model
 
 ```
-laptop                    <workstation> (host)              container "devbox"
-herdr client   --ssh-->   BIND_ADDR:2223  --DNAT-->          :2222  sshd running as dev
+client                    <workstation> (host)              container "devbox"
+Moshi/ssh      --ssh-->   BIND_ADDR:2223  --DNAT-->          :2222  sshd running as dev
 devbox deploy  --rsync->  ~/devbox (runtime files)             /home/dev  <- bind mount of
                           ${DEVBOX_DATA_DIR}                 ${DEVBOX_DATA_DIR}
 ```
@@ -51,21 +51,20 @@ Four facts:
    older versions also reached the host's own services), or drive dev's user manager through `/run/user/1001`.
    A Tailscale exit node on the workstation cuts the devbox's internet (`docs/docker.md`).
 
-## The four ways in
+## The three ways in
 
-| Route                | Run from    | Use it for                                                |
-| -------------------- | ----------- | --------------------------------------------------------- |
-| `herdr`              | Laptop      | Normal work; panes survive client exit, network loss      |
-| `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git`        |
-| Moshi                | Phone       | Watching, steering an agent away from the desk            |
-| `./bin/devbox shell` | Workstation | Recovery when SSH, `authorized_keys`, or Tailscale broken |
+| Route                | Run from      | Use it for                                                |
+| -------------------- | ------------- | --------------------------------------------------------- |
+| Moshi                | Moshi devices | Normal work; herdr panes survive disconnects              |
+| `ssh devbox`         | Laptop        | One-off commands, scripts, tunnels, `rsync`, `git`        |
+| `./bin/devbox shell` | Workstation   | Recovery when SSH, `authorized_keys`, or Tailscale broken |
 
-All four land as `dev` in `/home/dev`. `devbox` is an **SSH config alias**, not a shell alias: a
+All three land as `dev` in `/home/dev`. `devbox` is an **SSH config alias**, not a shell alias: a
 `Host devbox` block (`Port 2223`, `User dev`, `IdentityFile ~/.ssh/devbox.pub`) that anything reading
 `~/.ssh/config` honours - so `rsync`, `git` and `ssh -L` work unchanged.
 
 Moshi is a plain SSH client plus `moshi-hook` (daemon `bootstrap` installs, `entrypoint.sh` starts) - without
-it the phone gets a terminal but no notifications or approvals. Its phone key belongs in
+it Moshi gets a terminal but no notifications or approvals. Each device's key belongs in
 `DEVBOX_EXTRA_AUTHORIZED_KEYS`: `authorized_keys` gets rewritten every start (`docs/toolchain.md`).
 
 Dev servers are never published. Forward them: `ssh -N -L 5173:localhost:5173 devbox`.

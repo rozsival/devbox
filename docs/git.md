@@ -171,9 +171,9 @@ key most identities on it share (`IdentityFile` + `IdentitiesOnly yes`), plus a 
 per identity whose key differs, selected by the `ssh -P <slug>` an org's `core.sshCommand` passes — so `ssh` offers
 exactly one key, never whichever the forwarded agent happens to list first.
 
-Without `-A`, a manual `git push` or signed commit fails on purpose — no key to answer. Ordinary `herdr` panes and
-`./bin/devbox shell` do **not** forward the agent: herdr's SSH connection never sets `ForwardAgent`, and the laptop's
-`Host devbox` block keeps it off — only an explicit `ssh -A devbox` does.
+Without `-A`, a manual `git push` or signed commit fails on purpose — no key to answer. Plain `ssh devbox` and
+`./bin/devbox shell` do **not** forward the agent: the laptop's `Host devbox` block keeps it off — only an explicit
+`ssh -A devbox` does. Moshi connects from its own device, where the laptop's 1Password agent does not exist.
 
 > [!WARNING]
 > **Accepted limit.** For that connection's lifetime the forwarded socket is open to every process in the devbox, not

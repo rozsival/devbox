@@ -57,7 +57,7 @@ identity's block - see `devbox-setup`, phase 5.
 key most identities on it share, `IdentitiesOnly yes` so ssh offers only that key of the ones held; a
 `Match host <host> tagged <slug>` block per identity whose key differs, selected by the `ssh -P <slug>` its
 `org-<slug>.gitconfig` sets as `core.sshCommand` - no alias `Host` block, ever. `Host devbox` sets
-`ForwardAgent no` - herdr never carries the agent; only explicit `ssh -A devbox` does. Blocks verbatim:
+`ForwardAgent no` - a plain connection never carries the agent; only explicit `ssh -A devbox` does. Blocks verbatim:
 `docs/installation.md#2-add-the-sshconfig-blocks` for `Host *`/`<workstation>`/`devbox`; the GitHub blocks follow
 the pattern in `docs/git.md#-laptop-install` - one `Match … tagged <slug>` per identity with a key of its
 own, the plain `Host github.com` block for the rest.
@@ -245,7 +245,7 @@ repo.
 | `<name>.pub … is not held by the 1Password agent`                             | Wrong export, or item disabled; re-export via `ssh-add -L`                                                                                                                                                                                                                                                                                                                                            |
 | `1Password SSH agent not reachable`                                           | Agent off (1Password → Developer → SSH agent) or locked                                                                                                                                                                                                                                                                                                                                               |
 | `identities.conf: …`                                                          | Registry does not validate (`devbox-identities check`); fix the named block, phase 1/5                                                                                                                                                                                                                                                                                                                |
-| `~/.ssh/config does not parse: … line N`                                      | Option-name typo; ssh clients (herdr included) die before the agent, 1Password never prompts                                                                                                                                                                                                                                                                                                          |
+| `~/.ssh/config does not parse: … line N`                                      | Option-name typo; ssh clients die before the agent, 1Password never prompts                                                                                                                                                                                                                                                                                                                           |
 | `Host …: IdentityFile is …`                                                   | Names a private key path or wrong `.pub` (phase 2)                                                                                                                                                                                                                                                                                                                                                    |
 | `~/.ssh/config still has the alias Host <slug>.<host>`                        | Aliases are gone; delete the block - the tag selects the key now (phase 2)                                                                                                                                                                                                                                                                                                                            |
 | `Host devbox: ForwardAgent yes`                                               | Remove it; forward via `ssh -A devbox` when needed                                                                                                                                                                                                                                                                                                                                                    |
@@ -268,9 +268,6 @@ repo.
 | `… is not a symlink onto …/bin/devbox` / `bash completion … missing or stale` | `./bin/devbox install` from the checkout you want `devbox` to run                                                                                                                                                                                                                                                                                                                                     |
 | `a login shell does not find devbox` / `… does not load bash-completion`      | Add the printed `PATH` line, or `brew install bash-completion@2` and source it from `~/.bashrc`                                                                                                                                                                                                                                                                                                       |
 
-herdr's saved-machine connections are background ssh over that agent - a machine flapping between
-`connecting`/`offline` while 1Password is locked is that, not a devbox fault.
-
 ## What is deliberately not here
 
 - No `op` for tokens: `secrets.env` is plaintext at mode 600 on both machines, by choice; an `op://`
@@ -283,7 +280,7 @@ herdr's saved-machine connections are background ssh over that agent - a machine
 
 | Topic                                          | File                   |
 | ---------------------------------------------- | ---------------------- |
-| Key item, ssh config, herdr, 1Password         | `docs/installation.md` |
+| Key item, ssh config, 1Password                | `docs/installation.md` |
 | Both git modes, launcher, helper, signing      | `docs/git.md`          |
 | Tokens, App credentials, `secrets.env`         | `docs/secrets.md`      |
 | `devbox agent install`, `devbox doctor laptop` | `docs/cli.md`          |

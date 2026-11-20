@@ -14,7 +14,7 @@ quick start live in the [root README](../README.md).
 | ------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | [Architecture](architecture.md) | Understand what runs where and why                          | System map, container startup, ways in, repository layout                          |
 | [Installation](installation.md) | Set up the laptop and the workstation for the first time    | Laptop key, `~/.ssh/config`, deploy, `.env` reference, laptop agent install        |
-| [Connecting](connecting.md)     | Get a shell in the devbox                                   | herdr panes, `ssh devbox`, Moshi, `devbox shell`, cloning, dev servers             |
+| [Connecting](connecting.md)     | Get a shell in the devbox                                   | Moshi, `ssh devbox`, `devbox shell`, cloning, dev servers                          |
 | [Git identities](git.md)        | Clone repos and commit as the right account                 | Identity registry, manual vs agent git, credential helper, signing, laptop install |
 | [Secrets](secrets.md)           | Place tokens and keys where the right process reads them    | Three layers, `secrets.env`, per-identity `gh` tokens, agent logins, GCP ADC       |
 | [Toolchain](toolchain.md)       | See what is installed and add a tool                        | Pinned versions, install locations, OMP, Claude Code, Codex, Moshi hooks, skills   |
@@ -30,7 +30,7 @@ quick start live in the [root README](../README.md).
 ### First installation
 
 1. [Architecture](architecture.md) — the container-as-sandbox model and the one published port
-2. [Installation](installation.md) — laptop key, `~/.ssh/config`, deploy, `docker setup`, herdr
+2. [Installation](installation.md) — laptop key, `~/.ssh/config`, deploy, `docker setup`, Moshi
 3. [Git identities](git.md#-laptop-install) and [Secrets](secrets.md#-manual-checklist) — identities, tokens, App
    credentials
 4. [Connecting](connecting.md) — panes, cloning, dev servers

@@ -11,7 +11,7 @@ covers what to do about it.
 
 ```
 laptop (macOS)                         workstation (Ubuntu host)            container "devbox"
-the user, 1Password, herdr client  --ssh over Tailscale-->  BIND_ADDR:2223  -->  sshd as dev, agents, /home/dev
+the user, 1Password, ssh client    --ssh over Tailscale-->  BIND_ADDR:2223  -->  sshd as dev, agents, /home/dev
                                                             rootless dockerd (uid 1001)  <--socket--  docker CLI
 ```
 

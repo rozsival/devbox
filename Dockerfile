@@ -150,8 +150,7 @@ RUN if getent passwd "${HOST_UID}" >/dev/null; then userdel -r "$(getent passwd 
 
 # Pinned binaries land in /usr/local/bin, which is on the default *non-interactive*
 # sshd PATH. That is load-bearing for herdr: it prefers a compatible binary already
-# on the remote PATH and non-interactive runs fail rather than installing one, which
-# is exactly how saved-machine background connections run.
+# on the remote PATH and non-interactive runs fail rather than installing one.
 #
 # Every download is verified: against upstream's checksum file where it
 # publishes one, else against the SHA-256 GitHub records for the release asset

@@ -1,6 +1,6 @@
 ---
 name: devbox-setup
-description: Sets up the devbox end to end - the dedicated laptop SSH key, the two ~/.ssh/config host blocks, the first deploy and .env on the workstation, herdr machine registration, and the in-container manual steps (filling ~/.config/devbox/identities.conf, one GH_TOKEN_<SLUG> per identity in secrets.env, GitHub App credentials per identity). Use this whenever someone is installing or re-installing the devbox, onboarding a new laptop, says they cannot connect, gets "Too many authentication failures", "Permission denied (publickey)", an empty BIND_ADDR preflight failure, or a herdr machine stuck offline, or asks which manual steps are still outstanding.
+description: Sets up the devbox end to end - the dedicated laptop SSH key, the two ~/.ssh/config host blocks, the first deploy and .env on the workstation, connecting Moshi, and the in-container manual steps (filling ~/.config/devbox/identities.conf, one GH_TOKEN_<SLUG> per identity in secrets.env, GitHub App credentials per identity). Use this whenever someone is installing or re-installing the devbox, onboarding a new laptop, says they cannot connect, gets "Too many authentication failures", "Permission denied (publickey)", or an empty BIND_ADDR preflight failure, or asks which manual steps are still outstanding.
 ---
 
 # devbox setup
@@ -38,10 +38,6 @@ app until 1Password locks, so any key that app has used since then (`id_<slug>.p
 ssh-copy-id -f -i ~/.ssh/id_<slug>.pub -p 2222 <user>@<workstation>  # host sshd, needed by deploy - never devbox.pub
 cat ~/.ssh/devbox.pub                                           # goes into .env in phase 3
 ```
-
-herdr's saved-machine connections run in background, needing 1Password unlocked, the key approved - a
-machine flapping between `connecting` and `offline` while locked is that, not a devbox fault. Fallback if
-unworkable: a dedicated passphrase-less file key (documented).
 
 ## Phase 2 - `~/.ssh/config` (on the laptop)
 
@@ -123,13 +119,15 @@ active and current; toolchain probes - exits non-zero on any failure. Then `ssh 
 If the node's Tailscale address changes later, `doctor` reports `BIND_ADDR is X but Tailscale reports Y`;
 re-run `./bin/devbox env && ./bin/devbox start`.
 
-## Phase 5 - attach herdr and finish the identity steps
+## Phase 5 - connect Moshi and finish the identity steps
 
 ```bash
 ssh devbox true                                # accept the container host key once
-herdr machine add devbox --label "Devbox"      # interactive terminal: it verifies the remote binary
-herdr                                          # "Devbox" appears next to "Local"
 ```
+
+Then Moshi: host `<workstation>`, port `2223`, user `dev`, each device's key in `DEVBOX_EXTRA_AUTHORIZED_KEYS`
+(`docs/connecting.md#-moshi`). Never register the devbox as a saved machine in the laptop's herdr - Moshi is the
+one client, a second one only duplicates the same panes.
 
 Bootstrap runs every container start, fully idempotent, printing outstanding steps at the end - so
 `./bin/devbox bootstrap` answers "what's left" authoritatively, never a guess:
@@ -180,7 +178,7 @@ No `op` step: the container holds no 1Password account or `op` binary. Project s
 laptop (`op inject -i .env.tpl -o .env`), copy in; Google APIs need a per-project service-account key, never
 `gcloud auth application-default login`. Reasoning, commands: `docs/secrets.md`.
 
-Manual git and signing need the agent forwarded (`ssh -A devbox`, not plain `ssh devbox`, herdr, or
+Manual git and signing need the agent forwarded (`ssh -A devbox`, not plain `ssh devbox`, Moshi, or
 `./bin/devbox shell`): `ssh -T git@github.com` → `Hi <your-github-username>!`, `ssh -P work -T git@github.com`
 → `Hi <your-work-username>!` for any identity with its own key (`devbox-identities get work tag`). Agent
 sessions (`omp`/`claude`/`codex` launchers) skip this, pushing HTTPS with a token minted per operation. Full mechanism:
@@ -202,16 +200,15 @@ idempotent; details: `docs/toolchain.md#-agent-skills-and-browser-automation`.
 
 ## When setup does not work
 
-| Symptom                                 | Cause and fix                                                                                                                                                                    |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `start` aborts on empty `BIND_ADDR`     | Preflight by design - Tailscale up, then `env`                                                                                                                                   |
-| `Too many authentication failures`      | `IdentitiesOnly yes` missing from that `Host` block (which names exactly one key: `devbox.pub` / `id_<slug>.pub`)                                                                |
-| `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS`; restart (never register `devbox.pub` on GitHub)                                                                                       |
-| herdr machine stuck `offline`           | `~/.ssh/config` no longer parses (`ssh -G devbox` names the line; herdr's system `ssh -o BatchMode=yes` logs only `connection was lost`), or 1Password locked / key not approved |
-| `Host key verification failed`          | Data dir was wiped; `ssh-keygen -R '[<workstation>]:2223'`                                                                                                                       |
-| `Permission denied` writing `/home/dev` | `${DEVBOX_DATA_DIR}` not owned by `HOST_UID:HOST_GID`                                                                                                                            |
-| SSH itself is the broken thing          | `./bin/devbox shell` on host bypasses container's sshd                                                                                                                           |
-| `git push` hangs on a host-key prompt   | Key seeding failed; `ssh-keyscan github.com >> ~/.ssh/known_hosts`                                                                                                               |
+| Symptom                                 | Cause and fix                                                                                                     |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `start` aborts on empty `BIND_ADDR`     | Preflight by design - Tailscale up, then `env`                                                                    |
+| `Too many authentication failures`      | `IdentitiesOnly yes` missing from that `Host` block (which names exactly one key: `devbox.pub` / `id_<slug>.pub`) |
+| `Permission denied (publickey)`         | Key not in `DEVBOX_EXTRA_AUTHORIZED_KEYS`; restart (never register `devbox.pub` on GitHub)                        |
+| `Host key verification failed`          | Data dir was wiped; `ssh-keygen -R '[<workstation>]:2223'`                                                        |
+| `Permission denied` writing `/home/dev` | `${DEVBOX_DATA_DIR}` not owned by `HOST_UID:HOST_GID`                                                             |
+| SSH itself is the broken thing          | `./bin/devbox shell` on host bypasses container's sshd                                                            |
+| `git push` hangs on a host-key prompt   | Key seeding failed; `ssh-keyscan github.com >> ~/.ssh/known_hosts`                                                |
 
 `authorized_keys` is rebuilt on every container start from `https://github.com/<DEVBOX_GITHUB_USER>.keys` plus
 `DEVBOX_EXTRA_AUTHORIZED_KEYS`, so key changes take a restart, not a manual edit.
