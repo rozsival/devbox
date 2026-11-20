@@ -110,12 +110,6 @@ the container and rootless, and whether `host.docker.internal` resolves.
 The agent offered more than six keys. Give the `Host` block `IdentitiesOnly yes` plus that host's one key:
 `IdentityFile ~/.ssh/devbox.pub` for `Host devbox`, `IdentityFile ~/.ssh/id_<slug>.pub` for `Host <workstation>`.
 
-### herdr machine flaps between `connecting` and `offline`
-
-The 1Password agent serving the devbox key is locked or hasn't approved it for herdr, which can't answer background
-prompts. Unlock and approve; if it persists, use the documented file-key exception — see
-[Installation](installation.md#1-create-the-laptop-key).
-
 ### `start` fails with `BIND_ADDR is empty`
 
 Preflight working as intended — every command that loads the compose project (`start`, `stop`, `logs`, `ps`) fails until

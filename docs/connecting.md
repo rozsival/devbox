@@ -1,8 +1,8 @@
 # 🔗 Connecting
 
-> Four ways into the container, landing as `dev` in the same bind-mounted `/home/dev` — laptop and workstation
-> `~/projects` differ. Normal work goes through `herdr`; `ssh devbox` covers one-off commands and tunnels, Moshi covers
-> the phone, and `./bin/devbox shell` is the recovery route.
+> Three ways into the container, landing as `dev` in the same bind-mounted `/home/dev` — laptop and workstation
+> `~/projects` differ. Normal work goes through Moshi, straight to the container's sshd; `ssh devbox` covers one-off
+> commands and tunnels, and `./bin/devbox shell` is the recovery route.
 
 **Related:** [Installation](installation.md) · [Git Identities](git.md) · [Toolchain](toolchain.md) ·
 [Networking](networking.md)
@@ -11,24 +11,33 @@
 
 ## 🗺️ Routes
 
-| Route                | From        | Use it for                                         |
-| -------------------- | ----------- | -------------------------------------------------- |
-| `herdr`              | Laptop      | Normal work: survives client exit, network loss    |
-| `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git` |
-| Moshi                | Phone       | Watching, steering an agent away from the desk     |
-| `./bin/devbox shell` | Workstation | Recovery when SSH or the network is broken         |
+| Route                | From          | Use it for                                         |
+| -------------------- | ------------- | -------------------------------------------------- |
+| Moshi                | Moshi devices | Normal work: herdr panes survive disconnects       |
+| `ssh devbox`         | Laptop        | One-off commands, scripts, tunnels, `rsync`, `git` |
+| `./bin/devbox shell` | Workstation   | Recovery when SSH or the network is broken         |
 
-## 🪟 herdr panes
+## 📱 Moshi
 
-```bash
-herdr                    # select "Devbox" in the sidebar
-```
+Moshi's an SSH client: host `<workstation>`, port `2223`, user `dev`, container-authorized key. It connects straight to
+the container's sshd — no laptop in between, no 1Password prompt.
 
-A pane opens a login shell in `/home/dev`, running server-side after detach or quit — lid-close or a killed client won't
-interrupt a build, clone, or agent; reconnecting restores it.
+> [!IMPORTANT]
+> Add each device's key to `DEVBOX_EXTRA_AUTHORIZED_KEYS` in `.env` on the workstation, not via Easy Pair — the
+> entrypoint rebuilds `authorized_keys` from GitHub plus that variable each start, erasing direct edits at the next
+> `./bin/devbox start`.
 
-`herdr` requires the pinned binary at `/usr/local/bin/herdr` — background connections get only the default
-non-interactive SSH `PATH`, so it's missing from `~/.local/bin`.
+Panes run in the container's herdr server (the pinned `/usr/local/bin/herdr`) and keep running server-side after a
+disconnect — a dropped network or a closed app won't interrupt a build, clone, or agent; reconnecting restores it.
+
+Notifications, lock-screen approvals, and transcript view need `moshi-hook`, which `bootstrap` installs and the
+entrypoint starts. One pairing step activates it — [Toolchain](toolchain.md#-moshi-and-moshi-hook).
+
+> [!NOTE]
+> The laptop's herdr client does not register the devbox as a saved machine: Moshi is the one client for it, and a
+> second one only duplicates the same panes. To drop an existing profile: `herdr machine list`, then
+> `herdr machine remove <id>` (the 32-hex id; the label is refused). Removing it disconnects that client only; the
+> devbox's herdr server and its panes keep running.
 
 ## 🔑 `ssh devbox`
 
@@ -56,8 +65,8 @@ ssh -A devbox
 ```
 
 > [!NOTE]
-> Plain `ssh devbox` (no `-A`), herdr panes and `./bin/devbox shell` never forward the agent — manual git fails, on
-> purpose: [Git Identities](git.md#-manual-work-on-the-devbox--the-escape-hatch).
+> Plain `ssh devbox` (no `-A`), Moshi and `./bin/devbox shell` never forward the agent — manual git fails, on purpose:
+> [Git Identities](git.md#-manual-work-on-the-devbox--the-escape-hatch).
 
 ## 🧯 `./bin/devbox shell`
 
@@ -66,18 +75,6 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox shell'   # docker compose exec -i
 ```
 
 This bypasses the container's sshd, working even if `authorized_keys`, the host key, or Tailscale is broken.
-
-## 📱 Moshi on a phone
-
-Moshi's an SSH client: host `<workstation>`, port `2223`, user `dev`, container-authorized key.
-
-> [!IMPORTANT]
-> Add the phone's key to `DEVBOX_EXTRA_AUTHORIZED_KEYS` in `.env` on the workstation, not via Easy Pair — the
-> entrypoint rebuilds `authorized_keys` from GitHub plus that variable each start, erasing direct edits at the next
-> `./bin/devbox start`.
-
-Notifications, lock-screen approvals, and transcript view need `moshi-hook`, which `bootstrap` installs and the
-entrypoint starts. One pairing step activates it — [Toolchain](toolchain.md#-moshi-and-moshi-hook).
 
 ## 📥 Cloning a repo
 
@@ -136,14 +133,6 @@ The agent offered more than six keys before the right one; `IdentitiesOnly yes` 
 
 Shouldn't happen: the host key lives in `/home/dev/.ssh/host/`'s bind mount, surviving rebuilds. Wiped data dir? Remove
 the stale line: `ssh-keygen -R '[<workstation>]:2223'`, reconnect.
-
-### Moshi connected to my _laptop_ and 1Password asked to use the Devbox Laptop key — why?
-
-Moshi's laptop host runs `herdr`, and every herdr client connects every saved machine itself: the new client opens its
-own `ssh devbox` for the Devbox machine, and that is what 1Password is approving. Approve, and that client shows the
-devbox through the laptop; deny, and only its Devbox entry sits at _Attention_ — Local panes, the desktop client and a
-direct phone → devbox connection are unaffected. The direct route above involves neither the laptop nor 1Password, which
-is why it is the recommended one.
 
 ### Which tools resolve in a non-interactive `ssh devbox '<cmd>'`?
 

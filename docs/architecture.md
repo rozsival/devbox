@@ -1,8 +1,8 @@
 # 🏗️ Architecture
 
 > devbox is one Docker container on the workstation: an unprivileged `sshd` running as `dev`, published only on the
-> node's Tailscale address and loopback, with `/home/dev` on a host bind mount. A herdr client on the laptop attaches
-> to it as a saved machine; project containers come from a rootless sibling Docker daemon, never the host's root one.
+> node's Tailscale address and loopback, with `/home/dev` on a host bind mount. Moshi connects straight to it over SSH;
+> project containers come from a rootless sibling Docker daemon, never the host's root one.
 
 **Related:** [Installation](installation.md) · [Networking](networking.md) · [Docker](docker.md) ·
 [Security model](security.md) · [Development](development.md)
@@ -13,7 +13,7 @@
 
 ```mermaid
 flowchart LR
-  L["laptop<br/>herdr client"] -->|" ssh devbox<br/>Tailnet only "| H["&lt;workstation&gt;<br/>BIND_ADDR:2223"]
+  L["Moshi / laptop<br/>ssh client"] -->|" ssh :2223<br/>Tailnet only "| H["&lt;workstation&gt;<br/>BIND_ADDR:2223"]
   L -->|" devbox deploy<br/>rsync "| R["~/devbox<br/>(the runtime files)"]
   H -->|" DNAT "| C["container :2222<br/>sshd as dev"]
   C --> P["panes: OMP, Claude Code, Codex, node, gh, wt"]
@@ -64,14 +64,13 @@ Steps 5 and 6 are best-effort: neither an unreachable project daemon nor a missi
 
 ## 🚪 Ways in
 
-| Route                | Run from    | Use it for                                                   |
-| -------------------- | ----------- | ------------------------------------------------------------ |
-| `herdr`              | Laptop      | Normal work; panes survive client exit and network loss      |
-| `ssh devbox`         | Laptop      | One-off commands, scripts, tunnels, `rsync`, `git`           |
-| Moshi                | Phone       | Watching and steering an agent away from the desk            |
-| `./bin/devbox shell` | Workstation | Recovery when SSH, `authorized_keys` or Tailscale are broken |
+| Route                | Run from      | Use it for                                                   |
+| -------------------- | ------------- | ------------------------------------------------------------ |
+| Moshi                | Moshi devices | Normal work; herdr panes survive disconnects                 |
+| `ssh devbox`         | Laptop        | One-off commands, scripts, tunnels, `rsync`, `git`           |
+| `./bin/devbox shell` | Workstation   | Recovery when SSH, `authorized_keys` or Tailscale are broken |
 
-All four land as `dev` in `/home/dev`. Details: [Connecting](connecting.md).
+All three land as `dev` in `/home/dev`. Details: [Connecting](connecting.md).
 
 ## 📁 Repository layout
 

@@ -10,11 +10,11 @@
 
 ## 🧰 Prerequisites
 
-| Where       | Requirement                                                                                      |
-| ----------- | ------------------------------------------------------------------------------------------------ |
-| Workstation | Ubuntu 26.04, Docker with compose v2, Tailscale ≥ 1.98 up, `rsync`, a known UID/GID              |
-| Laptop      | GNU `rsync` (`brew install rsync`), `jq`, an SSH client, and a [herdr](https://herdr.dev) client |
-|             | bash ≥ 4.2 (`brew install bash`) — macOS's 3.2 can't run `./bin/devbox`                          |
+| Where       | Requirement                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| Workstation | Ubuntu 26.04, Docker with compose v2, Tailscale ≥ 1.98 up, `rsync`, a known UID/GID         |
+| Laptop      | GNU `rsync` (`brew install rsync`), `jq`, an SSH client; Moshi on the devices you work from |
+|             | bash ≥ 4.2 (`brew install bash`) — macOS's 3.2 can't run `./bin/devbox`                     |
 
 `./bin/devbox` is bashly-generated and refuses older bash; Homebrew's bash, first on the `PATH`, is the one
 `#!/usr/bin/env bash` finds. The workstation's Ubuntu bash is new enough. The same goes for `rsync`: macOS's
@@ -68,11 +68,6 @@ ssh-copy-id -f -i ~/.ssh/id_<slug>.pub -p 2222 <user>@<workstation>
 cat ~/.ssh/devbox.pub
 ```
 
-herdr's background connections need 1Password unlocked and the key's herdr approval remembered. A machine flapping
-`connecting`/`offline` under a locked 1Password reflects that — unlock or approve it. Unworkable? A passphrase-less
-_file_ key (`ssh-keygen -t ed25519 -N '' -f ~/.ssh/devbox`) serves only the `devbox` block, never the workstation or
-GitHub.
-
 ### 2. Add the `~/.ssh/config` blocks
 
 Two hosts, one machine, different ports: `2222` workstation sshd, `2223` container's.
@@ -99,8 +94,8 @@ Host devbox
   ServerAliveInterval 30
 ```
 
-`ForwardAgent no` states the default: manual git needs explicit `ssh -A devbox` ([Git Identities](git.md)), never
-herdr's connection. GitHub `Host`/`Match` blocks come from `~/.config/devbox/identities.conf`: one plain
+`ForwardAgent no` states the default: manual git needs explicit `ssh -A devbox` ([Git Identities](git.md)). GitHub
+`Host`/`Match` blocks come from `~/.config/devbox/identities.conf`: one plain
 `Host github.com` block naming the key most identities on it share, plus a `Match host github.com tagged <slug>` block
 per identity whose key differs — see [Git Identities](git.md#-laptop-install).
 
@@ -173,13 +168,15 @@ agent gitconfigs and `allowed_signers` from it. It lives on the bind mount, so i
 > [!NOTE]
 > `.env` is gitignored **and** protected from `devbox deploy` — deploys leave it untouched.
 
-### 4. Attach herdr
+### 4. Connect
 
 ```bash
 ssh devbox true                          # accept the host key once
-herdr machine add devbox --label "Devbox" # interactive terminal; verifies the remote binary
-herdr                                    # `Devbox` appears next to `Local`
 ```
+
+Then point Moshi at the devbox — host `<workstation>`, port `2223`, user `dev` — with each device's key in
+`DEVBOX_EXTRA_AUTHORIZED_KEYS` ([Connecting](connecting.md#-moshi)). Don't add the devbox to the laptop's herdr as a
+saved machine: Moshi already reaches the same panes.
 
 ## 🧩 Recommended extras
 
@@ -287,7 +284,7 @@ project's own `.env`. See [Secrets](secrets.md).
 
 ## ✅ Next steps
 
-1. Learn the everyday entry points — herdr panes, `ssh devbox`, `./bin/devbox shell` — in [Connecting](connecting.md)
+1. Learn the everyday entry points — Moshi, `ssh devbox`, `./bin/devbox shell` — in [Connecting](connecting.md)
 2. Wire up per-directory accounts, signing and agent credentials in [Git Identities](git.md)
 3. Review the three layers and the manual checklist in [Secrets](secrets.md)
 4. Bookmark redeploy, backup and health checks in [Operations](operations.md)
@@ -318,9 +315,7 @@ publishes only on `BIND_ADDR`.
 
 ### Do I need a key file on disk at all?
 
-No. Every key — devbox key, every GitHub identity — is a 1Password item; `~/.ssh` holds only `.pub` halves. Reason for a
-file key: herdr's background connection failing while 1Password is locked ([step 1](#1-create-the-laptop-key)) —
-serving the `devbox` block only.
+No. Every key — devbox key, every GitHub identity — is a 1Password item; `~/.ssh` holds only `.pub` halves.
 
 ### `start` failed with an empty `BIND_ADDR`. Is that a bug?
 

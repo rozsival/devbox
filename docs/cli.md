@@ -27,7 +27,6 @@
 ./bin/devbox deploy <workstation> --start   # deploy + start (keeps state; asks before killing SSH sessions)
 ssh devbox                           # shell in the container
 ssh -A devbox                        # + push, pull, sign as yourself (forwards the 1Password agent)
-herdr                                # attach panes; they survive client exit
 ssh -N -L 5173:localhost:5173 devbox # reach a dev server
 ssh devbox 'cd projects/app && docker compose up -d && devbox-ports'  # project containers on localhost
 ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
