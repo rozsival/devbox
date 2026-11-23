@@ -14,7 +14,7 @@ log_success() { echo -e "\033[0;32m[OK]\033[0m    $*"; }
 # The skills CLI follows vercel-labs/skills' tags rather than npm: find-skills
 # below is installed from the tag of this same version, which must exist.
 # renovate: datasource=github-tags depName=skills packageName=vercel-labs/skills
-SKILLS_CLI_VERSION="${SKILLS_CLI_VERSION:-1.8.1}"
+SKILLS_CLI_VERSION="${SKILLS_CLI_VERSION:-1.9.0}"
 # renovate: datasource=npm depName=agent-browser
 AGENT_BROWSER_VERSION="${AGENT_BROWSER_VERSION:-0.43.0}"
 # The skills too: a bare `owner/repo` installs whatever the default branch holds
