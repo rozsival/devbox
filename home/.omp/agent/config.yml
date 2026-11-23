@@ -64,6 +64,12 @@ update:
 secrets:
   enabled: true
 
+# OMP's selective-commit helper (eval `commit`, `/commit`) reads ~/.gitconfig through gitoxide and ignores
+# GIT_CONFIG_GLOBAL: it commits under your name and asks for your signature (can1357/oh-my-pi#19819). Off until
+# that is fixed; agents commit with plain `git`, which the launcher's fence covers (docs/git.md).
+commit:
+  enabled: false
+
 # Guardrail, not containment (docs/security.md, accepted limit 7). `deny` holds
 # even under yolo; `prompt` means a person decides. Three things it cannot do:
 #

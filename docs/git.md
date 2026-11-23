@@ -236,6 +236,13 @@ there reads `~/.gitconfig` and commits under your name, and `gh` gets the read-o
 bot and `gh` takes the App token again. A `GIT_CONFIG_GLOBAL` that is set to anything else, a test suite's
 `/dev/null` say, is a choice and stays. A child that also rebuilds `PATH` from scratch is out of reach of this.
 
+OMP's selective-commit helper (eval `commit`, `/commit`) never runs `git` for the commit itself: it reads the
+configuration through gitoxide, which loads `~/.gitconfig` and ignores `GIT_CONFIG_GLOBAL`, then sets
+`GIT_AUTHOR_*`/`GIT_COMMITTER_*` to your identity and asks for a signature
+([can1357/oh-my-pi#19819](https://github.com/can1357/oh-my-pi/issues/19819)). The signing step then runs under the
+fence, without your `gpg.format ssh`, and fails — the only thing that stopped those commits; with signing off they land
+as you. The OMP preset therefore sets `commit.enabled: false` until that is fixed.
+
 ### Claude desktop app
 
 The Claude desktop app starts its sessions itself, from launchd's environment, so no launcher runs and git and `gh`
