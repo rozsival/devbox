@@ -3,6 +3,7 @@
   "model": "opus",
   "advisorModel": "fable",
   "autoMemoryEnabled": false,
+  "disableClaudeAiConnectors": true,
   "permissions": {
     "deny": [
       "Bash(gh auth status*--show-token*)",

@@ -217,6 +217,12 @@ already holds the preset. The source defaults to `home/.claude/settings.json`; `
 Claude Code session needs a restart to pick the new rules up. There is no `--allow-unguarded` here: a merge cannot drop
 the live rules unless the preset sets an empty array. Details: [CLI Reference](cli.md#devbox-sync-claude).
 
+`disableClaudeAiConnectors: true` keeps the claude.ai connectors out of Claude Code: they are for the chat apps, and
+coding tools use the MCP servers configured on each machine, as Codex does (it does not load ChatGPT's connectors). The
+same servers are often both, at different URLs (a self-hosted server's tailnet port in `~/.claude.json`, its Funnel
+address as the connector), and Claude Code hides a connector only when a configured server has the same URL, so without
+it both load. Chats in the Claude apps keep the connectors.
+
 What differs from OMP's guardrail, and what it does and does not stop: [Security Model](security.md#command-allowlists-are-a-guardrail-not-a-control).
 
 > [!NOTE]
