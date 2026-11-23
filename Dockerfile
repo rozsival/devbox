@@ -31,7 +31,7 @@ ARG RUSTUP_VERSION=1.29.3
 # renovate: datasource=github-releases depName=rust packageName=rust-lang/rust
 ARG RUST_VERSION=1.100.0
 # renovate: datasource=ruby-version depName=ruby versioning=ruby
-ARG RUBY_VERSION=4.0.9
+ARG RUBY_VERSION=4.0.10
 # renovate: datasource=github-releases depName=gh packageName=cli/cli
 ARG GH_VERSION=2.104.0
 # renovate: datasource=github-releases depName=lazygit packageName=jesseduffield/lazygit
