@@ -51,7 +51,7 @@ ARG DOCKER_CLI_VERSION=29.9.0
 # renovate: datasource=github-releases depName=docker-compose packageName=docker/compose
 ARG DOCKER_COMPOSE_VERSION=5.7.1
 # renovate: datasource=github-releases depName=docker-buildx packageName=docker/buildx
-ARG DOCKER_BUILDX_VERSION=0.39.0
+ARG DOCKER_BUILDX_VERSION=0.39.1
 
 ENV DEBIAN_FRONTEND=noninteractive
 
