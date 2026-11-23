@@ -37,7 +37,7 @@ ARG GH_VERSION=2.105.0
 # renovate: datasource=github-releases depName=lazygit packageName=jesseduffield/lazygit
 ARG LAZYGIT_VERSION=0.66.3
 # renovate: datasource=github-releases depName=worktrunk packageName=max-sixty/worktrunk
-ARG WORKTRUNK_VERSION=0.82.0
+ARG WORKTRUNK_VERSION=0.83.0
 # renovate: datasource=github-releases depName=terraform packageName=hashicorp/terraform
 ARG TERRAFORM_VERSION=1.17.2
 # renovate: datasource=github-releases depName=shellcheck packageName=koalaman/shellcheck
