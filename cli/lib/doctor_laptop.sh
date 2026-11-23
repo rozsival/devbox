@@ -279,7 +279,7 @@ doctor_laptop() {
   for rel in .local/libexec/devbox-agent/agent-launch .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/claude-launcher \
     .local/libexec/devbox-agent/codex-launcher .local/libexec/devbox-agent/claude-session-env .local/libexec/devbox-agent/gh \
     .local/libexec/devbox-agent/fenced/git .local/libexec/devbox-agent/devbox-git-credential \
-    .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token \
+    .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .local/bin/mcp-token \
     .local/bin/wt-herdr .local/libexec/devbox-identities .codex/rules/devbox.rules; do
     cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
   done
@@ -322,7 +322,7 @@ doctor_laptop() {
   if ((${#stale[@]})); then
     fail "differ from the repo templates: ${stale[*]} - run ./bin/devbox agent install"
   else
-    log_success 'launchers, Claude session hook, shim, helper, fence, devbox-identities, wt-herdr, Codex rules and agent gitconfigs match the repo templates'
+    log_success 'launchers, Claude session hook, shim, helper, fence, devbox-identities, mcp-token, wt-herdr, Codex rules and agent gitconfigs match the repo templates'
   fi
   # Claude sessions no launcher starts (the desktop app) get the fence only
   # from this SessionStart hook; without it they run git and gh as you.

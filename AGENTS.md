@@ -68,10 +68,10 @@ the host's root Docker daemon.
     reference
   - `docs/connecting.md` - Moshi, `ssh devbox`, `./bin/devbox shell`, cloning, port forwarding
   - `docs/git.md` - the identity registry, manual vs agent git, the credential helper, signing, laptop install
-  - `docs/toolchain.md` - pinned versions, install locations, OMP, Claude Code, Codex, Moshi/`moshi-hook`, agent skills, adding
-    a tool
-  - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, the Claude Code and Codex logins, GCP ADC, App
-    credentials
+  - `docs/toolchain.md` - pinned versions, install locations, OMP, Claude Code, Codex, MCP server tokens (`mcp-token`
+    and each agent's per-machine server entry), Moshi/`moshi-hook`, agent skills, adding a tool
+  - `docs/secrets.md` - the three secret layers, `secrets.env`, `GH_TOKEN`, `MCP_TOKEN_<NAME>`, the Claude Code and
+    Codex logins, GCP ADC, App credentials
   - `docs/cli.md` - the `bin/devbox` reference (cheat sheet, workstation, laptop and `doctor` commands),
     `devbox-identities`, and the maintainer workflow for editing the CLI
   - `docs/networking.md` - exposure model, why UFW cannot block a published port, tunnels
@@ -145,7 +145,8 @@ the host's root Docker daemon.
   `herdr worktree open`, focused unless `-n`);
   11 the box-wide `secrets.env`; 12 `gh` (the `~/.local/libexec/devbox-agent` shim plus the per-identity
   token checklist, each identity checked with its own `devbox-gh-token --identity <slug>` and `GH_HOST` set to
-  that identity's host, for every identity); 13 the agent git override (`agent-launch` and the three launchers plus their `omp`/`claude`/`codex`
+  that identity's host, for every identity; beside `devbox-gh-token`, `mcp-token`, the MCP server header helper);
+  13 the agent git override (`agent-launch` and the three launchers plus their `omp`/`claude`/`codex`
   symlinks, credential helper,
   fence, the *rendered* `agent.gitconfig` and one `agent-<slug>.gitconfig` per identity claiming a `dir` -
   every one of them, inherited authors included, since git applies every matching `includeIf` and a nested
@@ -392,7 +393,8 @@ the host's root Docker daemon.
     `DEVBOX_SSH_HOST` (environment or `.push.env`), then `devbox`
   - `devbox agent install` - idempotent: installs the same agent git override the devbox bootstraps (`agent-launch`,
     `omp-launcher`, `claude-launcher`, `codex-launcher`, `claude-session-env`, `gh` shim, `fenced/git` shim, credential helper, fence,
-    `devbox-gh-token`, `wt-herdr`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin` symlink so it answers
+    `devbox-gh-token`, `mcp-token`, `wt-herdr`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin`
+    symlink so it answers
     by name, the read-only *rendered* `git/agent*.gitconfig`, and `omp`/`claude`/`codex` symlinks to the launchers in
     `~/.local/libexec/devbox-agent/launchers` - removing the pre-Claude `~/.local/bin/omp` symlink only once
     `omp` already resolves through that directory, since until the PATH line exists the old link is what

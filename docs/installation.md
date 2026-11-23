@@ -211,18 +211,19 @@ match:
 ./bin/devbox doctor laptop   # acceptance test: keys, ~/.ssh/config, signing, the override, tokens, connections
 ```
 
-| Part       | What the laptop gets                                                                                                                                                                                                                                                                      |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Keys**   | One `id_<slug>.pub`/`signing_<slug>.pub` pair per identity in `~/.config/devbox/identities.conf`, plus `devbox`: 1Password SSH items, public halves only in `~/.ssh`, selected per `Host` by `IdentityFile <name>.pub` + `IdentitiesOnly`.                                                |
-| **Git**    | Your own commits sign through `op-ssh-sign`; agents run through the `omp`/`claude`/`codex` launchers and get HTTPS remotes, per-operation tokens, a bot author and no signing, on the same clones. On the laptop the launchers need one `PATH` line, which `devbox agent install` prints. |
-| **Tokens** | One `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env` (mode 600) and each identity's GitHub App credentials in its own `app` directory, read only by agent sessions.                                                                                                       |
+| Part       | What the laptop gets                                                                                                                                                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Keys**   | One `id_<slug>.pub`/`signing_<slug>.pub` pair per identity in `~/.config/devbox/identities.conf`, plus `devbox`: 1Password SSH items, public halves only in `~/.ssh`, selected per `Host` by `IdentityFile <name>.pub` + `IdentitiesOnly`.                                                                         |
+| **Git**    | Your own commits sign through `op-ssh-sign`; agents run through the `omp`/`claude`/`codex` launchers and get HTTPS remotes, per-operation tokens, a bot author and no signing, on the same clones. On the laptop the launchers need one `PATH` line, which `devbox agent install` prints.                          |
+| **Tokens** | One `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env` (mode 600) and each identity's GitHub App credentials in its own `app` directory, read only by agent sessions; in the same file, one `MCP_TOKEN_<NAME>` per MCP server that takes a bearer token, read by `mcp-token` when an agent connects. |
 
 `devbox agent install` installs:
 
 - `agent-launch`, `omp-launcher`, `claude-launcher`, `codex-launcher`, `claude-session-env`, `gh` shim, `fenced/git`
   shim, credential helper, fence in `~/.local/libexec/devbox-agent`
 - `omp`, `claude` and `codex` symlinks to their launchers in `~/.local/libexec/devbox-agent/launchers`
-- `devbox-gh-token` and `wt-herdr` (`wt herdr <branch>`) in `~/.local/bin`
+- `devbox-gh-token`, `mcp-token` (MCP server headers, [Toolchain](toolchain.md#-mcp-server-tokens)) and `wt-herdr`
+  (`wt herdr <branch>`) in `~/.local/bin`
 - `~/.config/devbox/git/agent*.gitconfig` (directory left read-only)
 - the identity registry reader (`devbox-identities`)
 - `~/.config/devbox/secrets.env` from template if missing

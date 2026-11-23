@@ -13,10 +13,11 @@ done
 install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${AGENT_DIR}/agent-launch"
 
 # The resolver is a user-facing command (`devbox-gh-token --account`), same
-# place as on the devbox; so is `wt herdr` (worktrunk runs `wt-<name>` from the
-# PATH as `wt <name>`).
+# place as on the devbox; so are `mcp-token`, which the agents' MCP server
+# entries run for their bearer header, and `wt herdr` (worktrunk runs
+# `wt-<name>` from the PATH as `wt <name>`).
 install -d -m 755 "${BIN_DIR}"
-for tool in devbox-gh-token wt-herdr; do
+for tool in devbox-gh-token mcp-token wt-herdr; do
   install -m 755 "${TEMPLATE_DIR}/.local/bin/${tool}" "${BIN_DIR}/${tool}"
 done
 
@@ -227,7 +228,7 @@ fi
 agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_DIR}" 2>&1 || true)"
 
 # -- Report ---------------------------------------------------------------------
-log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,codex-launcher,claude-session-env,gh,fenced/git,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude,codex}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only), ~/.codex/rules/devbox.rules"
+log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,codex-launcher,claude-session-env,gh,fenced/git,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude,codex}→launchers, ${BIN_DIR}/{devbox-gh-token,mcp-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only), ~/.codex/rules/devbox.rules"
 path_fix=${legacy_kept}
 for agent in "${AGENTS[@]}"; do
   real="$(real_agent_binary "${agent}")"

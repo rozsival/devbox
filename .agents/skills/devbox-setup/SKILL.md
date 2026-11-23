@@ -155,7 +155,10 @@ register on GitHub - already your normal, registered laptop keys.
    Working directory picks which (the `dir` prefixes in `identities.conf`, same rule as git identities);
    `devbox-gh-token --account` reports it. Skip `gh auth login`: its web flow can't scope below `repo` +
    `read:org` + `gist` - non-expiring, account-wide, plaintext (no keyring here). A box-wide `GH_TOKEN`
-   works but overrides every identity's own, killing the per-directory choice.
+   works but overrides every identity's own, killing the per-directory choice. Add an `MCP_TOKEN_<NAME>` per MCP
+   server that takes a static bearer token (`docs/secrets.md#-mcp-server-tokens`) and check each with
+   `mcp-token --check <name>`, never the plain form, which prints the token; the server entries themselves go in
+   each agent's user config on each machine (`docs/toolchain.md#-mcp-server-tokens`).
 3. Log the agents in once from a pane: `/login` in `omp` and in `claude`, `codex login --device-auth` for Codex
    (step 6) - subscriptions, no API key needed. Anything else in `~/.config/devbox/secrets.env` (mode 600) is optional,
    project-shared `KEY=value` pairs - a model API key only for a provider used by key. Every shell sources it,

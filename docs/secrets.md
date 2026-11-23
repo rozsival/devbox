@@ -31,6 +31,7 @@ Everything is on the `/home/dev` bind mount, so it survives rebuilds and is set 
 | ---------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | SSH public keys, one pair per identity   | `~/.ssh/id_*.pub` (authentication), `~/.ssh/signing_*.pub` (signing) | `bootstrap`, from `identities.conf` — no private key present                |
 | `gh` tokens, one per identity            | `~/.config/devbox/secrets.env`                                       | you, a read-only fine-grained PAT each ([below](#-github-cli))              |
+| MCP server tokens, one per server        | `~/.config/devbox/secrets.env`                                       | you, `MCP_TOKEN_<NAME>` each ([below](#-mcp-server-tokens))                 |
 | OMP login                                | `~/.omp/agent/agent.db`                                              | you, once, `/login` in `omp` ([below](#omp))                                |
 | Claude Code login                        | `~/.claude/.credentials.json`                                        | you, once, `/login` in `claude` ([below](#claude-code))                     |
 | Codex login                              | `~/.codex/auth.json`                                                 | you, once, `codex login --device-auth` ([below](#codex))                    |
@@ -46,12 +47,12 @@ Everything is on the `/home/dev` bind mount, so it survives rebuilds and is set 
 Everything here needs a browser or a secret, so none of it is automated. `bootstrap` prints the steps still open, except
 the OMP login.
 
-| #   | Step                         | Details                                                                                                                |
-| --- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 1   | Set identity public keys     | `pubkey` and `signing_pubkey` per identity in `identities.conf` — see [Git Identities](git.md#-signing)                |
-| 2   | Fill `secrets.env`           | A read-only `GH_TOKEN_<SLUG>` per identity ([permissions](#permissions-per-token)); model API keys only if you use any |
-| 3   | Place GitHub App credentials | Every identity's `app` directory: `app-id` and `app.pem` (mode 600) — without them its agents can only read            |
-| 4   | Log the agents in            | `/login` once in `omp` and once in `claude`, `codex login --device-auth` once — see [Agent logins](#-agent-logins)     |
+| #   | Step                         | Details                                                                                                                                                                                |
+| --- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Set identity public keys     | `pubkey` and `signing_pubkey` per identity in `identities.conf` — see [Git Identities](git.md#-signing)                                                                                |
+| 2   | Fill `secrets.env`           | A read-only `GH_TOKEN_<SLUG>` per identity ([permissions](#permissions-per-token)), an `MCP_TOKEN_<NAME>` per MCP server that takes a bearer token; model API keys only if you use any |
+| 3   | Place GitHub App credentials | Every identity's `app` directory: `app-id` and `app.pem` (mode 600) — without them its agents can only read                                                                            |
+| 4   | Log the agents in            | `/login` once in `omp` and once in `claude`, `codex login --device-auth` once — see [Agent logins](#-agent-logins)                                                                     |
 
 ---
 
@@ -59,13 +60,14 @@ the OMP login.
 
 ### What it holds
 
-`~/.config/devbox/secrets.env` holds plain `KEY=value` pairs at mode 600: one GitHub token per identity, plus any model
-API key you choose to use. `bootstrap` installs it from `home/.config/devbox/secrets.env.example` if absent and never
-overwrites it.
+`~/.config/devbox/secrets.env` holds plain `KEY=value` pairs at mode 600: one GitHub token per identity, one token per
+MCP server that takes a static bearer token, plus any model API key you choose to use. `bootstrap` installs it from
+`home/.config/devbox/secrets.env.example` if absent and never overwrites it.
 
 ```dotenv
 GH_TOKEN_PERSONAL=github_pat_...
 GH_TOKEN_WORK=github_pat_...
+MCP_TOKEN_EXAMPLE=...
 ```
 
 > [!IMPORTANT]
@@ -75,11 +77,13 @@ GH_TOKEN_WORK=github_pat_...
 ### How it is loaded
 
 On the devbox, `~/.bashrc.d/devbox.sh` sources it under `set -a` in every shell, interactive or not — agents arrive as
-`ssh devbox <cmd>`. It then unsets every `GH_TOKEN_<SLUG>`: only `devbox-gh-token` needs them, and it reads them from the
-file by name, so a dev server or an install script never inherits every account's PAT. Other keys stay exported.
+`ssh devbox <cmd>`. It then unsets every `GH_TOKEN_<SLUG>` and every `MCP_TOKEN_<NAME>`: only `devbox-gh-token` and
+`mcp-token` need them, and each reads them from the file by name, so a dev server, an install script or an agent never
+inherits every account's PAT or every MCP server's token. Other keys stay exported.
 
 On the laptop, `./bin/devbox agent install` creates the same file, but no shell sources it: only `devbox-gh-token` and
-`devbox-git-credential` read it, in agent sessions. Your own `gh` keeps its OAuth login.
+`devbox-git-credential` read it, in agent sessions, and `mcp-token`, when an agent connects to an MCP server. Your own
+`gh` keeps its OAuth login.
 
 Neither copy travels: `devbox sync` carries `identities.conf` and the agent presets, never secrets.
 
@@ -230,6 +234,39 @@ Never raise the PAT.
   would race, and any `GH_TOKEN` in the environment makes stored accounts inert anyway.
 - **No keyring:** the container would store the login in plaintext, like `secrets.env` — not the deciding factor, but no
   better either.
+
+---
+
+## 🔌 MCP server tokens
+
+An MCP server reached over HTTP with a static bearer token gets `MCP_TOKEN_<NAME>` in `secrets.env`: the server's name
+as the agents' MCP config spells it, upper-cased, every character outside `A-Z0-9` turned into `_`.
+
+| Server name      | Variable                   |
+| ---------------- | -------------------------- |
+| `example`        | `MCP_TOKEN_EXAMPLE`        |
+| `example-server` | `MCP_TOKEN_EXAMPLE_SERVER` |
+
+No agent config file and no agent environment holds the token. Each agent's entry for the server runs
+`~/.local/bin/mcp-token` at connect time instead, which reads the one variable from the file by name — it never sources
+the file — and prints the header: `{"Authorization":"Bearer <token>"}` for Claude Code and Codex, `Bearer <token>` with
+`--raw` for OMP. The value in the file is the bare token, without `Bearer `; one holding whitespace, a quote, a
+backslash or a control character is refused, since it would break the header. Single-quote one holding `$`, `~` or
+another character a shell would expand: the helper refuses what a shell sourcing the file would read differently. Errors
+go to stderr and never print the token.
+
+```bash
+mcp-token example            # {"Authorization":"Bearer ..."}
+mcp-token --raw example      # Bearer ...
+mcp-token --check example    # MCP_TOKEN_EXAMPLE resolves (server example)
+```
+
+> [!WARNING]
+> Without `--check`, the output **is** the secret. Check a token by hand with `--check`, never with the plain or `--raw`
+> form: those put the token on screen, into scrollback, or into an agent's transcript.
+
+The server entries themselves — name, URL, helper command — are per machine, in each agent's own user config, never in
+the presets or this repo. How each agent references the helper: [Toolchain](toolchain.md#-mcp-server-tokens).
 
 ---
 
@@ -413,6 +450,12 @@ for a `curl` or script of your own, use `GH_TOKEN=$(devbox-gh-token)`.
 You're in the `work` identity's tree and only the default identity's token is set. There's deliberately no fallback —
 the default token on a `work` repo is the wrong identity. Add the variable.
 
+### `echo $MCP_TOKEN_EXAMPLE` is empty — is the server unauthenticated?
+
+No. Nothing exports it, on purpose; `mcp-token` reads it from the file each time an agent connects. Run
+`mcp-token --check <name>` to see whether it resolves: it names the variable it looked for when it does not, and never
+prints the token when it does. The plain and `--raw` forms print the token itself.
+
 ### How do I add another account?
 
 Add a `[slug]` block to `identities.conf` with its own `app` directory, its read-only `GH_TOKEN_<SLUG>` here, and its two
@@ -435,9 +478,10 @@ provider. Neither the Claude Code preset nor the Codex setup has such a setting.
 
 ### How do I rotate a leaked key?
 
-Revoke it at the source — GitHub's token settings for a PAT, a new `app.pem` from the App's settings, `gcloud iam
-service-accounts keys delete` for GCP, the provider's account page for an agent login — then update `secrets.env`, the
-`app` directory or the project `.env`. There's no SSH keypair to rotate: identity is your laptop's key.
+Revoke it at the source — GitHub's token settings for a PAT, a new `app.pem` from the App's settings,
+`gcloud iam service-accounts keys delete` for GCP, the provider's account page for an agent login, the server for an MCP
+token — then update `secrets.env`, the `app` directory or the project `.env`. An agent that already connected may hold
+the old MCP token until it restarts. There's no SSH keypair to rotate: identity is your laptop's key.
 
 ### Are secrets visible to the workstation's host user?
 
