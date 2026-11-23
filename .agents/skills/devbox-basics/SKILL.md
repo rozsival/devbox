@@ -116,8 +116,9 @@ key**, **no Google user credential** (`gcloud` not installed). Three layers:
   borrow/token split as above.
 - **Box-wide tool credentials** - `~/.config/devbox/secrets.env`, plain `KEY=value` mode 600, sourced by
   every shell including non-interactive `ssh devbox <cmd>`; holds model API keys (exported) and one
-  fine-grained GitHub token per identity (`GH_TOKEN_<SLUG>`, e.g. `GH_TOKEN_PERSONAL` - unset again right
-  after sourcing, so no process inherits them). Nothing exports `GH_TOKEN` - the `gh` shim in
+  fine-grained GitHub token per identity (`GH_TOKEN_<SLUG>`, e.g. `GH_TOKEN_PERSONAL`) and one token per
+  bearer-token MCP server (`MCP_TOKEN_<NAME>`, read by `~/.local/bin/mcp-token` when an agent connects) - both
+  unset again right after sourcing, so no process inherits them. Nothing exports `GH_TOKEN` - the `gh` shim in
   `~/.local/libexec/devbox-agent` resolves it per invocation from the working directory, reading the file,
   same rule as git identity (`devbox-gh-token --account` reports it); plus the Claude Code OAuth login in
   `~/.claude/.credentials.json` (from one `/login`) and the Codex login in `~/.codex/auth.json` (from one

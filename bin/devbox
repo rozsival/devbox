@@ -2680,7 +2680,7 @@ doctor_laptop() {
   for rel in .local/libexec/devbox-agent/agent-launch .local/libexec/devbox-agent/omp-launcher .local/libexec/devbox-agent/claude-launcher \
     .local/libexec/devbox-agent/codex-launcher .local/libexec/devbox-agent/claude-session-env .local/libexec/devbox-agent/gh \
     .local/libexec/devbox-agent/fenced/git .local/libexec/devbox-agent/devbox-git-credential \
-    .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token \
+    .local/libexec/devbox-agent/devbox-git-no-ssh .local/bin/devbox-gh-token .local/bin/mcp-token \
     .local/bin/wt-herdr .local/libexec/devbox-identities .codex/rules/devbox.rules; do
     cmp -s "${TEMPLATE_DIR}/${rel}" "${HOME}/${rel}" || stale+=("${HOME}/${rel}")
   done
@@ -2723,7 +2723,7 @@ doctor_laptop() {
   if ((${#stale[@]})); then
     fail "differ from the repo templates: ${stale[*]} - run ./bin/devbox agent install"
   else
-    log_success 'launchers, Claude session hook, shim, helper, fence, devbox-identities, wt-herdr, Codex rules and agent gitconfigs match the repo templates'
+    log_success 'launchers, Claude session hook, shim, helper, fence, devbox-identities, mcp-token, wt-herdr, Codex rules and agent gitconfigs match the repo templates'
   fi
   # Claude sessions no launcher starts (the desktop app) get the fence only
   # from this SessionStart hook; without it they run git and gh as you.
@@ -3598,10 +3598,11 @@ devbox_agent_install_command() {
   install -m 644 "${TEMPLATE_DIR}/.local/libexec/devbox-agent/agent-launch" "${AGENT_DIR}/agent-launch"
 
   # The resolver is a user-facing command (`devbox-gh-token --account`), same
-  # place as on the devbox; so is `wt herdr` (worktrunk runs `wt-<name>` from the
-  # PATH as `wt <name>`).
+  # place as on the devbox; so are `mcp-token`, which the agents' MCP server
+  # entries run for their bearer header, and `wt herdr` (worktrunk runs
+  # `wt-<name>` from the PATH as `wt <name>`).
   install -d -m 755 "${BIN_DIR}"
-  for tool in devbox-gh-token wt-herdr; do
+  for tool in devbox-gh-token mcp-token wt-herdr; do
     install -m 755 "${TEMPLATE_DIR}/.local/bin/${tool}" "${BIN_DIR}/${tool}"
   done
 
@@ -3812,7 +3813,7 @@ devbox_agent_install_command() {
   agent_context_problems="$("${BASH}" "${agent_context}" check laptop "${TEMPLATE_DIR}" 2>&1 || true)"
 
   # -- Report ---------------------------------------------------------------------
-  log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,codex-launcher,claude-session-env,gh,fenced/git,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude,codex}→launchers, ${BIN_DIR}/{devbox-gh-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only), ~/.codex/rules/devbox.rules"
+  log_success "Installed ${AGENT_DIR}/{agent-launch,omp-launcher,claude-launcher,codex-launcher,claude-session-env,gh,fenced/git,devbox-git-credential,devbox-git-no-ssh}, ${LAUNCHER_DIR}/{omp,claude,codex}→launchers, ${BIN_DIR}/{devbox-gh-token,mcp-token,wt-herdr,devbox-identities→libexec}, ${LIBEXEC_DIR}/devbox-identities, ${GIT_CONFIG_DIR}/agent*.gitconfig (read-only), ~/.codex/rules/devbox.rules"
   path_fix=${legacy_kept}
   for agent in "${AGENTS[@]}"; do
     real="$(real_agent_binary "${agent}")"

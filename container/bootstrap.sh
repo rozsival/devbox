@@ -434,6 +434,9 @@ fi
 # reach, stored in plaintext because the container has no keyring.
 install -d -m 755 "${HOME_DIR}/.local/bin"
 install -m 755 "${TEMPLATE_DIR}/.local/bin/devbox-gh-token" "${HOME_DIR}/.local/bin/devbox-gh-token"
+# The same file's MCP_TOKEN_<NAME>, printed as a header for an MCP server's
+# connect-time helper, so no agent config or environment holds the token.
+install -m 755 "${TEMPLATE_DIR}/.local/bin/mcp-token" "${HOME_DIR}/.local/bin/mcp-token"
 rm -f "${HOME_DIR}/.local/bin/gh" # pre-§13 location of the shim
 agent_dir="${HOME_DIR}/.local/libexec/devbox-agent"
 install -d -m 755 "${agent_dir}"

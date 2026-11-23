@@ -68,8 +68,11 @@ with `./bin/devbox skills`.
 
 ### Secrets
 
-- Every shell sources `~/.config/devbox/secrets.env` and then unsets the per-identity `GH_TOKEN_<SLUG>` PATs again
-  (`devbox-gh-token` reads those from the file), which leaves any model API keys in the environment.
+- Every shell sources `~/.config/devbox/secrets.env` and then unsets the per-identity `GH_TOKEN_<SLUG>` PATs and the
+  `MCP_TOKEN_<NAME>` MCP server tokens again (`devbox-gh-token` and `mcp-token` read those from the file), which leaves
+  any model API keys in the environment. An MCP server entry gets its `Authorization` header from
+  `~/.local/bin/mcp-token`, never from a token written into the agent's config. Run it yourself only as
+  `mcp-token --check <name>`: without `--check` it prints the token, which then sits in your transcript.
 - There is no `op` (1Password) and no `gcloud`. A vault-rendered file such as `.env.local` from `op inject` or
   `pnpm run env:inject` is generated on the laptop and copied in by the user. Ask for it; don't stub the values.
 

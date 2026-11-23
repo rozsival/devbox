@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# Installed by container/bootstrap.sh (devbox) and `devbox agent install` (laptop) -
+# edit home/.local/bin/mcp-token in the repo.
+#
+# Print the Authorization header for an MCP server that takes a static bearer
+# token, so no agent config file and no agent environment holds the token: each
+# tool runs this at connect time instead (docs/toolchain.md, "MCP server
+# tokens"). The token is MCP_TOKEN_<NAME> in ~/.config/devbox/secrets.env, the
+# server name upper-cased with every character outside [A-Z0-9] turned into `_`
+# (`my-server` -> MCP_TOKEN_MY_SERVER) - see docs/secrets.md.
+#
+#   mcp-token <name>         # {"Authorization":"Bearer <token>"} - Claude Code's
+#                            # headersHelper, Codex's http_headers_helper
+#   mcp-token --raw <name>   # Bearer <token> - an OMP "!" header value
+#   mcp-token                # <name> from $CLAUDE_CODE_MCP_SERVER_NAME, which
+#                            # Claude Code sets for a headersHelper
+#   mcp-token --check <name> # MCP_TOKEN_<NAME> resolves - the same checks,
+#                            # without printing the token: run this by hand
+#
+# The file is read by name, never sourced: a helper every agent tool runs at
+# connect time executes nothing out of a hand-edited credential file, and the
+# value is read afresh on every call, so a new token needs no reconnect of the
+# shell (the tool itself may cache it). Errors go to stderr with a non-zero
+# exit and never contain the token.
+set -euo pipefail
+# Byte-wise character classes below: [:graph:] is then printable ASCII without
+# the space, whatever locale the calling tool runs in.
+export LC_ALL=C
+
+usage() {
+  cat <<'EOF'
+Usage: mcp-token [--raw | --check] [<name>]
+
+Print the Authorization header for the MCP server <name>, from MCP_TOKEN_<NAME>
+in ~/.config/devbox/secrets.env (<name> upper-cased, every character outside
+[A-Z0-9] turned into _).
+
+  <name>   the server name; defaults to $CLAUDE_CODE_MCP_SERVER_NAME
+  --raw    print `Bearer <token>` instead of {"Authorization":"Bearer <token>"}
+  --check  only report whether the token resolves; never prints it
+  --help   show this help
+
+Without --check the output is the secret itself: to see whether a token
+resolves, run `mcp-token --check <name>`.
+EOF
+}
+
+die() {
+  printf '%s\n' "mcp-token: $1" >&2
+  exit 1
+}
+
+raw=false
+check=false
+while [[ ${1:-} == -* ]]; do
+  case "$1" in
+  --raw)
+    raw=true
+    shift
+    ;;
+  --check)
+    check=true
+    shift
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  --)
+    shift
+    break
+    ;;
+  *)
+    printf '%s\n' "mcp-token: unknown option $1" >&2
+    usage >&2
+    exit 2
+    ;;
+  esac
+done
+if (($# > 1)); then
+  printf '%s\n' 'mcp-token: takes one server name' >&2
+  usage >&2
+  exit 2
+fi
+
+name="${1:-${CLAUDE_CODE_MCP_SERVER_NAME:-}}"
+[[ -n ${name} ]] || die 'no server name - pass one, or run as a Claude Code headersHelper (CLAUDE_CODE_MCP_SERVER_NAME)'
+# A name only ever selects a variable, but one with whitespace, control or
+# non-ASCII characters is a typo or a quoting slip in a config entry - say so
+# rather than mapping it to MCP_TOKEN_<underscores> and reporting that unset.
+case "${name}" in
+*[![:graph:]]*) die 'the server name contains whitespace, a control character or a non-ASCII character' ;;
+esac
+suffix="$(printf '%s' "${name}" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')"
+case "${suffix}" in
+*[A-Z0-9]*) ;;
+*) die "the server name ${name} has no letter or digit to build a variable name from" ;;
+esac
+var="MCP_TOKEN_${suffix}"
+
+# The same file, at the same path, as devbox-gh-token; HOME moves it.
+secrets_file="${HOME:-/home/dev}/.config/devbox/secrets.env"
+[[ -f ${secrets_file} && -r ${secrets_file} ]] || die "${secrets_file} is missing, not a file or unreadable - add ${var} there (docs/secrets.md)"
+
+# KEY=value, optionally `export KEY=value`, the value bare or in one pair of
+# single or double quotes, with an optional trailing comment after whitespace.
+# Each form accepted here is one a shell sourcing the file (~/.bashrc.d/devbox.sh)
+# reads to the same value; what a shell would expand or parse differently - `$`
+# or a backtick outside single quotes; `~`, a brace, a glob character or
+# `;&|<>()` in a bare value (`export` expands braces and globs); a quote run into
+# a `#` - is refused rather than guessed at. The last assignment wins, as it
+# would there.
+# Separators are [:blank:] (space, tab), as for the shell: a CR from a CRLF file
+# stays part of the value there, so it is refused here rather than dropped.
+assign_re="^[[:blank:]]*(export[[:blank:]]+)?${var}=(.*)\$"
+double_re='^"([^"$`]*)"([[:blank:]]+#.*)?[[:blank:]]*$'
+single_re="^'([^']*)'([[:blank:]]+#.*)?[[:blank:]]*\$"
+bare_re='^([^][[:space:]"'\''$`;&|<>()~{}*?]*)([[:blank:]]+#.*)?[[:blank:]]*$'
+found=false
+token=''
+parsed=true
+line=''
+while IFS= read -r line || [[ -n ${line} ]]; do
+  [[ ${line} =~ ${assign_re} ]] || continue
+  value="${BASH_REMATCH[2]}"
+  found=true
+  parsed=true
+  if [[ ${value} =~ ${double_re} || ${value} =~ ${single_re} || ${value} =~ ${bare_re} ]]; then
+    token="${BASH_REMATCH[1]}"
+  else
+    token=''
+    parsed=false
+  fi
+done <"${secrets_file}"
+
+[[ ${found} == true ]] || die "${var} is not set in ${secrets_file} - add it there (server ${name})"
+[[ ${parsed} == true ]] || die "${var} in ${secrets_file} is not a plain value (KEY=token, at most one pair of quotes, nothing a shell would expand) - fix that line"
+[[ -n ${token} ]] || die "${var} in ${secrets_file} is empty - add the token for server ${name}"
+
+# Printed straight into JSON and into an HTTP header: anything that would end
+# the string or the header line, or smuggle another one in, is refused rather
+# than escaped - no real bearer token contains it.
+case "${token}" in
+*[![:graph:]]* | *[\"\'\\]*) die "${var} in ${secrets_file} contains whitespace, a quote, a backslash or a control character, which a header cannot carry" ;;
+esac
+
+if [[ ${check} == true ]]; then
+  printf '%s\n' "${var} resolves (server ${name})"
+elif [[ ${raw} == true ]]; then
+  printf 'Bearer %s\n' "${token}"
+else
+  printf '{"Authorization":"Bearer %s"}\n' "${token}"
+fi

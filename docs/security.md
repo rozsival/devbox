@@ -47,6 +47,7 @@ Authority is enumerated, not ambient: each credential is scoped, separately revo
 | Agent `gh` on one repository (PRs, issues, runs) | that repository's GitHub App installation token, else the PAT below      | App: one repo, 1h (cached ≤30 min on tmpfs)              |
 | Dashboards, CI, issues, account-wide `gh`        | one read-only fine-grained PAT per GitHub account                        | named repos, read-only                                   |
 | LLM inference                                    | per-project GCP service-account key                                      | one dev project, predict-only                            |
+| Agent MCP connections (HTTP, static bearer)      | one `MCP_TOKEN_<NAME>` per MCP server, in `secrets.env`                  | whatever that one server exposes; no expiry              |
 | Project secrets                                  | that project's `.env`                                                    | one project                                              |
 
 Notably absent: any 1Password account (`op` isn't installed), any GitHub private key, any Google user credential. See
@@ -55,8 +56,9 @@ Notably absent: any 1Password account (`op` isn't installed), any GitHub private
 ## 🔍 What an agent inside the devbox can reach
 
 **Can**: the whole `/home/dev` tree — every identity's public keys (useless without the laptop's forwarded agent), every
-identity's `gh` token, each configured App's private key, every project's `.env` and GCP key — plus the internet, the
-LAN (Tailnet peers included, at their LAN addresses) and the rootless project Docker daemon ([Docker](docker.md)).
+identity's `gh` token, each configured App's private key, every MCP server token, every project's `.env` and GCP key —
+plus the internet, the LAN (Tailnet peers included, at their LAN addresses) and the rootless project Docker daemon
+([Docker](docker.md)).
 
 **Cannot**: the host filesystem outside the data dir and world-readable paths, the host's **root** Docker daemon, the
 host's own services (its sshd included), other Tailnet machines over the overlay beyond the ports `DEVBOX_TAILNET_ALLOW`
@@ -67,10 +69,12 @@ The consequence: an agent with shell access can push through the same App token 
 each configured App's private key, every identity's PAT, and every project's `.env` and GCP key directly. None of that
 writes as you: every PAT is read-only, so a stolen one reads what it names and nothing more, and every write an agent
 makes carries an App's bot. Your own GitHub push authority stays out of reach — no private key to steal — unless an
-`ssh -A devbox` connection is open (accepted limit 2).
+`ssh -A devbox` connection is open (accepted limit 2). An MCP server token is the exception to "read-only": an agent can
+read every one from `secrets.env`, and each does whatever its server lets a client do, until that server revokes it.
 
 > [!IMPORTANT]
-> Treat a compromise as "revoke every identity's PAT and App key, plus the service-account key," not "rebuild a laptop."
+> Treat a compromise as "revoke every identity's PAT and App key, every MCP server token, plus the service-account key,"
+> not "rebuild a laptop."
 
 ## ⚠️ Accepted limits
 
@@ -99,9 +103,10 @@ These are known and deliberate, not gaps to be closed later:
 3. **No isolation between projects.** One container, one `dev` user, one bind mount: an agent in project A can read
    project B's `.env` and GCP key. Cloning something less trusted is where per-project containers or separate users stop
    being over-engineering.
-4. **Secrets are plaintext at rest.** `.env` files, `gh` tokens, key files and the Claude Code and Codex logins
-   (`~/.claude/.credentials.json`, `~/.codex/auth.json`) are unencrypted on the workstation's disk, readable by the
-   host user. Workstation disk encryption and host account hygiene are part of this security model, not separate.
+4. **Secrets are plaintext at rest.** `.env` files, `gh` tokens, MCP server tokens, key files and the Claude Code and
+   Codex logins (`~/.claude/.credentials.json`, `~/.codex/auth.json`) are unencrypted on the workstation's disk,
+   readable by the host user. Workstation disk encryption and host account hygiene are part of this security model, not
+   separate.
 5. **The project Docker daemon widens reach to the `dev` account.** Anything in the container can start a container
    through that socket, including one bind-mounting a host path — but only as unprivileged `dev`: world-readable host
    files to read, only `dev`-owned files to write, never host root, the root daemon, or your home directory (`750`,
@@ -280,6 +285,7 @@ The SSH keys are 1Password items, not files, so the laptop carries no key — bu
 `DEVBOX_EXTRA_AUTHORIZED_KEYS` anyway (`devbox.pub` is never registered on GitHub), restart the container
 (`authorized_keys` rebuilds on every start), and drop the default identity's key from the workstation's own
 `~/.ssh/authorized_keys`. What the laptop **does** hold in plaintext, if `./bin/devbox agent install` ran there, is the
-agent's own credentials: one `GH_TOKEN_<SLUG>` per identity in `~/.config/devbox/secrets.env`, and each configured
-identity's App pem under its own `app` directory. Revoke every identity's PAT, rotate every App private key — same list
-as a container compromise above.
+agent's own credentials: one `GH_TOKEN_<SLUG>` per identity and one `MCP_TOKEN_<NAME>` per MCP server in
+`~/.config/devbox/secrets.env`, and each configured identity's App pem under its own `app` directory. Revoke every
+identity's PAT, rotate every App private key and rotate each MCP server token at its server — same list as a container
+compromise above.

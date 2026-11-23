@@ -90,6 +90,10 @@ if [ -r "$HOME/.config/devbox/secrets.env" ]; then
   # runner and install script would inherit every account's PAT. Only
   # devbox-gh-token needs them, and it reads them from the file by name.
   unset "${!GH_TOKEN_@}"
+  # And the MCP server tokens, for the same reason: exported, every agent and
+  # every process it starts would hold every server's token. Only mcp-token
+  # needs them, and it reads them from the file by name.
+  unset "${!MCP_TOKEN_@}"
 fi
 
 # GH_TOKEN is deliberately *not* derived here. The account belongs to the

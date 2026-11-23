@@ -4,8 +4,8 @@
 > `Dockerfile` and is verified — upstream's checksum file, else GitHub's recorded asset digest, else a signed package
 > repository. The one download pinned by tag only is nvm's installer (fetched over TLS; upstream publishes no checksum
 > file or asset digest for it), and nvm then checks Node against nodejs.org's `SHASUMS256.txt`. This page covers the
-> pinned versions, where each tool lives, the agents (OMP, Claude Code, Codex, Moshi), skills and browser automation, and
-> how to add a tool.
+> pinned versions, where each tool lives, the agents (OMP, Claude Code, Codex, Moshi), their MCP server tokens, skills
+> and browser automation, and how to add a tool.
 
 **Related:** [Installation](installation.md) · [Docker](docker.md) · [Secrets](secrets.md) ·
 [Git Identities](git.md) · [Security Model](security.md) · [CLI Reference](cli.md)
@@ -77,7 +77,7 @@ upstream renamed. After a merge: `./bin/devbox deploy <workstation> --start` (th
 | `/usr/local/bin`                           | Default _non-interactive_ SSH `PATH`; `herdr` needs it since non-interactive SSH uses only a pre-existing compatible binary and never installs.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `/opt/nvm` + `/opt/corepack`               | Not `~/.nvm`: `/home/dev`'s bind mount would shadow anything the image installs there. `node`, `npm`, `npx`, `corepack`, `pnpm` symlink into `/usr/local/bin` to resolve without a login shell.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `/opt/rustup` + `/opt/cargo` + `/opt/ruby` | Same reason as `/opt/nvm`; owned by `dev`, so `rustup target add`, `cargo install` and `gem install` work until the next rebuild. Ruby's binaries symlink into `/usr/local/bin`; the rustup proxies get `sh` wrappers there instead, defaulting `RUSTUP_HOME`/`CARGO_HOME`, which a proxy otherwise reads as the empty `~/.rustup`/`~/.cargo`. `home/.bashrc.d/devbox.sh` exports both and puts `/opt/cargo/bin` and `/opt/ruby/bin` on `PATH` for what `cargo install`/`gem install` add.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `~/.local/bin`                             | OMP, Claude Code (`~/.local/bin/claude`, a symlink into `~/.local/share/claude/versions`), Codex (`~/.local/bin/codex`, a symlink into `~/.codex/packages/standalone`) and `moshi-hook`, installed by `bootstrap` rather than baked in, so `omp update`, Claude's auto-update, `codex update` and `moshi-hook update` work without a rebuild. Also `devbox-gh-token`, the per-directory GitHub token resolver ([Secrets](secrets.md#-github-cli)), and `wt-herdr` ([below](#new-worktree-in-herdr)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `~/.local/bin`                             | OMP, Claude Code (`~/.local/bin/claude`, a symlink into `~/.local/share/claude/versions`), Codex (`~/.local/bin/codex`, a symlink into `~/.codex/packages/standalone`) and `moshi-hook`, installed by `bootstrap` rather than baked in, so `omp update`, Claude's auto-update, `codex update` and `moshi-hook update` work without a rebuild. Also `devbox-gh-token`, the per-directory GitHub token resolver ([Secrets](secrets.md#-github-cli)), `mcp-token`, the agents' MCP server header helper ([below](#-mcp-server-tokens)), and `wt-herdr` ([below](#new-worktree-in-herdr)).                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `~/.local/libexec/devbox-agent`            | The agent launchers (`omp-launcher`, `claude-launcher`, `codex-launcher`, and the `agent-launch` body they share), the `gh` shim, and two git-fencing scripts (`devbox-git-credential`, `devbox-git-no-ssh`), plus `omp`, `claude` and `codex` symlinks to the launchers. `home/.bashrc.d/devbox.sh` puts it first on every devbox shell's `PATH`, shadowing `gh`, `omp`, `claude` and `codex`; a launcher does likewise for its own process tree on the laptop (`./bin/devbox agent install`, where the `omp`/`claude`/`codex` symlinks sit in a `launchers/` subdirectory of their own). `home/.bash_profile` re-asserts that order for login shells, where the distro's `~/.profile` prepends `~/.local/bin` _after_ sourcing `~/.bashrc` and would otherwise put the real binaries in front. Its `fenced/` subdirectory holds the `git` shim, on agent sessions' `PATH` only, on both machines ([Git Identities](git.md#children-with-a-filtered-environment)). See [Git Identities](git.md#-agent-sessions). |
 | `/usr/local/lib/docker/cli-plugins`        | Home for `docker compose`/`docker buildx` as CLI plugins; only the client ships in the image, the daemon is the host's rootless `dev` daemon ([below](#-project-containers)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
@@ -353,6 +353,87 @@ needs root), so `bootstrap` and `./bin/devbox agent install` run `codex features
 `codex features list` reports memories on: it removes the enable from `~/.codex/config.toml` — the desktop app's **Enable
 Codex memories** toggle writes one — leaving Codex's default, off. Only then, since `disable` deletes the key and would
 strip an explicit `memories = false` too.
+
+## 🔌 MCP server tokens
+
+An MCP server reached over HTTP with a static bearer token is configured in each agent on each machine, and none of
+those configs holds the token: each entry names `~/.local/bin/mcp-token`, which every agent runs when it connects and
+which prints the header from `MCP_TOKEN_<NAME>` in `~/.config/devbox/secrets.env`
+([Secrets](secrets.md#-mcp-server-tokens)). One helper serves all three agents; only the way each one calls it differs.
+
+```bash
+mcp-token <name>          # {"Authorization":"Bearer <token>"}: Claude Code, Codex
+mcp-token --raw <name>    # Bearer <token>: OMP
+mcp-token                 # <name> from $CLAUDE_CODE_MCP_SERVER_NAME
+mcp-token --check <name>  # MCP_TOKEN_<NAME> resolves: the same checks, the token never printed
+mcp-token --help
+```
+
+| Agent       | User config                                       | Key                                    | Value                                  |
+| ----------- | ------------------------------------------------- | -------------------------------------- | -------------------------------------- |
+| Claude Code | `~/.claude.json` (`$CLAUDE_CONFIG_DIR` moves it)  | `headersHelper`                        | `~/.local/bin/mcp-token`               |
+| Codex       | `~/.codex/config.toml` (`$CODEX_HOME` moves it)   | `http_headers_helper`                  | `~/.local/bin/mcp-token <name>`        |
+| OMP         | `~/.omp/agent/mcp.json` (its own, not the preset) | `headers.Authorization`, a `!` command | `!~/.local/bin/mcp-token --raw <name>` |
+
+The entries — name, URL and helper — are per machine: they live in those user files only, never in the presets
+(`home/.claude/settings.json`, `home/.omp/agent/config.yml`) or anywhere else in this repo, and no `devbox sync` carries
+them. Add them on each machine where the agents should reach the server, and put the server's token in that machine's
+`secrets.env`. Use the same server name in all three, since the name picks the variable.
+
+**Claude Code** passes the server's name to the helper as `CLAUDE_CODE_MCP_SERVER_NAME`, so the command needs none. Add
+the entry at user scope: a `headersHelper` at project or local scope runs only in a folder you trusted.
+
+```bash
+claude mcp add-json -s user example \
+  '{"type":"http","url":"https://mcp.example.com/mcp","headersHelper":"~/.local/bin/mcp-token"}'
+claude mcp list    # connects to each server: ✔ Connected
+```
+
+**Codex** runs `http_headers_helper` through `sh -c` and passes it no server name, so the name goes in the command. It
+is a string, not a table; its output must be a JSON object of string headers, within a 10 s timeout.
+`codex mcp get <name>` shows the entry with the helper redacted.
+
+```toml
+[mcp_servers.example]
+url = "https://mcp.example.com/mcp"
+http_headers_helper = "~/.local/bin/mcp-token example"
+```
+
+**OMP** needs entries of its own. It reads `~/.claude.json`'s servers too — the preset's `enabledProviders: [claude]`
+turns that source on — but drops `headersHelper`, so that copy of the entry connects without an `Authorization` header.
+A header value starting with `!` is a command run through `/bin/sh -c` (10 s timeout), and its trimmed output becomes
+the value, so OMP takes `--raw`. An entry in `~/.omp/agent/mcp.json` outranks the Claude Code one **with the same
+name**, which then never connects; under a different name both load. Codex's `config.toml` is a source only when `codex`
+is in `enabledProviders`, which the preset leaves out.
+
+```json
+{
+  "mcpServers": {
+    "example": {
+      "type": "http",
+      "url": "https://mcp.example.com/mcp",
+      "headers": { "Authorization": "!~/.local/bin/mcp-token --raw example" }
+    }
+  }
+}
+```
+
+When the helper fails — no file, no variable, a refused token — Claude Code and OMP connect without the header, and the
+server answers 401: Claude Code reports a failed connection, and OMP shows nothing of the helper's error. Run the helper
+by hand with `--check` to see it. Without `--check` its output is the token itself, so never run the plain or `--raw`
+form by hand or from an agent: the token would land in scrollback or the agent's transcript.
+
+```bash
+mcp-token --check example    # mcp-token: MCP_TOKEN_EXAMPLE is not set in ~/.config/devbox/secrets.env - ...
+```
+
+OMP caches a `!` command's output in memory, so assume a rotated token needs a new `omp` process; restart a Claude Code
+or Codex session as well.
+
+> [!NOTE]
+> All three can also take the token from the environment — Claude Code and OMP expand `${VAR}` in a header, Codex has
+> `bearer_token_env_var` and `env_http_headers` — but that puts every server's token in every agent's environment and in
+> every process the agent starts. The helper keeps it in `secrets.env` alone.
 
 ## 🧭 Which machine: the agent context
 
@@ -653,6 +734,12 @@ installed here, reporting `Failed to install 2` for two rejecting global install
 
 No — it launches and drives Chrome headless as `dev` with `cap_drop: [ALL]` unchanged, verified via `agent-browser open`
 plus `snapshot`. Headed mode needs the omitted GTK packages and a virtual display.
+
+### Why does OMP reach an MCP server without its token?
+
+Its Claude Code source drops `headersHelper`. Add the server to `~/.omp/agent/mcp.json` under the **same name**, with
+the `!~/.local/bin/mcp-token --raw <name>` header ([MCP server tokens](#-mcp-server-tokens)): the native entry then
+replaces the Claude Code one.
 
 ### Do the skills survive a rebuild?
 
