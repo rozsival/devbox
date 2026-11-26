@@ -79,7 +79,7 @@ the host's root Docker daemon.
   - `docs/operations.md` - redeploy, persistence, backup, health, troubleshooting
   - `docs/security.md` - boundaries, trust assumptions, deliberate limits
   - `docs/development.md` - toolchain, rules, shipping a change, agent assets
-- `renovate.json` - Renovate opens a weekly PR per new version: two regex managers read the `# renovate:` comment
+- `renovate.json` - Renovate opens weekly PRs, every minor and patch update grouped into one: two regex managers read the `# renovate:` comment
   above every `Dockerfile` `ARG` and `container/skills.sh` pin (`branch=` + a 40-hex commit for an untagged repository),
   `extractVersion` strips upstream's `v`; the `ubuntu` base is digest-pinned only (its release matches the host),
   `docker-cli` waits for Dependency Dashboard approval (it must equal the host daemon's version); nothing automerges,

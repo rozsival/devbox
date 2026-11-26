@@ -54,6 +54,13 @@
       "prBodyNotes": [
         "Review the skill changes between the two commits before merging; agents follow them as instructions."
       ]
+    },
+    {
+      "description": "Every minor and patch update in one pull request, to keep the pull request noise down; majors stay apart. docker-cli stays out: its Dependency Dashboard approval would hold back the whole group",
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchDepNames": ["*", "!docker-cli"],
+      "groupName": "non-major dependencies",
+      "groupSlug": "non-major"
     }
   ]
 }
