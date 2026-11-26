@@ -53,8 +53,9 @@ ssh <workstation> 'cd ~/devbox && ./bin/devbox doctor'
 
 ### 🔄 Updates
 
-[Renovate](https://docs.renovatebot.com) (`renovate.json`, the Renovate GitHub App on the repository) opens one PR per
-new version, weekly, for:
+[Renovate](https://docs.renovatebot.com) (`renovate.json`, the Renovate GitHub App on the repository) opens PRs weekly
+for the following. Every minor and patch update lands in one `non-major dependencies` PR; a major update, a digest or
+commit pin and the Docker CLI each get a PR of their own:
 
 - every `ARG <TOOL>_VERSION` in the `Dockerfile` and the pins in `container/skills.sh` — each found through the
   `# renovate: datasource=… depName=…` comment directly above it;
