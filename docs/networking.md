@@ -1,6 +1,6 @@
 # 🔌 Networking
 
-> One published port, bound to one address. The devbox container is reachable only from the Tailnet and loopback — never
+> One published port, bound to one address. The Devbox container is reachable only from the Tailnet and loopback — never
 > from the public internet — because the compose mapping scopes the port to `BIND_ADDR` (the node's Tailscale IP), not
 > because of a firewall rule. Everything else goes through SSH.
 
@@ -51,7 +51,7 @@ Conversely, for project containers: traffic _from_ the container _to_ a host add
 `INPUT`, which UFW's default deny would drop — why `sudo ./bin/devbox docker setup` adds one rule,
 `allow in on docker0 to <gateway>` (no source clause: arriving there means a bridge container). It admits every port on
 that address, so the boundary table narrows it: from `docker0` only the project daemon's sockets answer, and the
-workstation's own services — its sshd on `0.0.0.0` included — stay out of the devbox's reach, as they do for the
+workstation's own services — its sshd on `0.0.0.0` included — stay out of the Devbox's reach, as they do for the
 daemon's containers.
 
 Project ports mirror this: the rootless daemon's listeners _are_ plain host-namespace sockets, so `INPUT` applies — a
@@ -61,12 +61,12 @@ netfilter table, not the publish address, is the boundary. See [Docker](docker.m
 
 | Port                    | Owner                  | Reachable from                                                                    |
 | ----------------------- | ---------------------- | --------------------------------------------------------------------------------- |
-| `2222` (workstation)    | Workstation's sshd     | Whatever the host's ufw allows, on `0.0.0.0` — never the devbox or its containers |
+| `2222` (workstation)    | Workstation's sshd     | Whatever the host's ufw allows, on `0.0.0.0` — never the Devbox or its containers |
 | `2223` (published)      | Devbox container sshd  | `BIND_ADDR` (Tailnet) and `127.0.0.1`, DNATed to container `:2222`                |
 | `2222` (in container)   | Devbox container sshd  | Always the in-container listener, behind the `2223` mapping                       |
-| Project ports (default) | Rootless Docker daemon | `docker0` (the bridge gateway) — `host.docker.internal:<port>` from the devbox    |
+| Project ports (default) | Rootless Docker daemon | `docker0` (the bridge gateway) — `host.docker.internal:<port>` from the Devbox    |
 
-Nothing else is published from the devbox container. IPv6 is not published: only the IPv4 Tailscale address from
+Nothing else is published from the Devbox container. IPv6 is not published: only the IPv4 Tailscale address from
 `tailscale ip -4` and `127.0.0.1`.
 
 ## 🔎 Verifying exposure
@@ -75,14 +75,14 @@ Nothing else is published from the devbox container. IPv6 is not published: only
 ssh <workstation> 'ss -ltnp | grep 2223'
 ```
 
-Expect two lines: `<tailscale-ip>:2223` and `127.0.0.1:2223` — a `0.0.0.0:2223` line means the devbox is
+Expect two lines: `<tailscale-ip>:2223` and `127.0.0.1:2223` — a `0.0.0.0:2223` line means the Devbox is
 internet-exposed, and `doctor` fails on it explicitly.
 
 ## 🚪 Access patterns
 
 ### Dev servers and other ports
 
-Nothing else is published from the devbox container; forward per port, per session:
+Nothing else is published from the Devbox container; forward per port, per session:
 
 ```bash
 ssh -N -L 5173:localhost:5173 devbox &          # dev server
@@ -95,10 +95,10 @@ connection, never automatically — see [Git Identities](git.md#-manual-work-on-
 
 ### Project containers
 
-Project containers (see [Docker](docker.md)) publish onto `docker0` — the devbox's bridge gateway — by default,
+Project containers (see [Docker](docker.md)) publish onto `docker0` — the Devbox's bridge gateway — by default,
 reachable at `host.docker.internal:<port>`; `devbox-ports` mirrors it to `127.0.0.1:<port>`. Naming an address in
 `ports:` overrides that: `0.0.0.0` still can't reach off-host (boundary table drops it), while `127.0.0.1` binds the
-_host's_ loopback, invisible to the devbox. Tunnel either way:
+_host's_ loopback, invisible to the Devbox. Tunnel either way:
 
 ```bash
 ssh -N -L 5432:localhost:5432 devbox &                  # after `devbox-ports` mirrors the port
@@ -123,7 +123,7 @@ ssh -N -L 5432:host.docker.internal:5432 devbox &        # directly, without the
 `2222` is the workstation's sshd; `2223` is the container's — both live on one node without collision, and inside it
 sshd always listens on `2222`.
 
-### Can I reach the devbox from another Tailnet device?
+### Can I reach the Devbox from another Tailnet device?
 
 Yes — any device on the Tailnet can reach `BIND_ADDR:2223`, given an authorized key. Copy the `Host devbox` block and
 the key.
@@ -142,7 +142,7 @@ new boundary to audit each time. SSH forwarding needs no configuration and inher
 
 No — it sits on Docker's default bridge (`docker0`); the Tailnet terminates on the host, DNATing in. Outbound internet
 works normally; outbound over the Tailnet overlay does not — `devbox-docker-firewall` drops every new connection from
-`docker0` through `tailscale0` or to a Tailscale address, so a peer can reach the devbox but the devbox can't reach a
+`docker0` through `tailscale0` or to a Tailscale address, so a peer can reach the Devbox but the Devbox can't reach a
 peer's Tailscale address, except the `<peer>:<port>` services `.env`'s `DEVBOX_TAILNET_ALLOW` names (the local LLMs'
 sidecar, say, under its MagicDNS name, which `docker setup` writes into the container's hosts;
 [Docker](docker.md#2-the-boundary)). That peer's LAN or public address stays reachable like the rest of
@@ -156,16 +156,16 @@ No — only the IPv4 Tailscale address from `tailscale ip -4` and `127.0.0.1`.
 
 ### Are project containers on the Tailnet?
 
-No — the rootless daemon publishes on the devbox bridge gateway, not `0.0.0.0`; `devbox-docker-firewall` blocks `INPUT`
+No — the rootless daemon publishes on the Devbox bridge gateway, not `0.0.0.0`; `devbox-docker-firewall` blocks `INPUT`
 outside loopback and that bridge (see [Why UFW cannot help](#why-ufw-cannot-help)), overriding even a port spec's
-default. So `ports: ['5432:5432']` reaches only the devbox and host — see [Docker](docker.md).
+default. So `ports: ['5432:5432']` reaches only the Devbox and host — see [Docker](docker.md).
 Nor can they reach a Tailnet peer over the overlay: running as dev's uid or one of its subordinate uids in the host's
 namespace — a `--network host` container included — their traffic meets the same table's output rules.
 
-### Why did the devbox lose internet when I enabled an exit node?
+### Why did the Devbox lose internet when I enabled an exit node?
 
 With a Tailscale exit node set on the workstation, its outbound traffic leaves through `tailscale0`, and
 `devbox-docker-firewall` drops every new connection from `docker0`, or from dev's uid or its subordinate uids, on that
-interface — the devbox and the
+interface — the Devbox and the
 project daemon (image pulls included) lose the internet. Clear the exit node on the workstation
 (`tailscale set --exit-node=`); the boundary has no exception for it.

@@ -76,7 +76,7 @@ MCP_TOKEN_EXAMPLE=...
 
 ### How it is loaded
 
-On the devbox, `~/.bashrc.d/devbox.sh` sources it under `set -a` in every shell, interactive or not — agents arrive as
+On the Devbox, `~/.bashrc.d/devbox.sh` sources it under `set -a` in every shell, interactive or not — agents arrive as
 `ssh devbox <cmd>`. It then unsets every `GH_TOKEN_<SLUG>` and every `MCP_TOKEN_<NAME>`: only `devbox-gh-token` and
 `mcp-token` need them, and each reads them from the file by name, so a dev server, an install script or an agent never
 inherits every account's PAT or every MCP server's token. Other keys stay exported.
@@ -168,7 +168,7 @@ permissions_ unless marked; `Metadata: read` is mandatory and added by GitHub.
 
 #### Every PAT: read-only
 
-Agents use it for git on repositories without the App, for commands that name no repository, and in a devbox pane it
+Agents use it for git on repositories without the App, for commands that name no repository, and in a Devbox pane it
 is your own `gh` too — write work by hand goes through `ssh -A devbox` git or the laptop's own `gh`.
 
 | Permission                | Level           | For                                                                          |
@@ -177,7 +177,7 @@ is your own `gh` too — write work by hand goes through `ssh -A devbox` git or 
 | Contents                  | read            | clone and fetch of repositories without the App, `gh search code`            |
 | Issues, Pull requests     | read            | `gh search issues`, `gh search prs`, if agents search                        |
 | Actions, Commit statuses  | read, optional  | `gh run list/view`, `gh pr checks` on repositories without the App           |
-| Projects (_organization_) | read, optional  | your own `gh project` in a devbox pane; agents' go to the App                |
+| Projects (_organization_) | read, optional  | your own `gh project` in a Devbox pane; agents' go to the App                |
 | anything                  | **never write** | a write permission here is a write permission for every agent, acting as you |
 
 The org must allow fine-grained PATs (org settings → _Personal access tokens_); if it requires approval, a new token
@@ -283,7 +283,7 @@ credentials land in `~/.omp/agent/agent.db`. OMP needs no API key in `secrets.en
 only for a provider you deliberately use by key.
 
 Already logged in on the laptop? Copy that login over instead: `omp auth export | ssh devbox omp auth import -`. It
-carries every credential the laptop's OMP holds, API keys included, so the devbox then holds all of them.
+carries every credential the laptop's OMP holds, API keys included, so the Devbox then holds all of them.
 
 ### Claude Code
 
@@ -312,7 +312,7 @@ own LLM calls take their key from that project's `.env`, not from `secrets.env`.
 Agent `git` doesn't use `gh`'s path: the launchers' `agent.gitconfig` hands every HTTPS request to
 `devbox-git-credential`, which answers with the App token where the App is installed and the identity's PAT otherwise.
 The mechanism is in [Git Identities](git.md#-agent-sessions); the secrets it reads are the ones above — `GH_TOKEN_<SLUG>`
-from `secrets.env` and each identity's `app-id`/`app.pem` — on the laptop as well as the devbox.
+from `secrets.env` and each identity's `app-id`/`app.pem` — on the laptop as well as the Devbox.
 
 ---
 

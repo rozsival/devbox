@@ -1,6 +1,6 @@
 # 🏗️ Architecture
 
-> devbox is one Docker container on the workstation: an unprivileged `sshd` running as `dev`, published only on the
+> Devbox is one Docker container on the workstation: an unprivileged `sshd` running as `dev`, published only on the
 > node's Tailscale address and loopback, with `/home/dev` on a host bind mount. Moshi connects straight to it over SSH;
 > project containers come from a rootless sibling Docker daemon, never the host's root one.
 
@@ -37,7 +37,7 @@ flowchart LR
 | `/home/dev`                    | `${DEVBOX_DATA_DIR}` on the host, also `/home/dev`    | Bind mount: dotfiles, keys, `~/.config/devbox`, `~/projects`, project Docker data — survives rebuilds                                                              |
 | `/opt/devbox/{container,home}` | `./container`, `./home` mounted read-only             | Entrypoint, bootstrap and the templates bootstrap installs into `/home/dev`                                                                                        |
 | Project Docker daemon          | Host user `dev` (uid 1001), `/run/devbox/docker.sock` | Rootless `dockerd` from `sudo ./bin/devbox docker setup`; the socket _directory_ is bind-mounted in                                                                |
-| `devbox-docker-firewall`       | nftables table plus a systemd unit on the host        | Keeps published project ports off every interface but loopback and `docker0`, the host's own services away from the devbox, and the devbox off the Tailnet overlay |
+| `devbox-docker-firewall`       | nftables table plus a systemd unit on the host        | Keeps published project ports off every interface but loopback and `docker0`, the host's own services away from the Devbox, and the Devbox off the Tailnet overlay |
 | Identity registry              | `~/.config/devbox/identities.conf`                    | Who the box is, per account and directory tree; read only through `devbox-identities`                                                                              |
 | Agent launchers                | `~/.local/libexec/devbox-agent`                       | `omp`/`claude`/`codex` symlinks that fence agent git to HTTPS, a bot author and per-operation tokens                                                               |
 | `./bin/devbox`                 | `cli/` → generated `bin/devbox`                       | One CLI for workstation and laptop; see [CLI reference](cli.md)                                                                                                    |

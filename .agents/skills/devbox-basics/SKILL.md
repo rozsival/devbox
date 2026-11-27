@@ -1,9 +1,9 @@
 ---
 name: devbox-basics
-description: Explains how the devbox works - the container-as-sandbox model, the Tailnet-only exposure boundary, the three ways in, which machine owns which files, and how the identity registry routes Git identities by directory. Use this whenever someone asks what the devbox is, how it is isolated, "where do I actually work", why a repo or tool is missing from the laptop, whether the devbox is reachable from the internet, or is reading this repo for the first time. Also use it before answering any devbox question from memory, so the answer matches what the repo actually does.
+description: Explains how the Devbox works - the container-as-sandbox model, the Tailnet-only exposure boundary, the three ways in, which machine owns which files, and how the identity registry routes Git identities by directory. Use this whenever someone asks what the Devbox is, how it is isolated, "where do I actually work", why a repo or tool is missing from the laptop, whether the Devbox is reachable from the internet, or is reading this repo for the first time. Also use it before answering any Devbox question from memory, so the answer matches what the repo actually does.
 ---
 
-# devbox basics
+# Devbox basics
 
 `devbox` provisions one Docker container on `<workstation>`: its own unprivileged `sshd`, published only on
 its Tailscale address. Moshi connects straight to it over SSH, running OMP, Claude Code and Codex agents
@@ -30,7 +30,7 @@ Four facts:
    surviving: installed packages, `/opt/nvm`, `/opt/cargo`, `/opt/ruby` gems (writable layer, lost on recreate).
 3. **The published port is the entire network boundary**: `${BIND_ADDR}:2223:2222` in `docker-compose.yml`
    plus `127.0.0.1:2223`. Docker's DNAT matches the bound address, so UFW can't restrict it - binding to the
-   Tailscale IP keeps devbox off the public internet. An empty `BIND_ADDR` makes `./bin/devbox start` - and
+   Tailscale IP keeps Devbox off the public internet. An empty `BIND_ADDR` makes `./bin/devbox start` - and
    compose itself, via `${BIND_ADDR:?}` - refuse to start rather than publish on `0.0.0.0`; commands that
    load the compose project (`start`, `stop`, `logs`, `ps`) fail until `./bin/devbox env` fills it, while
    exec-based ones (`shell`, `bootstrap`, `hook`) still work, so the recovery shell stays available.
@@ -38,18 +38,18 @@ Four facts:
    root Docker socket is never mounted. Project containers come from a _second_ daemon: a rootless
    `dockerd` owned by the dedicated host user `dev`, socket `/run/devbox/docker.sock`, provisioned once by
    `sudo ./bin/devbox docker setup` - after which `docker` and `docker compose` work in the box. That daemon
-   publishes project ports on the devbox bridge gateway (`--ip` plus `--default-network-opt`, since `--ip`
+   publishes project ports on the Devbox bridge gateway (`--ip` plus `--default-network-opt`, since `--ip`
    alone covers only the default bridge). `devbox-docker-firewall` - nftables matching the daemon's socket
    cgroup - holds the line regardless: even an explicit `0.0.0.0:` port never reaches the Tailnet or the
-   LAN, and neither the devbox nor its project containers - `--network host` ones included - reach the
+   LAN, and neither the Devbox nor its project containers - `--network host` ones included - reach the
    host's own services (sshd included; dev's uid and its `/etc/subuid` ranges get no host address, loopback
    included, but systemd-resolved's DNS stub) or a Tailnet peer
    over the overlay (`tailscale0`, Tailscale's ranges) - bar the TCP `<peer>:<port>` services `.env`'s
-   `DEVBOX_TAILNET_ALLOW` opens to the devbox container alone. Accepted limits (`docs/security.md`): peers stay
+   `DEVBOX_TAILNET_ALLOW` opens to the Devbox container alone. Accepted limits (`docs/security.md`): peers stay
    reachable at LAN or public addresses; a project container can relay to them through `tailscaled`'s
    world-accessible LocalAPI socket (Tailnet routes only from Tailscale 1.98, which `doctor host` requires;
    older versions also reached the host's own services), or drive dev's user manager through `/run/user/1001`.
-   A Tailscale exit node on the workstation cuts the devbox's internet (`docs/docker.md`).
+   A Tailscale exit node on the workstation cuts the Devbox's internet (`docs/docker.md`).
 
 ## The three ways in
 
@@ -72,7 +72,7 @@ Dev servers are never published. Forward them: `ssh -N -L 5173:localhost:5173 de
 ## Identity registry: any number of accounts, one file
 
 `~/.config/devbox/identities.conf` is the single source of identity truth, held on both machines
-(`./bin/devbox sync identities` copies the laptop's copy to the devbox). One `[slug]` block per account, routed by
+(`./bin/devbox sync identities` copies the laptop's copy to the Devbox). One `[slug]` block per account, routed by
 directory prefix - the longest match wins, and exactly one block with no `dir` is the default that catches
 every tree no other block claims:
 
@@ -85,7 +85,7 @@ per `orgs`) and already applies on the very first `git clone`, since clone write
 fetches - unlike `includeIf gitdir:`, which needs the directory to exist first. It also sets the ssh tag
 (`core.sshCommand = ssh -P <slug>`) that picks the identity's key in `~/.ssh/config`.
 
-The devbox holds no private key for any identity: manual git (pane push, signed commit) borrows the
+The Devbox holds no private key for any identity: manual git (pane push, signed commit) borrows the
 laptop's 1Password agent, forwarded per connection with `ssh -A devbox`; agent git never touches it - the
 `omp`/`claude`/`codex` launchers rewrite their git to HTTPS with a repo-scoped token and bot author, unsigned. Agents
 write only through each identity's GitHub App (one per identity, personal included); every PAT is read-only,
@@ -98,13 +98,13 @@ so PRs carry the bot author too. Full mechanism: `docs/git.md`, `docs/secrets.md
 with a symlink each in `~/.claude/skills` (Claude Code), plus the `agent-browser` CLI and a Chrome build, so panes can drive a
 headless browser. `./bin/devbox sync omp` and `./bin/devbox sync claude` (laptop) apply the
 repo's OMP preset, `home/.omp/agent/config.yml`, and Claude Code preset, `home/.claude/settings.json` (`model` plus
-`permissions.deny`/`ask` rules mirroring OMP's `bash.patterns` guardrail), to the laptop and the devbox so both share
+`permissions.deny`/`ask` rules mirroring OMP's `bash.patterns` guardrail), to the laptop and the Devbox so both share
 them; `sync omp` copies, `sync claude` merges (other tools write `hooks` into that file). Neither sync nor `skills` runs
 during bootstrap, which only seeds each preset when absent; all are idempotent.
 Claude Code and Codex are installed by bootstrap and each needs one login in a pane: `/login` in `claude`
 (`docs/toolchain.md#-claude-code`), `codex login --device-auth` for Codex (ChatGPT subscription; allow device code sign-in in
 ChatGPT's security settings first). Codex's guardrail, `home/.codex/rules/devbox.rules`, is rewritten by every
-bootstrap - no sync; its sandbox is off on the devbox (the container is the sandbox).
+bootstrap - no sync; its sandbox is off on the Devbox (the container is the sandbox).
 
 ## What credentials live in the box
 

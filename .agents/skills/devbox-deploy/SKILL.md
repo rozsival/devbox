@@ -1,9 +1,9 @@
 ---
 name: devbox-deploy
-description: Pushes repo changes out to the devbox and applies them - ./bin/devbox deploy, choosing between start, rebuild and bootstrap for the file you actually changed, ./bin/devbox sync identities for the identity registry, rehearsing the rsync, and verifying with doctor. Use this whenever someone wants to deploy, redeploy, sync or "push to the devbox", has edited the Dockerfile, docker-compose.yml, container/, home/, .env or identities.conf and wants it live, is bumping a pinned tool version, asks whether a redeploy will wipe their keys or projects, or needs to restart, roll back or back up the devbox.
+description: Pushes repo changes out to the Devbox and applies them - ./bin/devbox deploy, choosing between start, rebuild and bootstrap for the file you actually changed, ./bin/devbox sync identities for the identity registry, rehearsing the rsync, and verifying with doctor. Use this whenever someone wants to deploy, redeploy, sync or "push to the devbox", has edited the Dockerfile, docker-compose.yml, container/, home/, .env or identities.conf and wants it live, is bumping a pinned tool version, asks whether a redeploy will wipe their keys or projects, or needs to restart, roll back or back up the Devbox.
 ---
 
-# devbox deploy
+# Devbox deploy
 
 Deploying is two easily-conflated steps: **sync the repo** to the workstation (`devbox deploy`, laptop side), **apply
 it** to the running container (`devbox start` and friends, workstation side) - picking the wrong one is
@@ -49,11 +49,11 @@ local Docker daemon, and `deploy`/`sync`/`agent install` only on the laptop. Fro
 | A pinned `ARG <TOOL>_VERSION`                                                     | `start`, or `rebuild` for no cache   | `ARG` invalidates that layer                                                                                                                                                    |
 | `container/*`, `home/*`                                                           | `start`                              | In build context, recreate                                                                                                                                                      |
 | `home/.codex/rules/devbox.rules` (the Codex guardrail)                            | `start` or `bootstrap`               | Bootstrap rewrites it on every run (no `sync codex`); on the laptop `./bin/devbox agent install` does                                                                           |
-| `container/codex-config.toml` (`/etc/codex/config.toml`: Codex's devbox sandbox)  | `start`; `rebuild` once for the link | Edits are live, since the symlink points into the `:ro` `container/` mount; the `Dockerfile` creates the link, so an image from before it needs one rebuild (`doctor` flags it) |
+| `container/codex-config.toml` (`/etc/codex/config.toml`: Codex's Devbox sandbox)  | `start`; `rebuild` once for the link | Edits are live, since the symlink points into the `:ro` `container/` mount; the `Dockerfile` creates the link, so an image from before it needs one rebuild (`doctor` flags it) |
 | Re-apply user setup only                                                          | `bootstrap`                          | No restart, no lost panes                                                                                                                                                       |
 | `bin/devbox` (regenerated from `cli/`)                                            | nothing                              | Read at invocation, on host                                                                                                                                                     |
 | `container/skills.sh`                                                             | `start`, then `./bin/devbox skills`  | Only run on demand                                                                                                                                                              |
-| `home/.omp/agent/config.yml` (the OMP preset)                                     | `./bin/devbox sync omp`              | Live files are OMP-owned once seeded; `sync omp` replaces both, laptop and devbox                                                                                               |
+| `home/.omp/agent/config.yml` (the OMP preset)                                     | `./bin/devbox sync omp`              | Live files are OMP-owned once seeded; `sync omp` replaces both, laptop and Devbox                                                                                               |
 | `home/.claude/settings.json` (the Claude Code preset)                             | `./bin/devbox sync claude`           | Merged, not copied: other tools write `hooks`/`statusLine` into the live files, which stay; rule lists are replaced whole                                                       |
 | `~/.config/devbox/identities.conf`                                                | `./bin/devbox sync identities`       | Hand-held state, not repo content                                                                                                                                               |
 | A new host needing project Docker                                                 | `sudo ./bin/devbox docker setup`     | Host provisioning, needs sudo                                                                                                                                                   |
@@ -61,12 +61,12 @@ local Docker daemon, and `deploy`/`sync`/`agent install` only on the laptop. Fro
 
 `docker setup` restarts `dev`'s user manager - and with it the project daemon and every project container - when
 the `user@1001` drop-in changed or the running manager predates it. Ubuntu's 5 s stop timeout for `user@`
-SIGKILLs a slow container; one without a restart policy stays down until its `docker compose up -d`. The devbox
+SIGKILLs a slow container; one without a restart policy stays down until its `docker compose up -d`. The Devbox
 itself (host root daemon) is untouched, and re-runs are no-ops once everything is current.
 
 `start` = `docker compose build` then `docker compose up -d` behind a preflight (`BIND_ADDR` non-empty,
 `${DEVBOX_DATA_DIR}` present and owned by `HOST_UID:HOST_GID`); missing project Docker socket only warns -
-devbox works without it. `rebuild` = `docker compose build --no-cache && docker compose up -d`.
+Devbox works without it. `rebuild` = `docker compose build --no-cache && docker compose up -d`.
 
 A recreate kills every live SSH session instantly, no client-side reason - looks like `ssh devbox` closed
 itself. `start`/`stop`/`rebuild` count sessions first: connected ones prompt on a terminal, refuse in a
@@ -103,7 +103,7 @@ This matters: "will I lose my keys / repos / gh login" is a flat no, by construc
   `docker-compose.override.yml`, `docker-compose.tailnet.yml` (`docker setup`'s hosts entries for
   `DEVBOX_TAILNET_ALLOW`), `data/` and `.git/` on the workstation.
 - `${DEVBOX_DATA_DIR}` is a host bind mount, not the image: `~/.ssh/id_*.pub`,
-  `~/.ssh/signing_*.pub` (public keys only - devbox holds no private key), sshd host key under
+  `~/.ssh/signing_*.pub` (public keys only - Devbox holds no private key), sshd host key under
   `~/.ssh/host/`, `~/.config/gh`, `~/.config/devbox/identities.conf`, `~/.config/devbox/secrets.env`,
   `~/.config/devbox/git/agent*.gitconfig`,
   `~/.local/libexec/devbox-agent` (`agent-launch`, all three launchers plus their `omp`/`claude`/`codex` symlinks, `gh`

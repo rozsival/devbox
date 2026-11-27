@@ -140,7 +140,7 @@ the host's root Docker daemon.
   GitHub App credential directories per identity (created, never fetched - only placed by hand; an identity with no
   `app` registered as a manual step, since every PAT is read-only and the App is the only way an agent writes); 10 shell
   (plus `~/.local/bin/wt-herdr`, the `wt herdr [-n|--no-focus] <branch>` custom subcommand: pull the default branch - refusing a
-  dirty worktree or a non-fast-forward; on the devbox the fetch alone runs under `agent.gitconfig`, HTTPS through
+  dirty worktree or a non-fast-forward; on the Devbox the fetch alone runs under `agent.gitconfig`, HTTPS through
   `devbox-git-credential`, since the container holds no SSH key - then `wt switch --create --no-cd` and
   `herdr worktree open`, focused unless `-n`);
   11 the box-wide `secrets.env`; 12 `gh` (the `~/.local/libexec/devbox-agent` shim plus the per-identity
@@ -176,7 +176,7 @@ the host's root Docker daemon.
 - `container/sshd_config` - unprivileged sshd: `UsePAM no`, pubkey-only, absolute paths, `AllowTcpForwarding
   yes` (dev-server tunnels), `AllowAgentForwarding yes` (the `ssh -A devbox` escape hatch only - the
   container holds no private key of its own) and `MaxSessions 32` (herdr channels)
-- `container/codex-config.toml` - Codex's system config layer on the devbox, which the `Dockerfile` symlinks to
+- `container/codex-config.toml` - Codex's system config layer on the Devbox, which the `Dockerfile` symlinks to
   `/etc/codex/config.toml`: root-owned, outside the bind mount, and live without a rebuild because the link points
   into the read-only `container/` bind mount (one rebuild creates the link). The lowest-precedence layer -
   `~/.codex/config.toml`, a trusted project's `.codex/config.toml` and `-c`/`--sandbox` override it - so it sets
@@ -207,7 +207,7 @@ the host's root Docker daemon.
   `export ...`) or a non-plain `bash -lc` script falls past it, and every Vercel/Neon invocation prompts (reads
   included). `make lint` loads it with `codex execpolicy check` when `codex` is installed, which also runs its inline
   match/not_match examples; to change it: edit, `make lint`, then `devbox agent install` (laptop) and `deploy` +
-  `bootstrap` (devbox).
+  `bootstrap` (Devbox).
   `home/.config/devbox/identities.conf.example` is the template for
   `~/.config/devbox/identities.conf` - the one file naming who this box is, per account and per directory
   tree. Neither installer copies it: it validates, so seeding it would hand git and every agent session the
@@ -235,7 +235,7 @@ the host's root Docker daemon.
   fenced) so the updater lands on the real install, and the symlink confines a missed argv shape to omp's
   shebang refusal. Never put a launcher symlink in `~/.local/bin`: Claude's native install owns
   `~/.local/bin/claude` and re-points it on every auto-update, Codex's installer and `codex update` re-point
-  `~/.local/bin/codex` (on the laptop Codex may also come from Homebrew, `brew install --cask codex`) - on the devbox the symlinks live in
+  `~/.local/bin/codex` (on the laptop Codex may also come from Homebrew, `brew install --cask codex`) - on the Devbox the symlinks live in
   `devbox-agent` itself, on the laptop in `devbox-agent/launchers`, a directory holding nothing else that
   the user puts first on the PATH. Beside them, the `gh` shim that deliberately shadows
   the real `gh` on the PATH: with `devbox-gh-token` it resolves `GH_TOKEN_<SLUG>` per invocation from the
@@ -289,7 +289,7 @@ the host's root Docker daemon.
   or present in `disabledProviders` (parsed with awk, no YAML tool on either machine), a non-empty
   `~/.omp/agent/AGENTS.md` (OMP keeps one user-level context file and its own wins), a `~/.codex/AGENTS.md` that is
   stale or the user's own, a non-empty `~/.codex/AGENTS.override.md` (Codex reads it instead of `AGENTS.md`),
-  and the `/etc/devbox-env` marker missing on the devbox or present on the laptop. It never edits OMP's config.
+  and the `/etc/devbox-env` marker missing on the Devbox or present on the laptop. It never edits OMP's config.
   Bash >= 4.2 and BSD tools, since the laptop runs it under `bin/devbox`
 - `bashly-settings.yml`, `cli/` and `bin/devbox` - the one CLI for both machines. `bashly-settings.yml` points
   bashly at `cli/` and writes `bin/`; `cli/bashly.yml` declares the commands, `cli/commands/` holds their
@@ -324,10 +324,10 @@ the host's root Docker daemon.
     reload, a failure there removing the drop-in; either shows sshd's own stderr and fails that step without
     aborting the rest of setup; captured `sshd -T` output confirms it applies), moves `DEVBOX_DATA_DIR` to
     `/home/dev` (path identity), writes `/etc/tmpfiles.d/devbox-docker.conf`, installs the nftables table plus
-    `devbox-docker-firewall.service` (ordered before the host's `docker.service`, which starts the devbox, and
+    `devbox-docker-firewall.service` (ordered before the host's `docker.service`, which starts the Devbox, and
     with no `ExecStop` - a restart's `nft -f` swaps the table atomically) that keeps published project ports
     off every interface but loopback and `docker0` (`--ip` covers only the default bridge, so the unit also
-    passes `--default-network-opt` and the table backs both up) and the host's own services out of the devbox's
+    passes `--default-network-opt` and the table backs both up) and the host's own services out of the Devbox's
     reach (from `docker0` only the daemon's sockets answer; host processes running as dev's uid or one of its
     `/etc/subuid` subordinate uids - the daemon, rootlesskit, slirp4netns, anything dev's user manager starts and
     every `--network host` project container, which shares the host's network namespace and runs a non-root
@@ -337,9 +337,9 @@ the host's root Docker daemon.
     new connection from `docker0` or those uids through `tailscale0` or to `100.64.0.0/10`/`fd7a:115c:a1e0::/48`,
     evaluated after Docker's DNAT so a root-daemon port on the host's Tailscale address still works; the one
     exception is `.env`'s `DEVBOX_TAILNET_ALLOW`, space-separated `<peer>:<port>` entries resolved with
-    `tailscale ip -4` when the table is written and accepted as TCP from `docker0` only - the devbox reaching the
+    `tailscale ip -4` when the table is written and accepted as TCP from `docker0` only - the Devbox reaching the
     LLM stack's own Tailscale sidecar - whose malformed or unresolvable entries setup and `doctor host` fail; since
-    the devbox's DNS is the LAN's, never MagicDNS, setup also writes `docker-compose.tailnet.yml`, the peers' names as
+    the Devbox's DNS is the LAN's, never MagicDNS, setup also writes `docker-compose.tailnet.yml`, the peers' names as
     `extra_hosts`, which `compose()` in `cli/lib/compose.sh` adds to every compose call and `doctor host` resolves
     inside the container). That covers
     direct connections to the overlay only: tailscaled's LocalAPI socket is world-accessible and dials Tailnet
@@ -349,7 +349,7 @@ the host's root Docker daemon.
     host` fails when the running tailscaled (`tailscale version --daemon`, falling back to the CLI's `tailscale
     version`) is below 1.98. `doctor host` also fails until the loaded file matches the ruleset the checkout writes
     and the installed unit matches the one `netfilter_unit` writes. Setup also
-    adds the one `ufw` rule that lets the devbox bridge reach the gateway, and runs a lingering rootless
+    adds the one `ufw` rule that lets the Devbox bridge reach the gateway, and runs a lingering rootless
     `dockerd` on `/run/devbox/docker.sock` from a root-owned unit in `/etc/systemd/user`, so nothing in the bind
     mount can rewrite the daemon's command line - plus a `user@1001.service` drop-in pointing dev's
     `XDG_CONFIG_HOME`/`XDG_DATA_HOME` at root-owned `/etc/devbox-docker`, since the user manager would otherwise
@@ -362,7 +362,7 @@ the host's root Docker daemon.
     manager's environment lacks `XDG_CONFIG_HOME=/etc/devbox-docker/config`, which restarts the project daemon
     and every project container (Ubuntu's `TimeoutStopSec=5` SIGKILLs slow ones; one without a restart policy
     stays down until `docker compose up -d`) - re-runs are no-ops once current, and `doctor host` compares the
-    manager's `ExecMainStartTimestamp` with the drop-in's mtime. The relocation closes only the path the devbox
+    manager's `ExecMainStartTimestamp` with the drop-in's mtime. The relocation closes only the path the Devbox
     writes directly: through `/run/user/1001` (the bus, `systemd/private`) a project container can still change
     the daemon's environment or start units as dev in the host network namespace - the rules above on dev's uid
     and its subordinate uids are what bound such code. Old unit files in the bind mount are removed as dev, never
@@ -372,7 +372,7 @@ the host's root Docker daemon.
     flagging a stale or missing drop-in file
   - `devbox sync omp` - applies the repo's preset, `home/.omp/agent/config.yml`, to both machines: the laptop's
     `~/.omp/agent/config.yml` first (a differing one kept as `config.yml.bak`, since OMP may have written a
-    change there that never reached the preset), then the devbox's over `Host devbox` (one `.bak` kept there);
+    change there that never reached the preset), then the Devbox's over `Host devbox` (one `.bak` kept there);
     only the preset, never the per-machine OMP state. Refuses (without `--allow-unguarded`) a preset lacking a
     top-level `bash:` block, since the copy replaces each whole file and would drop its seeded guardrail. The
     flag is not `--force` on purpose: `--force` only ever means "past the live-session prompt"
@@ -382,16 +382,16 @@ the host's root Docker daemon.
     `permissions`), so every key the preset does not set stays, the ones it sets take its value, and the rule
     arrays are replaced whole (a rule dropped from the preset disappears; a top-level key dropped from it
     entirely stays in live files). The laptop's file first (one `settings.json.bak` when it changed), then the
-    devbox's: fetched over `ssh` (`Host devbox`), merged locally, copied back through `sync_to_devbox` with one
+    Devbox's: fetched over `ssh` (`Host devbox`), merged locally, copied back through `sync_to_devbox` with one
     `.bak` there, skipped when it already holds the preset. Needs `jq`, `rsync`, `ssh`; `CLAUDE_SETTINGS`
     overrides the source file. No `--allow-unguarded`: a merge cannot drop the live rules unless the preset sets
     an empty array. Host resolved as for `sync omp`
-  - `devbox sync identities` - copies `~/.config/devbox/identities.conf` into the devbox over `Host devbox`,
+  - `devbox sync identities` - copies `~/.config/devbox/identities.conf` into the Devbox over `Host devbox`,
     keeping one `identities.conf.bak` remotely, then re-runs `bootstrap.sh` there so every identity-derived
     file catches up; validates locally with `devbox-identities check` first, the same reader that runs on both
-    sides, so a broken registry never becomes the one the devbox boots from. `sync` host: argument, then
+    sides, so a broken registry never becomes the one the Devbox boots from. `sync` host: argument, then
     `DEVBOX_SSH_HOST` (environment or `.push.env`), then `devbox`
-  - `devbox agent install` - idempotent: installs the same agent git override the devbox bootstraps (`agent-launch`,
+  - `devbox agent install` - idempotent: installs the same agent git override the Devbox bootstraps (`agent-launch`,
     `omp-launcher`, `claude-launcher`, `codex-launcher`, `claude-session-env`, `gh` shim, `fenced/git` shim, credential helper, fence,
     `devbox-gh-token`, `mcp-token`, `wt-herdr`, `devbox-identities` in `~/.local/libexec` with a `~/.local/bin`
     symlink so it answers
@@ -421,7 +421,7 @@ the host's root Docker daemon.
     `id_<slug>.pub`/`signing_<slug>.pub` pair per identity (plus `devbox.pub`) held by the 1Password agent,
     each forge host's plain key and one `.pub` per identity's ssh tag selecting through it, `Host <workstation>`
     on the default identity's `id_<slug>.pub` and the workstation refusing `devbox.pub` (every `ssh -A devbox`
-    leaves that key approved for anything in the devbox; asked with `ssh -v` and no agent, so the server answers
+    leaves that key approved for anything in the Devbox; asked with `ssh -v` and no agent, so the server answers
     before any signature and 1Password never prompts; its remedy is ordered - authorize `id_<default>.pub` and
     point `Host <workstation>` at it until `ssh <workstation> true` passes, only then remove `devbox.pub`, so the
     account is never locked out), `~/.gitconfig`'s org includes probed with a `hasconfig:`
