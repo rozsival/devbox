@@ -1,9 +1,9 @@
 ---
 name: devbox-runtime
-description: How to work in the machine this agent session runs on - the devbox container (remote, unprivileged Ubuntu sandbox) or the user's macOS laptop - and how the two relate. Use it whenever DEVBOX_ENV matters to a decision - installing a tool, running Docker or a dev server, giving the user a URL or port, a path that may only exist on the other machine, a git or gh authentication failure (a 403 "Resource not accessible by personal access token", "Could not resolve to a Repository"), calling git, gh or the GitHub API from a script, an eval/REPL kernel or another language, a commit with the wrong author, a secret or vault-rendered file that is missing - and whenever you catch yourself assuming root, sudo, the user's own credentials or the other machine's files.
+description: How to work in the machine this agent session runs on - the Devbox container (remote, unprivileged Ubuntu sandbox) or the user's macOS laptop - and how the two relate. Use it whenever DEVBOX_ENV matters to a decision - installing a tool, running Docker or a dev server, giving the user a URL or port, a path that may only exist on the other machine, a git or gh authentication failure (a 403 "Resource not accessible by personal access token", "Could not resolve to a Repository"), calling git, gh or the GitHub API from a script, an eval/REPL kernel or another language, a commit with the wrong author, a secret or vault-rendered file that is missing - and whenever you catch yourself assuming root, sudo, the user's own credentials or the other machine's files.
 ---
 
-# Working in the devbox and on the laptop
+# Working in the Devbox and on the laptop
 
 `DEVBOX_ENV` (set by the `omp`/`claude`/`codex` launcher, or on the laptop by the Claude desktop app's `SessionStart` hook) says
 where this session runs: `devbox` or `laptop`. Your context already holds a short summary for this machine. This skill
@@ -15,9 +15,9 @@ the user, 1Password, ssh client    --ssh over Tailscale-->  BIND_ADDR:2223  --> 
                                                             rootless dockerd (uid 1001)  <--socket--  docker CLI
 ```
 
-The laptop's `~/projects` and the devbox's `/home/dev/projects` are different trees. Nothing syncs them except git.
+The laptop's `~/projects` and the Devbox's `/home/dev/projects` are different trees. Nothing syncs them except git.
 
-## On the devbox
+## On the Devbox
 
 ### A tool is missing
 
@@ -31,7 +31,7 @@ The laptop's `~/projects` and the devbox's `/home/dev/projects` are different tr
    - `pipx` or `uv tool` when they exist, or a project-local virtualenv
 3. A system package (`apt-get`) needs root, and there is none. Don't look for one: no `sudo`, no setuid helpers, and
    `docker run -v /:/host` reaches only a rootless daemon that has no host root. Propose the change instead: an
-   `apt-get install` line or a pinned `ARG <TOOL>_VERSION` block in the devbox repo's `Dockerfile`, followed by
+   `apt-get install` line or a pinned `ARG <TOOL>_VERSION` block in the Devbox repo's `Dockerfile`, followed by
    `./bin/devbox rebuild` on the workstation, which the user runs.
 
 ### Docker
@@ -45,7 +45,7 @@ The laptop's `~/projects` and the devbox's `/home/dev/projects` are different tr
 - **Reaching a published port:** from this shell, use `host.docker.internal:<port>`, or run `devbox-ports` once per new
   service to mirror every published port onto `localhost:<port>` (`devbox-ports status`, `devbox-ports stop`).
 - **`127.0.0.1:<port>:<port>` in a compose file** binds the host's loopback, which nothing here can reach. Make the
-  address a variable (`${DOCKER_BIND_IP:-127.0.0.1}`) and set `DOCKER_BIND_IP=172.17.0.1` in the project's devbox
+  address a variable (`${DOCKER_BIND_IP:-127.0.0.1}`) and set `DOCKER_BIND_IP=172.17.0.1` in the project's Devbox
   `.env`; laptops leave it unset.
 - `--network host` shares the **workstation's** network namespace, not this container's: its `localhost` is the
   workstation's, and what it listens on does not appear on this container's `localhost`. The firewall still keeps its
@@ -63,7 +63,7 @@ ssh -N -L <port>:host.docker.internal:<port> devbox     # a project-container po
 ```
 
 Give the user that command with the URL. Never tell them to open `http://<workstation>:<port>`: nothing is published
-beyond SSH. For your own browser checks, `agent-browser` runs a headless Chrome inside the devbox, if it was installed
+beyond SSH. For your own browser checks, `agent-browser` runs a headless Chrome inside the Devbox, if it was installed
 with `./bin/devbox skills`.
 
 ### Secrets
@@ -91,8 +91,8 @@ container. herdr restores the pane layout, not the processes.
   their dotfiles are live. The launcher hides all of that from this session on purpose. The guardrail denies
   `security find-*-password`, `gh auth token` and absolute-path `gh`, and `op` prompts. Don't route around them.
 - **Reaching the devbox:** `ssh devbox '<cmd>'` works but makes 1Password prompt the user for approval. Use it only
-  when they ask for something to happen on the devbox, and remember the paths there differ.
-- Agent git and `gh` behave exactly as on the devbox (next section).
+  when they ask for something to happen on the Devbox, and remember the paths there differ.
+- Agent git and `gh` behave exactly as on the Devbox (next section).
 
 ## Git and GitHub (both machines)
 

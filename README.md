@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📦 devbox
+# 📦 Devbox
 
 ### Containerised remote development environment for an AI coding workstation
 
@@ -56,12 +56,19 @@ items and approvals, sudo passwords, interactive logins, tokens and identities.c
 Done means `./bin/devbox doctor` passes on the workstation and `./bin/devbox doctor laptop` here.
 ```
 
-Then connect Moshi to the devbox ([Connecting](docs/connecting.md#-moshi)), or `ssh devbox` for a plain shell. Prefer
+Then connect Moshi to the Devbox ([Connecting](docs/connecting.md#-moshi)), or `ssh devbox` for a plain shell. Prefer
 doing it by hand? Every step is in [Installation](docs/installation.md).
 
 > [!WARNING]
 > `start`, `stop` and `rebuild` recreate or stop the container and drop every live SSH session and herdr pane; they ask
 > first unless `--force` is given. `update` upgrades the agent tools in place and never does.
+
+## 🧭 The stack
+
+Devbox runs on Pantheon, the author's home server, set up with the [Pantheon](https://github.com/rozsival/pantheon) baseline (Docker and Tailscale
+included), next to the [Panther Minor](https://github.com/rozsival/panther-minor) AI stack. The laptop that drives it is
+set up with [Dotfiles](https://github.com/rozsival/dotfiles), and [Janus](https://github.com/rozsival/janus) switches
+the machine on and off remotely. The whole map is in [Pantheon's README](https://github.com/rozsival/pantheon#-the-stack).
 
 ## 📚 Documentation
 

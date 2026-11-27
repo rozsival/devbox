@@ -1,6 +1,6 @@
 # 🐳 Docker
 
-> Projects that bring their own containers work inside the devbox by speaking to a **second, rootless Docker daemon
+> Projects that bring their own containers work inside the Devbox by speaking to a **second, rootless Docker daemon
 > owned by a dedicated unprivileged host user** — never the host's root daemon, never a nested daemon. This page covers
 > the architecture, the host prep script, the publish boundary, path identity and how to reach a service.
 
@@ -21,7 +21,7 @@ flowchart LR
         end
         RL["rootless dockerd (user dev)<br/>runs the project's containers"]
         ROOT --> BOX
-        CLI -- "socket /run/devbox/docker.sock<br/>bind-mounted into the devbox" --> RL
+        CLI -- "socket /run/devbox/docker.sock<br/>bind-mounted into the Devbox" --> RL
         RL -- "publish #lt;docker0 gateway#gt;:#lt;port#gt;<br/>the devbox bridge gateway,<br/>alias host.docker.internal" --> BOX
         RL <-. "home /home/dev<br/>the same path on both sides" .-> BOX
     end
@@ -34,7 +34,7 @@ sudo ./bin/devbox docker setup      # then, as your own user:
 ./bin/devbox rebuild
 ```
 
-`sudo ./bin/devbox docker setup --check` reports state, changing nothing. Inside the devbox, `docker` and
+`sudo ./bin/devbox docker setup --check` reports state, changing nothing. Inside the Devbox, `docker` and
 `docker compose` work with no flags, no `sudo`, no socket path to remember.
 
 ## 🚫 Why not the two obvious options
@@ -42,7 +42,7 @@ sudo ./bin/devbox docker setup      # then, as your own user:
 | Option                              | What it actually grants                                                       |
 | ----------------------------------- | ----------------------------------------------------------------------------- |
 | Mount `/var/run/docker.sock`        | Host root. The API can start a container that bind-mounts `/` and adds caps   |
-| Nested daemon in the devbox         | Needs setuid `newuidmap`, which `cap_drop: ALL` + `no-new-privileges` prevent |
+| Nested daemon in the Devbox         | Needs setuid `newuidmap`, which `cap_drop: ALL` + `no-new-privileges` prevent |
 | Privileged sidecar `dind`           | Same as the first row, one indirection later                                  |
 | **Rootless sibling, dedicated uid** | Only what the `dev` host user can reach: `/home/dev` and world-readable paths |
 
@@ -64,7 +64,7 @@ container's hardening untouched: nothing in `docker-compose.yml` was relaxed.
 | `/etc/tmpfiles.d/devbox-docker.conf`                                      | `/run/devbox` must exist _before_ the daemon starts: rootlesskit copy-ups `/run`, symlinking only what's already there; tmpfiles recreates it on boot                                                                                                                                                                                                                                                                                                                         |
 | `loginctl enable-linger dev`                                              | A never-logged-in account gets no systemd user manager, so the daemon couldn't boot or survive. The root-owned manager configuration below (drop-in and wants link) is written before anything can start `user@1001` — linger, or the firewall unit's `Wants=` when its restart pulls the manager in — so a first provisioning's manager starts on `/etc/devbox-docker`, never on the bind mount                                                                              |
 | Unit in `/etc/systemd/user`, owned by root                                | `dockerd-rootless-setuptool.sh install` would put it in `~/.config/systemd/user` on the bind mount, letting the container rewrite the daemon's command line; the script runs only for its prerequisite `check`, owning the unit itself. Old unit files in the bind mount are removed as `dev`, never by a root `rm` that would follow a planted symlink                                                                                                                       |
-| `user@1001.service` drop-in → `/etc/devbox-docker`                        | dev's user manager reads units, drop-ins, wants links and `environment.d` from `XDG_CONFIG_HOME`/`XDG_DATA_HOME` — by default the bind mount. Pointed at root-owned directories (the wants link starting the daemon included), files the devbox writes can't change the daemon's flags or add a host service — the manager's own bus is another matter ([below](#the-user-manager-is-not-fenced-off)). Written right after the data dir, before the firewall steps and linger |
+| `user@1001.service` drop-in → `/etc/devbox-docker`                        | dev's user manager reads units, drop-ins, wants links and `environment.d` from `XDG_CONFIG_HOME`/`XDG_DATA_HOME` — by default the bind mount. Pointed at root-owned directories (the wants link starting the daemon included), files the Devbox writes can't change the daemon's flags or add a host service — the manager's own bus is another matter ([below](#the-user-manager-is-not-fenced-off)). Written right after the data dir, before the firewall steps and linger |
 | `/etc/nftables.d/devbox-docker.nft` plus `devbox-docker-firewall.service` | The publish boundary and the one around the host's own services, the non-obvious piece ([below](#-where-a-published-port-is-bound))                                                                                                                                                                                                                                                                                                                                           |
 
 Every `docker` call the script makes as `dev` runs with a `DOCKER_CONFIG` outside `/home/dev`, so a `config.json` or CLI
@@ -83,7 +83,7 @@ controls, or a LocalAPI that relays to the host's own services, gets reported, n
 
 ### The user manager is not fenced off
 
-The drop-in closes the path the devbox writes directly: files in the bind mount. It doesn't close dev's user manager
+The drop-in closes the path the Devbox writes directly: files in the bind mount. It doesn't close dev's user manager
 itself. A project container can bind-mount `/run/user/1001` — the manager's bus, `systemd/private`,
 `systemd/user.control`, `systemd/transient` — and through it change the daemon's environment or start units as `dev` in
 the host's network namespace. What bounds such code is the boundary table's output rules for dev's uid and its
@@ -148,13 +148,13 @@ so image-pull and DNS replies also arrive on a socket in that slice. Without `ct
 have no outbound connectivity. An inbound connection is `ct state new`, so it still meets the drop.
 
 Matching is by the **listening socket's cgroup**, covering every port that daemon will ever publish, at any address,
-without knowing port numbers: loopback and the devbox bridge are accepted, everywhere else dropped — so
-`ports: ['5432:5432']` works from the devbox and host, invisible from Tailnet and LAN, whatever the compose file asks.
+without knowing port numbers: loopback and the Devbox bridge are accepted, everywhere else dropped — so
+`ports: ['5432:5432']` works from the Devbox and host, invisible from Tailnet and LAN, whatever the compose file asks.
 Unlike the DNAT case in [Networking](networking.md), these are ordinary host sockets, so `INPUT` genuinely applies.
 
 The same table is the boundary around the host's own services. ufw's rule admits `docker0` to every port on the
 gateway and the workstation's sshd listens on all addresses, so from `docker0` only the daemon's sockets are accepted
-and the rest is dropped: the devbox reaches project ports and nothing else on the host. Its project containers would
+and the rest is dropped: the Devbox reaches project ports and nothing else on the host. Its project containers would
 get there one hop later — they leave through slirp4netns, a `dev` process in the host namespace — hence the output
 chain refusing new connections from dev's uid and its subordinate uids to any of the host's addresses, loopback
 included. The one exception is systemd-resolved's stub (`127.0.0.53`/`127.0.0.54`, port 53), where the daemon's DNS
@@ -169,7 +169,7 @@ like any other `dev` process: no host service but the resolver stub, no Tailnet.
 host namespace, which a container can start through dev's user manager ([above](#the-user-manager-is-not-fenced-off)).
 Ports the host's root daemon publishes are untouched, DNATed to their containers before this table sees the packet.
 
-And it keeps both off the Tailnet overlay. Peers reach the devbox — its sshd is published on the Tailscale address — but
+And it keeps both off the Tailnet overlay. Peers reach the Devbox — its sshd is published on the Tailscale address — but
 nothing in it needs to reach a peer, and a forwarded agent plus a peer's sshd is a way off this machine. So no new
 connection leaves `docker0`, or leaves as dev's uid or a subordinate uid, through `tailscale0` or towards a Tailscale address
 (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`); replies to your inbound sessions are established and pass. Docker's DNAT runs
@@ -179,7 +179,7 @@ already become a container address and never matches: that traffic stays on the 
 default route out to the ISP.
 
 The one way through is `DEVBOX_TAILNET_ALLOW` in `.env`: space-separated `<peer>:<port>` entries, each a Tailnet
-service the devbox container itself may open — the LLM stack behind its own Tailscale sidecar, say
+service the Devbox container itself may open — the LLM stack behind its own Tailscale sidecar, say
 (`panther-minor:8000 panther-minor:8001`). `docker setup` resolves each peer with `tailscale ip -4` and puts one accept
 per entry at the head of the forward chain, TCP to that address and port only:
 
@@ -193,12 +193,12 @@ runs again, and `./bin/devbox doctor host` reports the stale ruleset — and an 
 meanwhile. The connection leaves masqueraded as the workstation, so the Tailnet policy sees the workstation's node and
 must grant it the port.
 
-The address alone isn't enough: the devbox resolves names through the LAN's DNS, never MagicDNS (`100.100.100.100` is
+The address alone isn't enough: the Devbox resolves names through the LAN's DNS, never MagicDNS (`100.100.100.100` is
 in the range the forward chain drops), and a `ts.net` name's public record points at Tailscale's own servers — so
 `https://panther-minor.<tailnet>.ts.net:8000`, the name on the peer's certificate, would hang. `docker setup` therefore
 also writes `docker-compose.tailnet.yml`: an `extra_hosts` entry for every peer given by name, as written and, for a
 bare name, under the tailnet's MagicDNS suffix, from the same resolution as the table. Every `bin/devbox` command loads
-the file (a bare `docker compose` doesn't); `./bin/devbox start` recreates the devbox with it, and `doctor host` checks
+the file (a bare `docker compose` doesn't); `./bin/devbox start` recreates the Devbox with it, and `doctor host` checks
 each name resolves to its address inside the container. Like `.env`, it's host state: gitignored, and `deploy` never
 touches it.
 
@@ -211,7 +211,7 @@ address, the host's sshd and loopback services included, past every uid rule abo
 fails below 1.98. Both are accepted limits ([Security Model](security.md#-accepted-limits)).
 
 > [!WARNING]
-> An **exit node** on the workstation leaves the devbox and the project daemon without internet: with one set, every
+> An **exit node** on the workstation leaves the Devbox and the project daemon without internet: with one set, every
 > outbound packet leaves through `tailscale0`, and the `oifname "tailscale0"` rules drop it.
 
 It lives in its own `inet` table at lower priority than ufw's chains, so neither touches the other's rules; ufw still
@@ -223,14 +223,14 @@ needs its allow rule, since a packet accepted in one table isn't exempt from lat
 > lingering user manager that owns the slice — rather than merely after ufw, which at boot lost the race and left the
 > boundary down.
 
-It is also ordered **before** the host's `docker.service`, which starts the devbox container: at boot the root daemon
-used to restore the devbox while the table was still loading. That costs the root daemon about 0.1 s — the user manager
+It is also ordered **before** the host's `docker.service`, which starts the Devbox container: at boot the root daemon
+used to restore the Devbox while the table was still loading. That costs the root daemon about 0.1 s — the user manager
 reports ready before its own units run. And the unit has no `ExecStop`: stopping it leaves the table loaded, and a
 restart's `nft -f` replaces it atomically. Deleting it on stop opened a gap on every restart — including the one
-`PartOf=` triggers when `docker setup` restarts the user manager — while the devbox was running. Removing the boundary
+`PartOf=` triggers when `docker setup` restarts the user manager — while the Devbox was running. Removing the boundary
 therefore takes both: `sudo systemctl disable --now devbox-docker-firewall && sudo nft delete table inet devbox`.
 
-The devbox deliberately sits on the _default_ bridge (`network_mode: bridge`): `docker0` exists whenever the host
+The Devbox deliberately sits on the _default_ bridge (`network_mode: bridge`): `docker0` exists whenever the host
 daemon does, while a compose-managed bridge is removed by `docker compose down` (`./bin/devbox stop`) and recreated with a new address — both
 the publish address and the boundary table's interface are keyed to it.
 
@@ -265,8 +265,8 @@ Three ways, in order of preference:
 | #   | Route                                           | How                                                                                                                                                                                                                                                                                                                       |
 | --- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | From another container in the same stack        | Unchanged: compose networks and service DNS work as on a laptop; `postgres:5432` resolves                                                                                                                                                                                                                                 |
-| 2   | Via `host.docker.internal`, from a devbox shell | Every port published _on the gateway_ (a `ports:` entry with no explicit host address) is reachable there: the name resolves to the devbox bridge gateway, the boundary table's one admitted interface. An entry naming `127.0.0.1` isn't — see [A compose file that binds 127.0.0.1](#-a-compose-file-that-binds-127001) |
-| 3   | Via `localhost`, from a devbox shell            | Run `devbox-ports`, forwarding `127.0.0.1:<port>` to `host.docker.internal:<port>` for every gateway-published port, one `socat` per port. A loopback-bound publish is skipped with a warning naming the container, since a forward there relays to nothing                                                               |
+| 2   | Via `host.docker.internal`, from a Devbox shell | Every port published _on the gateway_ (a `ports:` entry with no explicit host address) is reachable there: the name resolves to the Devbox bridge gateway, the boundary table's one admitted interface. An entry naming `127.0.0.1` isn't — see [A compose file that binds 127.0.0.1](#-a-compose-file-that-binds-127001) |
+| 3   | Via `localhost`, from a Devbox shell            | Run `devbox-ports`, forwarding `127.0.0.1:<port>` to `host.docker.internal:<port>` for every gateway-published port, one `socat` per port. A loopback-bound publish is skipped with a warning naming the container, since a forward there relays to nothing                                                               |
 
 ```bash
 docker compose up -d
@@ -277,7 +277,7 @@ devbox-ports stop
 
 That last one exists so a project whose `.env` says `postgres://localhost:5432` needs no devbox-specific edit. Each
 forward is a detached `socat` outliving its shell, every `docker compose restart`, and every rebuild — bound to the
-port, not the container, dying only with the devbox itself. `container/entrypoint.sh` re-syncs on start, so
+port, not the container, dying only with the Devbox itself. `container/entrypoint.sh` re-syncs on start, so
 `./bin/devbox rebuild` restores forwards before sshd accepts a connection. Run `devbox-ports` once per added service,
 not once per session.
 
@@ -287,7 +287,7 @@ From the laptop, tunnel as usual: `ssh -N -L 5432:localhost:5432 devbox &` reach
 ## 📍 A compose file that binds 127.0.0.1
 
 A project publishing with an explicit loopback prefix — `'127.0.0.1:5432:5432'`, common and correct on a laptop — is
-**unreachable from the devbox**: the daemon is a sibling, so that's the _host's_ loopback, with no devbox route to it.
+**unreachable from the Devbox**: the daemon is a sibling, so that's the _host's_ loopback, with no Devbox route to it.
 Neither `host.docker.internal` nor `devbox-ports` can see the port, since nothing published on the bridge gateway.
 
 Make the address a variable in the project's compose file, defaulting to today's behaviour:
@@ -297,7 +297,7 @@ ports:
   - '${DOCKER_BIND_IP:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432'
 ```
 
-Then set `DOCKER_BIND_IP=172.17.0.1` in that project's devbox `.env` — the gateway address, printed by
+Then set `DOCKER_BIND_IP=172.17.0.1` in that project's Devbox `.env` — the gateway address, printed by
 `./bin/devbox doctor` and resolved by `host.docker.internal`. Laptops leave it unset, unaffected. This bind is safe: the
 boundary table drops connections to a published port from every interface except `lo` and `docker0`, including ports
 published to `0.0.0.0` (see [Where a published port is bound](#-where-a-published-port-is-bound)).
@@ -313,7 +313,7 @@ pnpm dev                # apps on localhost:3000/4000-4002, natively in the box
 ```
 
 The apps' own `localhost` URLs (`NEXT_PUBLIC_GATEWAY_URL`, `CORS_ORIGINS`, `AGENT_UPSTREAMS`, `AUTH_URL`) need no
-change, since those processes run in the devbox and its loopback is theirs. Renaming the two container-facing values to
+change, since those processes run in the Devbox and its loopback is theirs. Renaming the two container-facing values to
 `host.docker.internal` instead of mirroring works for Postgres but breaks Langfuse: compose feeds `LANGFUSE_BASE_URL` to
 `NEXTAUTH_URL`, which must match the operator's browser address over the tunnel.
 
@@ -321,7 +321,7 @@ change, since those processes run in the devbox and its loopback is theirs. Rena
 > Leave it `localhost:3001` and mirror; a wrong value fails silently, since OTel's span processor drops spans instead of
 > raising.
 
-`.env.local` holds vault-injected credentials and can't be generated in the devbox, which ships no `op` by design (see
+`.env.local` holds vault-injected credentials and can't be generated in the Devbox, which ships no `op` by design (see
 [Secrets](secrets.md)). Generate it on the laptop with `pnpm run env:inject`, copy it in once — `.worktreeinclude`
 carries it into every `wt` worktree.
 
@@ -366,7 +366,7 @@ owns. The host's root daemon isn't exposed.
 The daemon's user _is_ the authority ceiling: running it as the deploying user would let anything with the socket mount
 `/home/<you>/.ssh` as that uid, reading the host's private keys.
 
-### Can an agent in the devbox stop the devbox container?
+### Can an agent in the Devbox stop the Devbox container?
 
 No — it runs on the host's root daemon, unreachable from the container. It can stop and start project containers —
 that's the point.
@@ -378,7 +378,7 @@ No, by two independent mechanisms: the daemon publishes on the bridge gateway by
 bridge, even when a port spec overrides the default. `./bin/devbox doctor` fails if the boundary service is inactive or
 stale, or the address drifted.
 
-### Can the devbox reach the workstation's own services?
+### Can the Devbox reach the workstation's own services?
 
 No — only the project daemon's published ports. `devbox-docker-firewall` drops everything else `docker0` sends the
 host, the workstation's sshd included, and stops project containers — `--network host` ones too — or anything running
@@ -391,7 +391,7 @@ ssh devbox 'docker run --rm alpine:3 nc -w 3 <workstation-lan-ip> 2222 </dev/nul
 ssh devbox 'docker run --rm --network host -u 1000 alpine:3 nc -w 3 127.0.0.1 2222 </dev/null'
 ```
 
-### Can the devbox reach other machines on my Tailnet?
+### Can the Devbox reach other machines on my Tailnet?
 
 Not directly over the overlay — it is reachable _from_ the Tailnet, and `devbox-docker-firewall` drops every new
 connection from `docker0`, or from dev's uid or its subordinate uids, through `tailscale0` or to a Tailscale address. A
@@ -431,11 +431,11 @@ The daemon is down or unprovisioned. On the host: `sudo ./bin/devbox docker setu
 
 `/etc/devbox-docker/config/docker/daemon.json`, written as root, then
 `sudo systemctl --user --machine=dev@.host restart docker`. `~/.config/docker/daemon.json` is ignored on purpose:
-anything in the devbox can write the bind mount, and a daemon configuration it controls could turn off the boundaries
+anything in the Devbox can write the bind mount, and a daemon configuration it controls could turn off the boundaries
 this page describes. Same for units and `environment.d`: dev's user manager reads them from `/etc/devbox-docker`. That
 closes the files, not the manager's bus — see [The user manager is not fenced off](#the-user-manager-is-not-fenced-off).
 
-### What if a service is running but nothing in the devbox can reach its port?
+### What if a service is running but nothing in the Devbox can reach its port?
 
 Run `devbox-ports`: it names the case. A `[WARN]` means the compose file binds the _host's_ loopback, unreachable
 here — parameterise the address and set `DOCKER_BIND_IP` (see
@@ -454,6 +454,6 @@ No — they live under `/home/dev/.local/share/docker` on the bind mount, which 
 
 ### Can I use the host's root daemon for something else?
 
-It still runs the devbox container itself, and it's yours over `ssh <workstation>`. Nothing inside the devbox can reach
+It still runs the Devbox container itself, and it's yours over `ssh <workstation>`. Nothing inside the Devbox can reach
 it. Give anything else you run on it its own network, as a compose project's default network does: a container it puts
-on the default bridge (`docker0`) shares the devbox's boundary — no host services, no Tailnet.
+on the default bridge (`docker0`) shares the Devbox's boundary — no host services, no Tailnet.

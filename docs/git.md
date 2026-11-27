@@ -1,7 +1,7 @@
 # 🔑 Git Identities
 
 > Any number of identities, chosen by directory and generated from one registry, `~/.config/devbox/identities.conf`. The
-> devbox holds no private key for any of them; you (a forwarded 1Password agent) and an agent session (HTTPS,
+> Devbox holds no private key for any of them; you (a forwarded 1Password agent) and an agent session (HTTPS,
 > per-operation tokens) use them differently.
 
 **Related:** [Secrets](secrets.md) · [Security Model](security.md) · [CLI Reference](cli.md) ·
@@ -12,7 +12,7 @@
 ## 🗺️ Overview
 
 Any number of identities, chosen by directory. Each is a `[slug]` block in `~/.config/devbox/identities.conf`, read by
-`devbox-identities`, the one script that turns the registry into everything below. The devbox holds no private key for
+`devbox-identities`, the one script that turns the registry into everything below. The Devbox holds no private key for
 any of them; you and an agent session use them differently.
 
 | Who                                                 | Default identity (everywhere)                                                                                           | A second identity (`~/projects/work/**`, org `your-org`)                                                                  |
@@ -49,7 +49,7 @@ overrides the path) is its one reader on both machines: `~/.ssh/config`, `~/.git
 > `Your Name <you@example.com>` this machine's identity instead of failing the check. Both print the `cp` command while
 > it is missing.
 
-Both machines need the _same_ file; `./bin/devbox sync identities` copies the laptop's copy to the devbox and re-runs
+Both machines need the _same_ file; `./bin/devbox sync identities` copies the laptop's copy to the Devbox and re-runs
 bootstrap so everything derived from it catches up (see [Laptop install](#-laptop-install)).
 
 One `[slug]` block per identity, `slug` lowercase `[a-z][a-z0-9_]*`:
@@ -156,16 +156,16 @@ git remote -v                # git@github.com:<org>/<repo> - no alias host
 
 ---
 
-## 🚪 Manual work on the devbox — the escape hatch
+## 🚪 Manual work on the Devbox — the escape hatch
 
-The devbox generates and holds no private GitHub key. A push, signed commit, or cloning a private repo as _you_ borrows
+The Devbox generates and holds no private GitHub key. A push, signed commit, or cloning a private repo as _you_ borrows
 the laptop's running 1Password agent, forwarded for one connection:
 
 ```bash
 ssh -A devbox
 ```
 
-`container/sshd_config` sets `AllowAgentForwarding yes` for this. The devbox's `~/.ssh/config` (`bootstrap`, rendered
+`container/sshd_config` sets `AllowAgentForwarding yes` for this. The Devbox's `~/.ssh/config` (`bootstrap`, rendered
 from `identities.conf` by `devbox-identities render ssh-config`) has one plain `Host <host>` block per forge naming the
 key most identities on it share (`IdentityFile` + `IdentitiesOnly yes`), plus a `Match host <host> tagged <slug>` block
 per identity whose key differs, selected by the `ssh -P <slug>` an org's `core.sshCommand` passes — so `ssh` offers
@@ -176,7 +176,7 @@ Without `-A`, a manual `git push` or signed commit fails on purpose — no key t
 `ssh -A devbox` does. Moshi connects from its own device, where the laptop's 1Password agent does not exist.
 
 > [!WARNING]
-> **Accepted limit.** For that connection's lifetime the forwarded socket is open to every process in the devbox, not
+> **Accepted limit.** For that connection's lifetime the forwarded socket is open to every process in the Devbox, not
 > just the shell you forwarded it into. Git in an agent session can't use it (fenced to HTTPS); a raw `ssh` from
 > anything else can. 1Password approves per key and per application, not per use, so a key your terminal app is
 > already approved for signs without a prompt. See [Security Model](security.md#-accepted-limits).
@@ -204,7 +204,7 @@ agent, signed commits.
 
 It also clears what the shell that started it may carry for you: an IDE terminal's askpass (`GIT_ASKPASS`,
 `SSH_ASKPASS`, VS Code's `VSCODE_GIT_*` — it answers git's credential prompts with your own GitHub login), your
-`GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN`, `SSH_AUTH_SOCK` (a forwarded agent on the devbox;
+`GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN`, `SSH_AUTH_SOCK` (a forwarded agent on the Devbox;
 on the laptop the session's own `ssh` still reaches 1Password through `IdentityAgent`), and `GIT_CONFIG_COUNT`/
 `GIT_CONFIG_PARAMETERS`, which outrank every config file. `GH_TOKEN` stays: the `gh` shim honours an explicit one as a
 deliberate choice. Clearing is a default, not a boundary — a forwarded agent's socket is still under `~/.ssh/agent/`
@@ -303,7 +303,7 @@ that has it from there) — which is what the updater must replace. The same pas
 exports still apply, so a prompt that is literally `update` runs fenced, with a token-less `gh`, not as you.
 
 Belt and braces, because the failure was silent: `omp`, `claude` and `codex` are **symlinks** to their launchers
-(`~/.local/libexec/devbox-agent/<agent>` on the devbox, `~/.local/libexec/devbox-agent/launchers/<agent>` on the
+(`~/.local/libexec/devbox-agent/<agent>` on the Devbox, `~/.local/libexec/devbox-agent/launchers/<agent>` on the
 laptop), never files named after the tool. An argv shape the passthrough does not recognise therefore hits omp's own
 refusal to replace a script behind a symlink — a one-line error — instead of a release binary landing on top of the
 launcher, which leaves agent sessions on your `~/.gitconfig`, with SSH remotes and your keys. `./bin/devbox doctor`
@@ -391,7 +391,7 @@ can't reach past it — keeping an agent's git off your SSH keys and any forward
 Agent commits are unsigned — `commit.gpgsign = false` in `agent.gitconfig`, by design: the signing keys are yours.
 
 Your manual commits are signed with `gpg.format = ssh` — on the laptop through 1Password's signer
-(`gpg.ssh.program = /Applications/1Password.app/Contents/MacOS/op-ssh-sign`), on the devbox (`ssh -A devbox`) against
+(`gpg.ssh.program = /Applications/1Password.app/Contents/MacOS/op-ssh-sign`), on the Devbox (`ssh -A devbox`) against
 the forwarded 1Password agent:
 
 ```
@@ -418,7 +418,7 @@ gh api repos/<owner>/<repo>/commits/<sha> --jq .commit.verification  # verified:
 
 ## 💻 Laptop install
 
-`./bin/devbox agent install` installs the identical mechanism on the laptop, from the `home/` templates the devbox
+`./bin/devbox agent install` installs the identical mechanism on the laptop, from the `home/` templates the Devbox
 bootstraps from:
 
 ```bash
@@ -441,9 +441,9 @@ bootstraps from:
 | `~/.codex/rules/devbox.rules`, `~/.codex/AGENTS.md`                                           | The Codex guardrail ([Toolchain](toolchain.md#codex-guardrail)), a file of its own rewritten each run; and a copy of `~/.claude/CLAUDE.md` with its imports expanded, the agent context included, rewritten each run — a file without its marker comment is yours and `doctor laptop` reports it |
 
 The installer reads or edits nothing of yours in either file. It does **not** touch `~/.ssh/config` or `~/.gitconfig` —
-on the laptop they are yours (below); `bootstrap` renders them on the devbox because nothing there is meant to be
+on the laptop they are yours (below); `bootstrap` renders them on the Devbox because nothing there is meant to be
 hand-edited. Yours to write by hand, or to have rendered: a laptop set up with
-[rozsival/dotfiles](https://github.com/rozsival/dotfiles) gets both from `dot identities`, which calls the same
+[Dotfiles](https://github.com/rozsival/dotfiles) gets both from `dot identities`, which calls the same
 `devbox-identities render …` functions shown below — there, edit `identities.conf` and re-run it rather than editing the
 output.
 
@@ -462,7 +462,7 @@ Only a launcher's own `PATH` puts the libexec directory itself first — an ordi
 shim, so your `gh` keeps its OAuth login. Whatever else resolves `omp`/`claude`/`codex` is "the real" one; the
 installer reports which, whether each name resolves to its launcher, and prints the line above as a manual step until
 it does. An agent that is not installed is fine — its launcher waits for it, and until then prints how to install it
-(OMP's points the devbox at `./bin/devbox bootstrap`, the laptop at the `omp.sh` installer; Codex's names its
+(OMP's points the Devbox at `./bin/devbox bootstrap`, the laptop at the `omp.sh` installer; Codex's names its
 standalone installer).
 
 ### Remaining manual steps
@@ -505,7 +505,7 @@ not theoretical. A `Match … tagged` block is the only thing that overrides it.
 ### `~/.gitconfig`
 
 The laptop side of the _manual_ identity isn't installed by this repo either — it's your own `~/.gitconfig` — but
-`devbox doctor laptop` holds it to the same layout the devbox bootstraps: a base `[user]` that is the default
+`devbox doctor laptop` holds it to the same layout the Devbox bootstraps: a base `[user]` that is the default
 identity's, since every repository no include claims commits as it, one `includeIf "gitdir:…"` per tree (author and
 signing key only — the SSH key follows the repository's owner, not the tree), and one set of four
 `includeIf "hasconfig:remote.*.url:…"` per identity with `orgs` (author, signing key, and the ssh tag):
@@ -526,7 +526,7 @@ includeIf "hasconfig:remote.*.url:https://github.com/your-org/**"   → org-work
 ```
 
 `devbox-identities org-urls work` prints the four patterns for an identity's `orgs`;
-`devbox-identities render org-gitconfig work` prints the file they point at — any path; the devbox keeps them in
+`devbox-identities render org-gitconfig work` prints the file they point at — any path; the Devbox keeps them in
 `~/.config/devbox/git/`, dotfiles in `~/.config/git/identities/`, both named `org-<slug>.gitconfig`:
 
 ```
@@ -549,11 +549,11 @@ them — `devbox-identities render allowed-signers` builds it from whichever `si
 ### Keeping both machines in sync
 
 Both machines hold the same `identities.conf`. `./bin/devbox sync identities [ssh-host]` copies the laptop's copy to the
-devbox (keeping one `identities.conf.bak` there), validates it locally with `devbox-identities check` first so a broken
+Devbox (keeping one `identities.conf.bak` there), validates it locally with `devbox-identities check` first so a broken
 file never lands, then re-runs `container/bootstrap.sh` so `~/.ssh/config`, `~/.gitconfig`'s `user-*`/`org-*` includes,
 the agent gitconfigs and `allowed_signers` catch up — the same regeneration `./bin/devbox bootstrap` does on its own,
 and just as idempotent. The laptop's own `~/.ssh/config` and `~/.gitconfig` follow by hand, or by `dot identities` on a
-dotfiles laptop; `devbox doctor laptop` is what notices drift.
+Dotfiles laptop; `devbox doctor laptop` is what notices drift.
 
 ---
 
@@ -607,7 +607,7 @@ commands to fix each one).
 Fixed in the launcher, and worth recognising: before the `update` passthrough existed, the updater resolved `omp` on the
 launcher's own `PATH` and wrote the release binary straight over the launcher script, so later sessions read
 `~/.gitconfig` — SSH remotes, your keys, 1Password prompting. Repair is `./bin/devbox agent install` on the laptop,
-`./bin/devbox bootstrap` on the devbox; both are idempotent and the update itself is not lost (re-run `omp update`).
+`./bin/devbox bootstrap` on the Devbox; both are idempotent and the update itself is not lost (re-run `omp update`).
 Recognition cue: `./bin/devbox doctor laptop` reports the installed launcher no longer matching the repo template — the
 `omp` symlink stays intact, it is the file behind it that became a ~180 MB binary. Inside a session,
 `echo $GIT_CONFIG_GLOBAL` printing nothing says the same thing.
@@ -635,7 +635,7 @@ rewritten, which is what a `git config --global user.name …` inside a session 
 file. On this laptop the caller was not an agent at all but `~/.extra`, sourced by `~/.bash_profile`, so any login bash
 a session started did it. Delete those two lines from the dotfile. The directory is mode 500 now, so the same call fails
 with `could not lock config file`; repair a drifted copy with `./bin/devbox agent install` (laptop) or
-`./bin/devbox bootstrap` (devbox). Both sides of `doctor` compare the two files against the templates and check the
+`./bin/devbox bootstrap` (Devbox). Both sides of `doctor` compare the two files against the templates and check the
 mode. Commits already made are only fixable by rewriting history, and `--reset-author` is the wrong tool: it takes the
 author from the shell doing the rewrite, so from your own terminal it stamps you again. Name the author instead, per
 commit to rewrite, and leave your own commits alone: `git rebase -i <base>` from your own terminal with
@@ -651,7 +651,7 @@ off SSH, with no HTTPS equivalent of `ssh-keygen -Y sign`. `agent.gitconfig` set
 fail. Provenance: author identity, and for App-backed pushes, only the App's token could have pushed it — not a
 signature.
 
-### Why does the devbox generate no keys?
+### Why does the Devbox generate no keys?
 
 A private key there is ambient push authority for every agent, present or not. Public keys, plus an agent forwarded
 only for one `ssh -A` connection, keep that authority with you. `bootstrap` deletes any earlier devbox-generated
@@ -691,7 +691,7 @@ and account-wide agent commands (`gh repo list`, `gh api user`), keep the PAT. S
 One `[slug]` block in `~/.config/devbox/identities.conf` with its own `app` directory, a read-only `GH_TOKEN_<SLUG>` in
 `~/.config/devbox/secrets.env`, the App's `app-id` + `app.pem`, and the
 identity's two public keys, already on GitHub. Apply with `./bin/devbox sync identities` from the laptop, or
-`./bin/devbox bootstrap` on the devbox alone — no code change, nowhere. See [The identity
+`./bin/devbox bootstrap` on the Devbox alone — no code change, nowhere. See [The identity
 registry](#-the-identity-registry).
 
 ### Can two identities be the same GitHub account?
@@ -706,8 +706,8 @@ only checks that each connection authenticates with the key its `pubkey` names, 
 ### Both machines hold `identities.conf` — which one wins?
 
 Neither is authoritative by itself; they're expected to agree. `./bin/devbox sync identities` always copies laptop →
-devbox (validating with `devbox-identities check` before it copies), because the laptop is where you hand-edit the file
-and where 1Password holds the private keys it names. Editing the devbox's copy directly works too —
+Devbox (validating with `devbox-identities check` before it copies), because the laptop is where you hand-edit the file
+and where 1Password holds the private keys it names. Editing the Devbox's copy directly works too —
 `./bin/devbox bootstrap` re-derives everything from whichever copy is on disk there — but the next `sync identities`
 overwrites it with the laptop's, so a devbox-only edit should be mirrored back by hand or it will be lost on the next
 sync.
@@ -722,5 +722,5 @@ orgs works the same way as two Apps, at the cost of both identities sharing one 
 ### What happens if I run an agent session by hand inside `ssh -A devbox`?
 
 Its git is still fenced to HTTPS — same as anywhere else. Nothing else is: while that connection lasts, any process in
-the devbox, that session's shell commands included, can reach the forwarded agent socket with a raw `ssh` call. See
+the Devbox, that session's shell commands included, can reach the forwarded agent socket with a raw `ssh` call. See
 [Security Model](security.md#-accepted-limits).

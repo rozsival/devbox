@@ -1,6 +1,6 @@
 # ⚙️ Operations
 
-> Day-to-day running of the devbox: redeploy, restart, persistence, backup, health checks, and the failure modes worth
+> Day-to-day running of the Devbox: redeploy, restart, persistence, backup, health checks, and the failure modes worth
 > knowing.
 
 **Related:** [Installation](installation.md) · [Connecting](connecting.md) · [CLI Reference](cli.md) ·
@@ -32,7 +32,7 @@ files. `doctor` flags a stale ruleset, firewall unit or drop-in and sshd's effec
 > [!WARNING]
 > When the `user@1001.service` drop-in changed, or the running manager predates it, `docker setup` restarts `dev`'s user
 > manager — and with it the project daemon and every project container. Ubuntu's 5 s stop timeout for `user@` SIGKILLs
-> a container slower to stop; one without a restart policy stays down until its `docker compose up -d`. The devbox
+> a container slower to stop; one without a restart policy stays down until its `docker compose up -d`. The Devbox
 > itself runs on the host's root daemon and keeps going. Re-runs are no-ops once everything is current.
 
 Use `rebuild` over `start` for a cache-free image after a pinned version changes:
@@ -120,7 +120,7 @@ it's set; the exec-based ones (`shell`, `bootstrap`, `hook`) still work, so the 
 ### `doctor` reports `published on 0.0.0.0`
 
 > [!CAUTION]
-> A `ports` entry lost its address scope — the devbox is internet-exposed until fixed.
+> A `ports` entry lost its address scope — the Devbox is internet-exposed until fixed.
 
 Correct `docker-compose.yml`, then `start`.
 
@@ -216,7 +216,7 @@ Yes — every step is guarded, touching only config files; it doesn't restart ss
 Docker's json-file log for the `devbox` service — `./bin/devbox logs`. sshd logs to stderr (`-e`), so authentication
 failures appear there.
 
-### How do I move the devbox to another workstation?
+### How do I move the Devbox to another workstation?
 
 `./bin/devbox deploy <new-workstation>`, then `./bin/devbox env` there, restore the data tarball (or start fresh,
 re-running the [manual checklist](secrets.md#-manual-checklist)), then `./bin/devbox start`. The SSH host key comes from

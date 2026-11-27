@@ -1,11 +1,11 @@
 ---
 name: devbox-laptop
-description: Sets up and checks the laptop side of the devbox - bash >= 4.2 (brew install bash) for the generated ./bin/devbox, private keys only in 1Password, one id_<slug>.pub/signing_<slug>.pub pair per identity in ~/.ssh (plus the fixed devbox key), the identity registry at ~/.config/devbox/identities.conf, ~/.ssh/config that selects keys through the 1Password agent, gitconfigs signing through op-ssh-sign, the agent git override (./bin/devbox agent install - omp, claude and codex launchers and their PATH line, gh shim, credential helper, rendered agent gitconfigs, Codex guardrail rules), one fine-grained PAT per identity in ~/.config/devbox/secrets.env, the GitHub App credentials, and ./bin/devbox doctor laptop as the acceptance test. Use this whenever someone is onboarding a new laptop or Mac, asks where a key, token or config file lives on the laptop, wants OMP, Claude Code or Codex on the laptop to stop using their identity, finds a private key on disk, sees commits Unverified on GitHub, is adding a new account to the registry, or gets a devbox doctor laptop warning.
+description: Sets up and checks the laptop side of the Devbox - bash >= 4.2 (brew install bash) for the generated ./bin/devbox, private keys only in 1Password, one id_<slug>.pub/signing_<slug>.pub pair per identity in ~/.ssh (plus the fixed Devbox key), the identity registry at ~/.config/devbox/identities.conf, ~/.ssh/config that selects keys through the 1Password agent, gitconfigs signing through op-ssh-sign, the agent git override (./bin/devbox agent install - omp, claude and codex launchers and their PATH line, gh shim, credential helper, rendered agent gitconfigs, Codex guardrail rules), one fine-grained PAT per identity in ~/.config/devbox/secrets.env, the GitHub App credentials, and ./bin/devbox doctor laptop as the acceptance test. Use this whenever someone is onboarding a new laptop or Mac, asks where a key, token or config file lives on the laptop, wants OMP, Claude Code or Codex on the laptop to stop using their identity, finds a private key on disk, sees commits Unverified on GitHub, is adding a new account to the registry, or gets a Devbox doctor laptop warning.
 ---
 
-# devbox laptop
+# Devbox laptop
 
-Laptop and devbox share one identity layout; every private half lives on the laptop, in 1Password, served
+Laptop and Devbox share one identity layout; every private half lives on the laptop, in 1Password, served
 by its SSH agent. Everything on disk: public key, config, or token. `./bin/devbox doctor laptop` is the
 acceptance test - run it, fix what it names, run again; its checks are the phases below.
 
@@ -16,10 +16,10 @@ shims, credential helper and `devbox-identities` are not generated and stay bash
 Blocks, rationale: `docs/installation.md` (key, ssh config), `docs/git.md` (identities, agent override, signing).
 Read the needed section, not retyped, so a changed default gets picked up, not reintroduced.
 
-A laptop set up with rozsival/dotfiles (`~/.ssh/config` a symlink into it, `~/.gitconfig` whose first line
+A laptop set up with Dotfiles (rozsival/dotfiles, `~/.ssh/config` a symlink into it, `~/.gitconfig` whose first line
 names `dot identities`) owns phases 1-3 differently: `id_*`/`signing_*.pub`, the GitHub ssh blocks,
 `~/.gitconfig` with its includes and `allowed_signers` are rendered by `dot identities` from `identities.conf` -
-fix the registry and re-run it, never edit the output; `Host *`/`<workstation>`/`devbox` are edited in the dotfiles
+fix the registry and re-run it, never edit the output; `Host *`/`<workstation>`/`devbox` are edited in the Dotfiles
 repo's `home/.ssh/config`. Phases 4-5 apply unchanged.
 
 ## Phase 1 - keys: 1Password items, public halves on disk
@@ -35,11 +35,11 @@ file names follow from them:
 | `devbox.pub`         | Devbox Laptop               | `Host devbox`, `DEVBOX_EXTRA_AUTHORIZED_KEYS` - never the workstation                                              |
 
 Never authorize `devbox.pub` on the workstation: 1Password approves a key per application, so every
-`ssh -A devbox` leaves it approved for anything inside the devbox to sign with. `Host <workstation>` on the
+`ssh -A devbox` leaves it approved for anything inside the Devbox to sign with. `Host <workstation>` on the
 default identity's key does not close this: an approval covers the whole terminal app until 1Password locks,
 so any key that app has used since then (`id_<slug>.pub` after a `devbox deploy` or `ssh <workstation>`
-included) can sign from the devbox while an `ssh -A devbox` from it is open; `devbox-docker-firewall` is what
-keeps the devbox off the workstation's sshd. `devbox.pub` is never registered on GitHub.
+included) can sign from the Devbox while an `ssh -A devbox` from it is open; `devbox-docker-firewall` is what
+keeps the Devbox off the workstation's sshd. `devbox.pub` is never registered on GitHub.
 
 Auth/signing are separate files: GitHub registers each separately, per account - signing with auth key
 verifies locally, shows _Unverified_ on GitHub.
@@ -75,7 +75,7 @@ aliases are gone; the tag replaces it.
 ## Phase 3 - gitconfigs
 
 Commits sign through 1Password (`gpg.ssh.program = op-ssh-sign`), signing key named by file so laptop and
-devbox read it alike. Two kinds of block in `~/.gitconfig`, hand-maintained unless dotfiles renders them, both
+Devbox read it alike. Two kinds of block in `~/.gitconfig`, hand-maintained unless Dotfiles renders them, both
 checked by `devbox doctor laptop` against a fresh `devbox-identities render …`:
 
 ```
@@ -90,7 +90,7 @@ checked by `devbox doctor laptop` against a fresh `devbox-identities render …`
 ~/.ssh/allowed_signers          one line per identity: <email> <key type> <key>
 ```
 
-`<dir>` is any directory: the devbox uses `~/.config/devbox/git`, dotfiles `~/.config/git/identities`.
+`<dir>` is any directory: the Devbox uses `~/.config/devbox/git`, dotfiles `~/.config/git/identities`.
 
 `devbox-identities org-urls work` prints the four `hasconfig:` patterns for `work`'s `orgs`;
 `devbox-identities render user-gitconfig work` / `render org-gitconfig work` print the two files' content -
@@ -106,7 +106,7 @@ signature for <email>` with the _signing_ key's fingerprint.
 ./bin/devbox agent install
 ```
 
-Installs the devbox's bootstrap override, from `home/` templates: `agent-launch` with `omp-launcher`,
+Installs the Devbox's bootstrap override, from `home/` templates: `agent-launch` with `omp-launcher`,
 `claude-launcher` and `codex-launcher` (`~/.local/libexec/devbox-agent/launchers/{omp,claude,codex}` → their launcher), `gh`
 shim, `devbox-git-credential`, `devbox-git-no-ssh`, `devbox-gh-token`, `mcp-token` (an MCP server entry's bearer
 header from `MCP_TOKEN_<NAME>` in `secrets.env`), `wt-herdr` (`wt herdr [-n] <branch>`: a
@@ -142,7 +142,7 @@ agent sessions silently fell back to `~/.gitconfig` - SSH remotes, your keys. Re
 checks.
 
 `devbox agent install` also seeds `~/.omp/agent/config.yml` when absent from `home/.omp/agent/config.yml`, the
-one OMP preset the laptop and the devbox share: model roles, feature flags and `bash.patterns` denying the
+one OMP preset the laptop and the Devbox share: model roles, feature flags and `bash.patterns` denying the
 obvious reach past the scoped tokens (`gh auth token|login|…`, keychain reads, force push). An existing config
 is never edited; one without a `bash:` block is listed as a manual step (copy the block from
 `home/.omp/agent/config.yml`). On a dotfiles laptop `dot setup` seeds the same file first, before OMP ever
@@ -155,7 +155,7 @@ mirroring the OMP guardrail, written `Bash(<pattern>)`), into `~/.claude/setting
 has no `permissions.deny` - a merge (`jq`, needed on the laptop), because `moshi-hook` and IDE integrations write
 `hooks`/`statusLine` there too, with one `settings.json.bak` kept when it changed an existing file. A file that already
 has `permissions.deny` is left alone; invalid JSON is listed as a manual step. `./bin/devbox sync claude` re-applies
-the preset to the laptop and the devbox on purpose. Claude Code applies deny/ask to every subcommand of a compound
+the preset to the laptop and the Devbox on purpose. Claude Code applies deny/ask to every subcommand of a compound
 command and merges permission arrays across settings scopes, so a repository's own `.claude/settings.json` cannot drop
 these rules; it is the same guardrail, not a boundary - `docs/security.md`.
 
@@ -164,7 +164,7 @@ The run also rewrites `~/.codex/rules/devbox.rules` from `home/.codex/rules/devb
 seeded or merged, and there is no `sync codex`. Codex loads every `*.rules` in `~/.codex/rules` and the strictest match
 wins, so an "always allow" (written to `default.rules`) never lifts a `forbidden`. Prefix rules are coarser than OMP's
 globs - a flag later in the line, an assignment or a non-plain `bash -lc` script falls past them, and every
-Vercel/Neon invocation prompts. The laptop keeps Codex's own macOS Seatbelt sandbox; the devbox is where it is off
+Vercel/Neon invocation prompts. The laptop keeps Codex's own macOS Seatbelt sandbox; the Devbox is where it is off
 (`docs/security.md`). To change the rules: edit `home/.codex/rules/devbox.rules`, `make lint`, then `devbox agent
 install`.
 
@@ -191,7 +191,7 @@ no `@` imports, so the same run writes `~/.codex/AGENTS.md` as a copy of `~/.cla
 expanded - re-run it after editing `CLAUDE.md` or a file it imports; a file of yours without the marker comment is left
 alone and listed as a manual step, as is a non-empty
 `~/.codex/AGENTS.override.md`, which shadows it. Launcher and Claude desktop app sessions also get `DEVBOX_ENV=laptop`. On a dotfiles laptop where `~/.claude/CLAUDE.md` is a symlink, the line lands in
-the dotfiles repo: commit it there.
+the Dotfiles repo: commit it there.
 
 A session's git config is the file `GIT_CONFIG_GLOBAL` names, so any `git config --global …` in its
 process tree rewrites the agent's own identity. The real caller here was `~/.extra` (sourced by
@@ -220,7 +220,7 @@ treats an explicit one as deliberate.
   `docs/secrets.md#permissions-per-token`). Never grant a PAT write: any agent can read this file, so a write
   permission there is every agent writing as you. Used by the credential helper for clone/fetch on repos
   without the App and by `gh` for commands naming no repo. Same file and variable names as
-  the devbox, and on neither machine are the `GH_TOKEN_<SLUG>` lines exported (the devbox's
+  the Devbox, and on neither machine are the `GH_TOKEN_<SLUG>` lines exported (the Devbox's
   `~/.bashrc.d/devbox.sh` unsets them after sourcing): they are read by name, from the file. All three agents log
   in with their own subscription (`/login`, `codex login --device-auth`), so no model key is needed.
 - Every identity has an `app` field in `identities.conf` - your personal account included - with

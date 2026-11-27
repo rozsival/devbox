@@ -16,6 +16,11 @@
 | Laptop      | GNU `rsync` (`brew install rsync`), `jq`, an SSH client; Moshi on the devices you work from |
 |             | bash ≥ 4.2 (`brew install bash`) — macOS's 3.2 can't run `./bin/devbox`                     |
 
+> [!TIP]
+> [Pantheon](https://github.com/rozsival/pantheon) prepares such a workstation from a fresh Ubuntu Server: Docker with
+> Compose, Tailscale (then `sudo tailscale up`), key-only SSH and a firewall that Devbox's `docker setup` adds its one
+> rule to.
+
 `./bin/devbox` is bashly-generated and refuses older bash; Homebrew's bash, first on the `PATH`, is the one
 `#!/usr/bin/env bash` finds. The workstation's Ubuntu bash is new enough. The same goes for `rsync`: macOS's
 `/usr/bin/rsync` is openrsync, which `devbox deploy` refuses (it ignores the rules that protect the workstation's
@@ -51,12 +56,12 @@ No private key sits on the laptop's disk — a 1Password SSH item served by the 
 2. Save its public key as `~/.ssh/devbox.pub` (the item's _public key_ field, or via `ssh-add -l`/
    `ssh-add -L | grep <fingerprint>`).
 
-It opens the devbox and nothing else. The workstation's own sshd takes a different key — your default identity's
+It opens the Devbox and nothing else. The workstation's own sshd takes a different key — your default identity's
 `id_<slug>.pub`, the GitHub key saved the same way ([Git Identities](git.md#-laptop-install)) — because 1Password
-approves a key per application, not per use: while an `ssh -A devbox` connection lasts, anything in the devbox can sign
+approves a key per application, not per use: while an `ssh -A devbox` connection lasts, anything in the Devbox can sign
 with the key that connection authenticated with. Nor is that the only key: an approval covers the whole terminal app
 until 1Password locks, so any key that app has used since then — `id_<slug>.pub` after a `devbox deploy` or an
-`ssh <workstation>` included — can sign from the devbox while an `ssh -A devbox` from it is open. What keeps the devbox
+`ssh <workstation>` included — can sign from the Devbox while an `ssh -A devbox` from it is open. What keeps the Devbox
 off the workstation's sshd is `devbox-docker-firewall` ([Docker](docker.md)); `devbox.pub` is never registered on
 GitHub.
 
@@ -104,10 +109,10 @@ and nothing else. `devbox doctor laptop` checks both, and asks the workstation �
 1Password prompt — whether it would accept `devbox.pub`.
 
 > [!NOTE]
-> On a laptop set up with [rozsival/dotfiles](https://github.com/rozsival/dotfiles), none of this is written by hand:
+> On a laptop set up with [Dotfiles](https://github.com/rozsival/dotfiles), none of this is written by hand:
 > `~/.ssh/config` is a tracked file symlinked from that repo (`Host *`, the workstation, `devbox`), and `dot identities`
 > renders the GitHub blocks into `~/.ssh/config.d/identities`, together with `~/.gitconfig`, `allowed_signers` and the
-> `id_*`/`signing_*.pub` files. Change them there — the registry plus `dot identities`, or the dotfiles repo — never
+> `id_*`/`signing_*.pub` files. Change them there — the registry plus `dot identities`, or the Dotfiles repo — never
 > in place.
 
 > [!IMPORTANT]
@@ -174,8 +179,8 @@ agent gitconfigs and `allowed_signers` from it. It lives on the bind mount, so i
 ssh devbox true                          # accept the host key once
 ```
 
-Then point Moshi at the devbox — host `<workstation>`, port `2223`, user `dev` — with each device's key in
-`DEVBOX_EXTRA_AUTHORIZED_KEYS` ([Connecting](connecting.md#-moshi)). Don't add the devbox to the laptop's herdr as a
+Then point Moshi at the Devbox — host `<workstation>`, port `2223`, user `dev` — with each device's key in
+`DEVBOX_EXTRA_AUTHORIZED_KEYS` ([Connecting](connecting.md#-moshi)). Don't add the Devbox to the laptop's herdr as a
 saved machine: Moshi already reaches the same panes.
 
 ## 🧩 Recommended extras
@@ -202,7 +207,7 @@ There is no `sync` for Codex: its guardrail is a rules file `bootstrap` and `age
 
 ### 6. Agent git on the laptop (optional but recommended)
 
-The laptop is the only place a private key or a 1Password session ever lives; the devbox borrows them per connection.
+The laptop is the only place a private key or a 1Password session ever lives; the Devbox borrows them per connection.
 Agents run on the laptop too — OMP, Claude Code and Codex, same launchers, same mechanism. Two commands make the laptop
 match:
 
@@ -244,7 +249,7 @@ the launchers cannot live there):
 export PATH="$HOME/.local/libexec/devbox-agent/launchers:$PATH"
 ```
 
-On a [dotfiles](https://github.com/rozsival/dotfiles) laptop, `~/.config/bash/env.sh` already puts the launchers first.
+On a [Dotfiles](https://github.com/rozsival/dotfiles) laptop, `~/.config/bash/env.sh` already puts the launchers first.
 
 It reports whether `omp`, `claude` and `codex` resolve to their launchers (an agent that is not installed is only noted:
 its launcher takes over once it is), and prints the remaining manual steps per identity: a read-only `GH_TOKEN_<SLUG>`
@@ -272,7 +277,7 @@ fixes. Details: [CLI Reference](cli.md#-devbox-doctor).
 | `DEVBOX_DATA_DIR`              | `/home/dev`            | Host path; must equal container home (path identity)                            |
 | `HOST_UID` / `HOST_GID`        | `1001`                 | Dedicated `dev` host user; owns the data dir and project daemon                 |
 | `DEVBOX_DOCKER_SOCKET_DIR`     | `/run/devbox`          | Project daemon socket dir, bind-mounted into the container                      |
-| `DEVBOX_TAILNET_ALLOW`         | _(empty)_              | `<peer>:<port>` Tailnet services the devbox may open; applied by `docker setup` |
+| `DEVBOX_TAILNET_ALLOW`         | _(empty)_              | `<peer>:<port>` Tailnet services the Devbox may open; applied by `docker setup` |
 | `TZ`                           | `Europe/Prague`        | Container timezone                                                              |
 | `DEVBOX_GITHUB_USER`           | `your-github-username` | Seeds keys from `github.com/<user>.keys`                                        |
 | `DEVBOX_EXTRA_AUTHORIZED_KEYS` | _(empty)_              | Extra keys, newline-separated                                                   |
@@ -316,7 +321,7 @@ publishes only on `BIND_ADDR`.
 
 ### Do I need a key file on disk at all?
 
-No. Every key — devbox key, every GitHub identity — is a 1Password item; `~/.ssh` holds only `.pub` halves.
+No. Every key — Devbox key, every GitHub identity — is a 1Password item; `~/.ssh` holds only `.pub` halves.
 
 ### `start` failed with an empty `BIND_ADDR`. Is that a bug?
 
@@ -325,7 +330,7 @@ empty — `start`, `stop`, `logs` and `ps` — and a bare `docker compose` stops
 value` for the same reason. The exec-based ones (`shell`, `bootstrap`, `hook`) still work, so the recovery shell stays
 available. Run `./bin/devbox env` (Tailscale up first), or set the address by hand. A box already
 published on `0.0.0.0` can't wait for that: `docker rm -f devbox` removes it without compose. `0.0.0.0` as fallback
-would expose devbox publicly.
+would expose Devbox publicly.
 
 ### Does `devbox deploy` overwrite my host configuration?
 
@@ -337,7 +342,7 @@ workstation is removed by the next deploy.
 
 Only if the Tailscale address changed; `doctor` compares `BIND_ADDR` to `tailscale ip -4`, failing on drift.
 
-### I already have a devbox at the old data path. What does `sudo ./bin/devbox docker setup` do to it?
+### I already have a Devbox at the old data path. What does `sudo ./bin/devbox docker setup` do to it?
 
 Nothing while the container runs — it refuses, pointing to `./bin/devbox stop` first. Stopped, it `mv`s the old
 `DEVBOX_DATA_DIR` to `/home/dev`, chowned to `dev`. Keys, cloned repos, `~/.config/devbox/secrets.env` survive — a move,

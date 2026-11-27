@@ -1,9 +1,9 @@
 ---
 name: devbox-setup
-description: Sets up the devbox end to end - the dedicated laptop SSH key, the two ~/.ssh/config host blocks, the first deploy and .env on the workstation, connecting Moshi, and the in-container manual steps (filling ~/.config/devbox/identities.conf, one GH_TOKEN_<SLUG> per identity in secrets.env, GitHub App credentials per identity). Use this whenever someone is installing or re-installing the devbox, onboarding a new laptop, says they cannot connect, gets "Too many authentication failures", "Permission denied (publickey)", or an empty BIND_ADDR preflight failure, or asks which manual steps are still outstanding.
+description: Sets up the Devbox end to end - the dedicated laptop SSH key, the two ~/.ssh/config host blocks, the first deploy and .env on the workstation, connecting Moshi, and the in-container manual steps (filling ~/.config/devbox/identities.conf, one GH_TOKEN_<SLUG> per identity in secrets.env, GitHub App credentials per identity). Use this whenever someone is installing or re-installing the Devbox, onboarding a new laptop, says they cannot connect, gets "Too many authentication failures", "Permission denied (publickey)", or an empty BIND_ADDR preflight failure, or asks which manual steps are still outstanding.
 ---
 
-# devbox setup
+# Devbox setup
 
 Five phases, strict order: laptop key → `~/.ssh/config` → deploy/`.env` on the workstation → project
 Docker → in-container identity steps. Each ends with a check that must pass before moving on - a failure two
@@ -12,7 +12,7 @@ phases later is almost always an earlier phase left unverified.
 Command/config blocks live in `docs/installation.md` - read the section pointed to, not from memory, so a changed
 default gets picked up. Phases 1-2 are the laptop's share of a larger layout (GitHub keys, gitconfigs, the
 agent git override, tokens) owned by `devbox-laptop`; `./bin/devbox doctor laptop` checks it. A laptop set up
-with rozsival/dotfiles has phases 1-2 done by its `workstation-setup` skill: verify with the phase checks; its
+with Dotfiles (rozsival/dotfiles) has phases 1-2 done by its `workstation-setup` skill: verify with the phase checks; its
 `~/.ssh/config` is a symlink into the dotfiles repo (`home/.ssh/config`), so a change there is a commit there.
 
 ## Phase 1 - the laptop key (on the laptop)
@@ -24,14 +24,14 @@ its LocalAPI `dial` to any address as root (host sshd and loopback included) for
 `/run/tailscale/tailscaled.sock`, which a project container can bind-mount; `doctor` fails on an older one,
 reading the running tailscaled's version (`tailscale version --daemon`), falling back to the CLI's.
 
-Two 1Password SSH items served by its agent: the devbox key, whose public half lands in `~/.ssh/devbox.pub`,
+Two 1Password SSH items served by its agent: the Devbox key, whose public half lands in `~/.ssh/devbox.pub`,
 and the default identity's key, `~/.ssh/id_<slug>.pub` - only the public halves on disk, which `IdentityFile`
-selects. `devbox.pub` opens the devbox and nothing else (never registered on GitHub) - the workstation's sshd
+selects. `devbox.pub` opens the Devbox and nothing else (never registered on GitHub) - the workstation's sshd
 takes the default identity's `id_<slug>.pub`, because every `ssh -A devbox` leaves `devbox.pub` approved in
-1Password for anything in the devbox to sign with. Not only that key: an approval covers the whole terminal
+1Password for anything in the Devbox to sign with. Not only that key: an approval covers the whole terminal
 app until 1Password locks, so any key that app has used since then (`id_<slug>.pub` after a `devbox deploy` or
-`ssh <workstation>` included) can sign from the devbox while an `ssh -A devbox` from it is open -
-`devbox-docker-firewall` is what keeps the devbox off the workstation's sshd. Steps:
+`ssh <workstation>` included) can sign from the Devbox while an `ssh -A devbox` from it is open -
+`devbox-docker-firewall` is what keeps the Devbox off the workstation's sshd. Steps:
 `docs/installation.md#1-create-the-laptop-key`:
 
 ```bash
@@ -81,16 +81,16 @@ Needs `sudo`, idempotent; `--check` reports state, no changes made. Installs `ui
 creates unprivileged host user `dev:devbox`, daemon owner, and denies it in the host's sshd (its `~/.ssh` is
 the bind mount); moves `DEVBOX_DATA_DIR` to `/home/dev`, chowns
 the tree; installs the nftables table and `devbox-docker-firewall.service`, keeping project ports off the
-Tailnet and LAN, the host's own services (its sshd, anything on loopback) out of reach of the devbox, its
+Tailnet and LAN, the host's own services (its sshd, anything on loopback) out of reach of the Devbox, its
 project containers (a `--network host` one shares the host's network namespace, and the rules match dev's
 uid plus every subordinate uid in its `/etc/subuid` ranges, so it is covered too) and anything else running
 as those uids, and the Tailnet overlay (`tailscale0`, Tailscale's address ranges) closed to them, bar the
-`<peer>:<port>` services `.env`'s `DEVBOX_TAILNET_ALLOW` opens to the devbox container - peers' LAN
+`<peer>:<port>` services `.env`'s `DEVBOX_TAILNET_ALLOW` opens to the Devbox container - peers' LAN
 and public addresses stay
 reachable like the rest of the network, and tailscaled's world-accessible LocalAPI socket can still relay to
 peers for a project container that bind-mounts it (accepted limits, `docs/security.md`); enables a lingering
 rootless `dockerd` on `/run/devbox/docker.sock`, whose user manager reads its units and environment from
-root-owned `/etc/devbox-docker` rather than the bind mount. That closes the files the devbox writes, not the
+root-owned `/etc/devbox-docker` rather than the bind mount. That closes the files the Devbox writes, not the
 manager itself: a project container that bind-mounts `/run/user/1001` can still drive it, bounded by the
 firewall rules on dev's uid and its subordinate uids (resolver stub only on the host, no Tailnet). A re-run
 restarts that manager - the
@@ -126,7 +126,7 @@ ssh devbox true                                # accept the container host key o
 ```
 
 Then Moshi: host `<workstation>`, port `2223`, user `dev`, each device's key in `DEVBOX_EXTRA_AUTHORIZED_KEYS`
-(`docs/connecting.md#-moshi`). Never register the devbox as a saved machine in the laptop's herdr - Moshi is the
+(`docs/connecting.md#-moshi`). Never register the Devbox as a saved machine in the laptop's herdr - Moshi is the
 one client, a second one only duplicates the same panes.
 
 Bootstrap runs every container start, fully idempotent, printing outstanding steps at the end - so
@@ -136,7 +136,7 @@ Bootstrap runs every container start, fully idempotent, printing outstanding ste
 ssh <workstation> 'cd ~/devbox && ./bin/devbox keys'       # installed public keys + host-key fingerprint
 ```
 
-The devbox generates no keys - it installs only the laptop's public keys from
+The Devbox generates no keys - it installs only the laptop's public keys from
 `~/.config/devbox/identities.conf` (`pubkey` for authentication, `signing_pubkey` for signing). Nothing to
 register on GitHub - already your normal, registered laptop keys.
 

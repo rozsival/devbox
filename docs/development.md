@@ -1,6 +1,6 @@
 # 🧪 Development
 
-> How to work on devbox itself: the toolchain that builds the CLI, the rules every change keeps, how a change reaches
+> How to work on Devbox itself: the toolchain that builds the CLI, the rules every change keeps, how a change reaches
 > the workstation, and the agent assets that mirror these docs.
 
 **Related:** [CLI reference](cli.md#-maintainer-workflow) · [Architecture](architecture.md#-repository-layout) ·
@@ -77,7 +77,7 @@ needs after the sync — `start`, `rebuild`, `bootstrap` or nothing — is in [O
 | ------------------------------- | --------------------------------------------------------------------------------------------- |
 | `AGENTS.md`                     | Project context and rules for AI assistants                                                   |
 | `CLAUDE.md`                     | The single line `@AGENTS.md`: Claude Code before v2.1.277 does not read `AGENTS.md`           |
-| `.agents/skills/devbox-basics/` | What the devbox is and how it is isolated: architecture, boundaries, entry routes             |
+| `.agents/skills/devbox-basics/` | What the Devbox is and how it is isolated: architecture, boundaries, entry routes             |
 | `.agents/skills/devbox-setup/`  | First install in five ordered phases, plus connection failures                                |
 | `.agents/skills/devbox-laptop/` | Keys in 1Password, ssh/git config, the agent override, tokens; `devbox doctor laptop` accepts |
 | `.agents/skills/devbox-deploy/` | Shipping a change and applying it: sync vs apply, what a redeploy cannot destroy              |

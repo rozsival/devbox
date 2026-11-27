@@ -79,7 +79,7 @@ upstream renamed. After a merge: `./bin/devbox deploy <workstation> --start` (th
 | `/opt/nvm` + `/opt/corepack`               | Not `~/.nvm`: `/home/dev`'s bind mount would shadow anything the image installs there. `node`, `npm`, `npx`, `corepack`, `pnpm` symlink into `/usr/local/bin` to resolve without a login shell.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `/opt/rustup` + `/opt/cargo` + `/opt/ruby` | Same reason as `/opt/nvm`; owned by `dev`, so `rustup target add`, `cargo install` and `gem install` work until the next rebuild. Ruby's binaries symlink into `/usr/local/bin`; the rustup proxies get `sh` wrappers there instead, defaulting `RUSTUP_HOME`/`CARGO_HOME`, which a proxy otherwise reads as the empty `~/.rustup`/`~/.cargo`. `home/.bashrc.d/devbox.sh` exports both and puts `/opt/cargo/bin` and `/opt/ruby/bin` on `PATH` for what `cargo install`/`gem install` add.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `~/.local/bin`                             | OMP, Claude Code (`~/.local/bin/claude`, a symlink into `~/.local/share/claude/versions`), Codex (`~/.local/bin/codex`, a symlink into `~/.codex/packages/standalone`) and `moshi-hook`, installed by `bootstrap` rather than baked in, so `omp update`, Claude's auto-update, `codex update` and `moshi-hook update` work without a rebuild. Also `devbox-gh-token`, the per-directory GitHub token resolver ([Secrets](secrets.md#-github-cli)), `mcp-token`, the agents' MCP server header helper ([below](#-mcp-server-tokens)), and `wt-herdr` ([below](#new-worktree-in-herdr)).                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `~/.local/libexec/devbox-agent`            | The agent launchers (`omp-launcher`, `claude-launcher`, `codex-launcher`, and the `agent-launch` body they share), the `gh` shim, and two git-fencing scripts (`devbox-git-credential`, `devbox-git-no-ssh`), plus `omp`, `claude` and `codex` symlinks to the launchers. `home/.bashrc.d/devbox.sh` puts it first on every devbox shell's `PATH`, shadowing `gh`, `omp`, `claude` and `codex`; a launcher does likewise for its own process tree on the laptop (`./bin/devbox agent install`, where the `omp`/`claude`/`codex` symlinks sit in a `launchers/` subdirectory of their own). `home/.bash_profile` re-asserts that order for login shells, where the distro's `~/.profile` prepends `~/.local/bin` _after_ sourcing `~/.bashrc` and would otherwise put the real binaries in front. Its `fenced/` subdirectory holds the `git` shim, on agent sessions' `PATH` only, on both machines ([Git Identities](git.md#children-with-a-filtered-environment)). See [Git Identities](git.md#-agent-sessions). |
+| `~/.local/libexec/devbox-agent`            | The agent launchers (`omp-launcher`, `claude-launcher`, `codex-launcher`, and the `agent-launch` body they share), the `gh` shim, and two git-fencing scripts (`devbox-git-credential`, `devbox-git-no-ssh`), plus `omp`, `claude` and `codex` symlinks to the launchers. `home/.bashrc.d/devbox.sh` puts it first on every Devbox shell's `PATH`, shadowing `gh`, `omp`, `claude` and `codex`; a launcher does likewise for its own process tree on the laptop (`./bin/devbox agent install`, where the `omp`/`claude`/`codex` symlinks sit in a `launchers/` subdirectory of their own). `home/.bash_profile` re-asserts that order for login shells, where the distro's `~/.profile` prepends `~/.local/bin` _after_ sourcing `~/.bashrc` and would otherwise put the real binaries in front. Its `fenced/` subdirectory holds the `git` shim, on agent sessions' `PATH` only, on both machines ([Git Identities](git.md#children-with-a-filtered-environment)). See [Git Identities](git.md#-agent-sessions). |
 | `/usr/local/lib/docker/cli-plugins`        | Home for `docker compose`/`docker buildx` as CLI plugins; only the client ships in the image, the daemon is the host's rootless `dev` daemon ([below](#-project-containers)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ## 🐳 Project containers
@@ -118,8 +118,8 @@ window), so a concurrent `bootstrap`'s download is never swept. The download abo
 for 30 s), never a slow one. A failed download or check skips OMP and leaves a checklist item; it never stops the rest
 of `bootstrap`.
 
-`~/.omp/agent/config.yml` seeds from `home/.omp/agent/config.yml` only if absent — by `bootstrap` on the devbox, by
-`./bin/devbox agent install` on the laptop. That file is the one preset the laptop and the devbox share: model roles,
+`~/.omp/agent/config.yml` seeds from `home/.omp/agent/config.yml` only if absent — by `bootstrap` on the Devbox, by
+`./bin/devbox agent install` on the laptop. That file is the one preset the laptop and the Devbox share: model roles,
 theme and feature flags, `secrets: { enabled: true }` obfuscating an API key in the environment
 (`~/.config/devbox/secrets.env` or a project `.env`) before it reaches a provider, and a `bash.patterns` guardrail:
 
@@ -199,7 +199,7 @@ preset disappears from the live files. A top-level key removed from the preset e
 It is seeded when absent, where absent means the file is missing _or_ holds no `permissions.deny` — `moshi-hook` writes
 its hooks into the same file, so on a box that ran `bootstrap` before the preset existed it is rarely missing:
 
-- `bootstrap` (section 14, before `moshi-hook`'s section 15) seeds or merges it on the devbox; invalid JSON becomes a
+- `bootstrap` (section 14, before `moshi-hook`'s section 15) seeds or merges it on the Devbox; invalid JSON becomes a
   manual action in the checklist.
 - `./bin/devbox agent install` does the same on the laptop, keeping the previous file as `settings.json.bak` when it
   changed an existing one; invalid JSON is listed as a manual step. It needs `jq`.
@@ -212,8 +212,8 @@ To re-apply the preset deliberately after changing it, commit it and run, from t
 ./bin/devbox sync claude devbox-2     # a different ~/.ssh/config host
 ```
 
-It merges this laptop's file first, then fetches the devbox's over `ssh` (`Host devbox`), merges it locally and copies it
-back, keeping one `settings.json.bak` on each machine when the file changed and skipping the copy when the devbox
+It merges this laptop's file first, then fetches the Devbox's over `ssh` (`Host devbox`), merges it locally and copies it
+back, keeping one `settings.json.bak` on each machine when the file changed and skipping the copy when the Devbox
 already holds the preset. The source defaults to `home/.claude/settings.json`; `CLAUDE_SETTINGS` overrides it. A running
 Claude Code session needs a restart to pick the new rules up. There is no `--allow-unguarded` here: a merge cannot drop
 the live rules unless the preset sets an empty array. Details: [CLI Reference](cli.md#devbox-sync-claude).
@@ -294,7 +294,7 @@ What it does and does not stop: [Security Model](security.md#command-allowlists-
 
 ### Codex sandbox
 
-On the devbox, `container/codex-config.toml` is symlinked by the `Dockerfile` to `/etc/codex/config.toml`, Codex's
+On the Devbox, `container/codex-config.toml` is symlinked by the `Dockerfile` to `/etc/codex/config.toml`, Codex's
 system configuration layer: root-owned, outside the bind mount and the lowest-precedence layer, so your
 `~/.codex/config.toml`, a trusted project's `.codex/config.toml` and `-c`/`--sandbox` all override it. It sets
 `sandbox_mode = "danger-full-access"`. Codex's Linux sandbox is bubblewrap, which needs a user namespace that Docker's
@@ -317,7 +317,7 @@ into `~/.codex` and restarts mid-turn. Two settings keep it out:
 - `codex-launcher` passes `--no-daemon` on both machines, so a launcher session runs its own embedded server even while
   a shared one is up — one started by the desktop app or a bare `~/.local/bin/codex` would otherwise drop the fence
   ([Security](security.md#command-allowlists-are-a-guardrail-not-a-control)).
-- On the devbox, `bootstrap` runs `codex features disable daemon_auto_start` when `~/.codex/config.toml` does not
+- On the Devbox, `bootstrap` runs `codex features disable daemon_auto_start` when `~/.codex/config.toml` does not
   mention the key, so a bare `codex` starts no server either. It is the user file, not `/etc/codex/config.toml`, because
   Moshi's check reads only that one; `moshi-hook install` would write the same, but only after asking, and `bootstrap`
   runs it without a terminal. On the laptop, `moshi-hook install` or `moshi-hook doctor --yes` makes that change.
@@ -347,7 +347,7 @@ per-machine state.
 | ----------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | OMP         | `memory.backend: 'off'` in `home/.omp/agent/config.yml`        | `sync omp`                                                                     |
 | Claude Code | `autoMemoryEnabled: false` in `home/.claude/settings.json`     | `sync claude`                                                                  |
-| Codex       | `[features] memories = false` in `container/codex-config.toml` | the image's `/etc/codex/config.toml` (devbox); `bootstrap` and `agent install` |
+| Codex       | `[features] memories = false` in `container/codex-config.toml` | the image's `/etc/codex/config.toml` (Devbox); `bootstrap` and `agent install` |
 
 Codex's system layer is outranked by `~/.codex/config.toml`, and the laptop has no system layer at all (`/etc/codex`
 needs root), so `bootstrap` and `./bin/devbox agent install` run `codex features disable memories` whenever
@@ -439,7 +439,7 @@ or Codex session as well.
 ## 🧭 Which machine: the agent context
 
 Every agent session on either machine knows where it runs. That stops it assuming `sudo` in the container, a laptop path
-on the devbox, or the user's own credentials on the laptop. Three pieces, each installed by `bootstrap` (devbox) and
+on the Devbox, or the user's own credentials on the laptop. Three pieces, each installed by `bootstrap` (Devbox) and
 `./bin/devbox agent install` (laptop) through `container/agent-context apply`:
 
 | Piece                                     | What it holds                                                                                                                                                                                                                                                                                                  |
@@ -447,7 +447,7 @@ on the devbox, or the user's own credentials on the laptop. Three pieces, each i
 | `DEVBOX_ENV`                              | `devbox` or `laptop`, exported by `agent-launch` for the session's process tree; in a Claude desktop app session on the laptop, by its `SessionStart` hook ([Git Identities](git.md#claude-desktop-app)). `devbox` means the image's root-owned `/etc/devbox-env` exists; nothing in the bind mount can set it |
 | `~/.config/devbox/agent-context.md`       | A short, always-loaded summary for this machine: what is there, what is missing, what not to try. Rendered on every run from `home/.config/devbox/agent-context/{devbox,laptop}.md`                                                                                                                            |
 | `devbox-runtime` skill                    | How-tos for both machines (missing tools, Docker, ports for the user, secrets, git and `gh` failures), from `home/.agents/skills/devbox-runtime`: copied to `~/.agents/skills`, which OMP and Codex read, and linked from `~/.claude/skills`                                                                   |
-| `@~/.config/devbox/agent-context.md` line | Appended once to `~/.claude/CLAUDE.md`; the rest of that file stays yours (a dotfiles symlink is written through)                                                                                                                                                                                              |
+| `@~/.config/devbox/agent-context.md` line | Appended once to `~/.claude/CLAUDE.md`; the rest of that file stays yours (a Dotfiles symlink is written through)                                                                                                                                                                                              |
 | `~/.codex/AGENTS.md`                      | A copy of `~/.claude/CLAUDE.md` with its `@` imports expanded, for Codex, which reads that one global file and expands no imports. Rewritten on every run; a file without the marker comment on its first line is yours and left alone                                                                         |
 
 One file reaches every session: `~/.claude/CLAUDE.md`, so what you add to it - your own instructions, more imports -
@@ -467,7 +467,7 @@ both doctors and both installers report them rather than edit that file:
 > the `~/.agents/skills` ones are dropped; `moshi-hook`'s `moshi-visuals` is new to OMP) and Claude Code's user plugins.
 
 `DEVBOX_ENV=devbox` needs an image built after the marker was added: until `./bin/devbox start` or `rebuild` runs,
-sessions on the devbox get `laptop`, and `doctor host` and `bootstrap` say so. To change what agents are told, edit the
+sessions on the Devbox get `laptop`, and `doctor host` and `bootstrap` say so. To change what agents are told, edit the
 templates or the skill, commit, deploy, and re-run `bootstrap` and `agent install`; `doctor host` and `doctor laptop`
 fail while either machine's copy is stale.
 
@@ -616,7 +616,7 @@ wt list
 
 ### New worktree in herdr
 
-`wt herdr <branch>` (devbox and laptop) cuts a worktree from the default branch as it is on the remote right now and
+`wt herdr <branch>` (Devbox and laptop) cuts a worktree from the default branch as it is on the remote right now and
 opens it as its own herdr workspace, focused; `-n`/`--no-focus` leaves the focused pane where it is. Your shell never
 moves:
 
@@ -629,7 +629,7 @@ It stops before changing anything when the default branch's worktree has uncommi
 when the pull is not a fast-forward, or outside a herdr pane. With the default branch checked out nowhere, it
 fast-forwards the local branch from its upstream instead of pulling. A re-run for a branch that already has a worktree
 only opens it in herdr (the recovery when that step failed); a branch without a worktree is refused. The worktree's `wt`
-hooks run as usual. On the devbox, which holds no SSH key, the fetch takes the agent sessions' transport for every
+hooks run as usual. On the Devbox, which holds no SSH key, the fetch takes the agent sessions' transport for every
 forge host in `identities.conf`, SSH and HTTPS remote URLs alike: HTTPS with a token from `devbox-git-credential`, the
 GitHub App installation token where the App covers the repository, the read-only PAT elsewhere ([Git](git.md)) — no
 forwarded 1Password agent needed. A remote on any other host still goes over SSH. Only the fetch: the fast-forward, the
@@ -685,7 +685,7 @@ does), gitignored, so extra mounts, env vars or resource limits stay local to on
 No — `dev` has no root or sudo, by design: the image records what exists. Add it to the `Dockerfile` and rebuild; for
 throwaway tools use `pnpm dlx` or `python3 -m venv`.
 
-### Can I run Docker inside the devbox?
+### Can I run Docker inside the Devbox?
 
 Yes, via a second rootless daemon owned by a dedicated user — see [Docker](docker.md). The host's root socket stays
 unmounted; nesting is impossible: rootless docker needs setuid helpers `newuidmap`/`newgidmap`, ruled out by

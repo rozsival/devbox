@@ -1,6 +1,6 @@
 # 📚 Devbox Documentation
 
-> Entry point to the devbox documentation. Each page covers **one domain**, opens with a one-paragraph summary, links
+> Entry point to the Devbox documentation. Each page covers **one domain**, opens with a one-paragraph summary, links
 > its related pages, and ends with an FAQ where one is useful.
 
 New here? Start with [Architecture](architecture.md), then [Installation](installation.md). The project overview and
@@ -14,13 +14,13 @@ quick start live in the [root README](../README.md).
 | ------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | [Architecture](architecture.md) | Understand what runs where and why                          | System map, container startup, ways in, repository layout                          |
 | [Installation](installation.md) | Set up the laptop and the workstation for the first time    | Laptop key, `~/.ssh/config`, deploy, `.env` reference, laptop agent install        |
-| [Connecting](connecting.md)     | Get a shell in the devbox                                   | Moshi, `ssh devbox`, `devbox shell`, cloning, dev servers                          |
+| [Connecting](connecting.md)     | Get a shell in the Devbox                                   | Moshi, `ssh devbox`, `devbox shell`, cloning, dev servers                          |
 | [Git identities](git.md)        | Clone repos and commit as the right account                 | Identity registry, manual vs agent git, credential helper, signing, laptop install |
 | [Secrets](secrets.md)           | Place tokens and keys where the right process reads them    | Three layers, `secrets.env`, per-identity `gh` tokens, agent logins, GCP ADC       |
 | [Toolchain](toolchain.md)       | See what is installed and add a tool                        | Pinned versions, install locations, OMP, Claude Code, Codex, Moshi hooks, skills   |
-| [Networking](networking.md)     | Know who can reach the devbox and how to reach a dev server | `BIND_ADDR`, why UFW cannot help, verifying exposure, port forwarding              |
-| [Docker](docker.md)             | Run a project's containers from inside the devbox           | Rootless project daemon, path identity, published ports, `devbox-ports`            |
-| [Operations](operations.md)     | Redeploy, back up or troubleshoot a running devbox          | Redeploy, persistence, backup, health, troubleshooting                             |
+| [Networking](networking.md)     | Know who can reach the Devbox and how to reach a dev server | `BIND_ADDR`, why UFW cannot help, verifying exposure, port forwarding              |
+| [Docker](docker.md)             | Run a project's containers from inside the Devbox           | Rootless project daemon, path identity, published ports, `devbox-ports`            |
+| [Operations](operations.md)     | Redeploy, back up or troubleshoot a running Devbox          | Redeploy, persistence, backup, health, troubleshooting                             |
 | [Security model](security.md)   | Know what an escaped agent reaches and what is accepted     | Boundaries, no root, accepted limits, trust assumptions                            |
 | [CLI reference](cli.md)         | Look up a `./bin/devbox` command                            | Workstation, laptop and `doctor` commands, `devbox-identities`, maintainer flow    |
 | [Development](development.md)   | Change this repository                                      | Toolchain, rules, regenerating the CLI, agent assets                               |

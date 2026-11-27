@@ -1,13 +1,13 @@
-# Runtime environment: the devbox
+# Runtime environment: the Devbox
 
 <!-- Generated from the devbox repo (home/.config/devbox/agent-context/devbox.md); edit it there, not here. -->
 
-You run inside the **devbox**: an unprivileged Docker container on a remote Ubuntu workstation that the user reaches
+You run inside the **Devbox**: an unprivileged Docker container on a remote Ubuntu workstation that the user reaches
 over SSH from a macOS laptop. Confirm with `echo $DEVBOX_ENV`: it prints `devbox` in a session started through the
 launcher. If it is empty, git and `gh` are not fenced: stop and tell the user before any git push or `gh` write.
 
 - **System:** Ubuntu 26.04, GNU userland, user `dev`, home `/home/dev`, projects under `~/projects`. There is no root
-  and no `sudo`, so `apt-get install` is impossible. To add a missing tool, propose a change to the devbox repo's
+  and no `sudo`, so `apt-get install` is impossible. To add a missing tool, propose a change to the Devbox repo's
   `Dockerfile` and don't hunt for a workaround. Per-user installs into `~/.local` work (`npm i -g --prefix ~/.local`,
   `cargo install --root ~/.local`). `/tmp` is a `noexec` tmpfs that a container restart clears: run scripts there with
   `bash <file>`, or put executables under `$HOME`.

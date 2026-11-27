@@ -34,10 +34,10 @@ Notifications, lock-screen approvals, and transcript view need `moshi-hook`, whi
 entrypoint starts. One pairing step activates it — [Toolchain](toolchain.md#-moshi-and-moshi-hook).
 
 > [!NOTE]
-> The laptop's herdr client does not register the devbox as a saved machine: Moshi is the one client for it, and a
+> The laptop's herdr client does not register the Devbox as a saved machine: Moshi is the one client for it, and a
 > second one only duplicates the same panes. To drop an existing profile: `herdr machine list`, then
 > `herdr machine remove <id>` (the 32-hex id; the label is refused). Removing it disconnects that client only; the
-> devbox's herdr server and its panes keep running.
+> Devbox's herdr server and its panes keep running.
 
 ## 🔑 `ssh devbox`
 
@@ -121,7 +121,7 @@ No — the port publishes only on the node's Tailscale address and `127.0.0.1` (
 
 ### Why does `git push` fail over plain `ssh devbox`?
 
-The devbox holds no private key; `-A` forwards the laptop's 1Password agent — see
+The Devbox holds no private key; `-A` forwards the laptop's 1Password agent — see
 [Git Identities](git.md#-manual-work-on-the-devbox--the-escape-hatch).
 
 ### `Too many authentication failures` — why?
